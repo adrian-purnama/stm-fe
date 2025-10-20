@@ -35,11 +35,13 @@ export const NotificationsProvider = ({ children }) => {
     if (!user.isLoggedIn) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname;
-    const port = window.location.port || '5173';
+    //const host = window.location.hostname;
+    //const host = "stm-uat.onrender.com";
+    //const port = window.location.port || '5173';
     // const apiPort = import.meta.env.VITE_API_PORT || 5000; // assume backend port
     const apiPort = "stm-be.onrender.com";
-    const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
+    //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
+    const wsUrl = `${protocol}://:${apiPort}/notification`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
