@@ -4,7 +4,8 @@ import toast from "react-hot-toast";
 import { isTokenExpired } from "./tokenUtils";
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:5000",
+  // baseURL: "http://localhost:5000",
+  baseURL: "https://stm-be.onrender.com",
   paramsSerializer: (params) =>
     qs.stringify(params, {
       arrayFormat: "brackets",
