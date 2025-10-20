@@ -1,16 +1,27 @@
 import axios from "axios";
-import qs from "qs";
 import toast from "react-hot-toast";
 import { isTokenExpired } from "./tokenUtils";
 
 const axiosInstance = axios.create({
   // baseURL: "http://localhost:5000",
   baseURL: "https://stm-be.onrender.com",
-  paramsSerializer: (params) =>
-    qs.stringify(params, {
-      arrayFormat: "brackets",
-      encode: false,
-    }),
+  paramsSerializer: (params) => {
+    const searchParams = new URLSearchParams();
+    
+    Object.keys(params).forEach(key => {
+      const value = params[key];
+      if (Array.isArray(value)) {
+        // Handle arrays with brackets format (similar to qs arrayFormat: "brackets")
+        value.forEach(item => {
+          searchParams.append(`${key}[]`, item);
+        });
+      } else if (value !== null && value !== undefined) {
+        searchParams.append(key, value);
+      }
+    });
+    
+    return searchParams.toString();
+  },
 });
 
 axiosInstance.interceptors.request.use((config) => {
