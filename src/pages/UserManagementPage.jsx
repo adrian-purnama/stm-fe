@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal';
 import RoleManagementModal from '../components/RoleManagementModal';
 import CustomDropdown from '../components/CustomDropdown';
+import AddUserModal from '../components/AddUserModal';
 
 
 const UserManagementPage = () => {
@@ -18,6 +19,7 @@ const UserManagementPage = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState('');
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [showAddUser, setShowAddUser] = useState(false);
 
   const fetchUsers = async (page = 1, search = '') => {
     try {
@@ -67,8 +69,20 @@ const UserManagementPage = () => {
   }, [searchTerm]);
 
   const handleCreateUser = () => {
-    // For now, just show a message that user creation is disabled
-    toast.info('User creation is currently disabled. Only the first user can be created during registration.');
+    setShowAddUser(true);
+  };
+
+  const submitCreateUser = async ({ fullName, email, password }) => {
+    const createToast = toast.loading('Creating user...');
+    try {
+      await ApiHelper.post('/api/auth/users', { fullName, email, password });
+      toast.success('User created successfully', { id: createToast });
+      setShowAddUser(false);
+      fetchUsers(pagination.current, searchTerm);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      toast.error(error?.response?.data?.message || 'Failed to create user', { id: createToast });
+    }
   };
 
 
@@ -335,6 +349,14 @@ const UserManagementPage = () => {
             </table>
           </div>
         </div>
+
+        {showAddUser && (
+          <AddUserModal
+            isOpen={showAddUser}
+            onClose={() => setShowAddUser(false)}
+            onSubmit={submitCreateUser}
+          />
+        )}
 
         {/* Pagination */}
         {pagination.pages > 1 && (

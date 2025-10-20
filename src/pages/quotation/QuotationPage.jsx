@@ -1,8 +1,10 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { ArrowLeft, BarChart3, CheckCircle, FileText } from 'lucide-react';
+import { ArrowLeft, BarChart3, CheckCircle, FileText, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Navigation from '../../components/Navigation';
 import QuotationList from '../../components/quotations/QuotationList';
+import RequestQuotationTab from '../../components/quotations/RequestQuotationTab';
+import ApproveQuotationTab from '../../components/quotations/ApproveQuotationTab';
 import { UserContext } from '../../utils/UserContext';
 import ApiHelper from '../../utils/ApiHelper';
 import toast from 'react-hot-toast';
@@ -12,26 +14,36 @@ const QuotationPage = () => {
   const { user } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('create');
   const [hasApproveRfqPermission, setHasApproveRfqPermission] = useState(false);
+  const [hasQuotationCreatePermission, setHasQuotationCreatePermission] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(true);
 
-  // Check if user has approve_rfq permission using the new endpoint
+  // Check user permissions
   useEffect(() => {
-    const checkPermission = async () => {
+    const checkPermissions = async () => {
       try {
         setPermissionLoading(true);
-        const response = await ApiHelper.get('/api/auth/ispermission/approve_rfq');
-        const hasPermission = response.data.message?.hasPermission || response.data.data?.hasPermission || response.data.hasPermission;
-        setHasApproveRfqPermission(hasPermission);
+        
+        // Check approve_rfq permission
+        const approveResponse = await ApiHelper.get('/api/auth/ispermission/approve_rfq');
+        const hasApprovePermission = approveResponse.data.message?.hasPermission || approveResponse.data.data?.hasPermission || approveResponse.data.hasPermission;
+        setHasApproveRfqPermission(hasApprovePermission);
+        
+        // Check quotation_create permission
+        const createResponse = await ApiHelper.get('/api/auth/ispermission/quotation_create');
+        const hasCreatePermission = createResponse.data.message?.hasPermission || createResponse.data.data?.hasPermission || createResponse.data.hasPermission;
+        setHasQuotationCreatePermission(hasCreatePermission);
+        
       } catch (error) {
-        console.error('Error checking permission:', error);
+        console.error('Error checking permissions:', error);
         setHasApproveRfqPermission(false);
+        setHasQuotationCreatePermission(false);
       } finally {
         setPermissionLoading(false);
       }
     };
 
     if (user?.isLoggedIn) {
-      checkPermission();
+      checkPermissions();
     }
   }, [user]);
 
@@ -134,6 +146,7 @@ const QuotationPage = () => {
           {/* Tabs */}
           <div className="border-b border-gray-200 mb-6">
             <nav className="-mb-px flex space-x-8">
+              {/* Create Quotation Tab - Always visible */}
               <button
                 onClick={() => setActiveTab('create')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -148,19 +161,39 @@ const QuotationPage = () => {
                 </div>
               </button>
               
-              <button
-                onClick={() => setActiveTab('request')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'request'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  {hasApproveRfqPermission ? 'Approve RFQ' : 'Request Quotation'}
-                </div>
-              </button>
+              {/* Request Quotation Tab - Only if user has quotation_create permission */}
+              {hasQuotationCreatePermission && (
+                <button
+                  onClick={() => setActiveTab('request')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'request'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Request Quotation
+                  </div>
+                </button>
+              )}
+              
+              {/* Approve Quotation Tab - Only if user has approve_rfq permission */}
+              {hasApproveRfqPermission && (
+                <button
+                  onClick={() => setActiveTab('approve')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'approve'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Approve Quotation
+                  </div>
+                </button>
+              )}
             </nav>
           </div>
 
@@ -184,7 +217,9 @@ const QuotationPage = () => {
             <div className="text-sm text-gray-500">
               {activeTab === 'create' 
                 ? 'Create and manage your quotations'
-                : (hasApproveRfqPermission ? 'Review and approve RFQ requests' : 'Create and manage your quotation requests')
+                : activeTab === 'request'
+                ? 'Create and manage your quotation requests'
+                : 'Review and approve RFQ requests'
               }
             </div>
           </div>
@@ -205,27 +240,10 @@ const QuotationPage = () => {
                 onCreate={handleCreate}
                 onDelete={handleDelete}
               />
+            ) : activeTab === 'request' ? (
+              <RequestQuotationTab />
             ) : (
-              <div className="text-center py-12">
-                <CheckCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {hasApproveRfqPermission ? 'Approve RFQ' : 'Request Quotation'}
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  {hasApproveRfqPermission 
-                    ? 'This section will contain the RFQ approval functionality.'
-                    : 'This section will contain the quotation request functionality.'
-                  }
-                </p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                  <p className="text-sm text-blue-800">
-                    <strong>Coming Soon:</strong> {hasApproveRfqPermission 
-                      ? 'RFQ approval workflow, bid/no-bid decision tools, and vendor evaluation features.'
-                      : 'RFQ creation, vendor selection, and quotation request management features.'
-                    }
-                  </p>
-                </div>
-              </div>
+              <ApproveQuotationTab />
             )}
           </div>
         </div>

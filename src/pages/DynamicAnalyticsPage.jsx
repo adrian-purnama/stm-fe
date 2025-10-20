@@ -27,16 +27,17 @@ const DynamicAnalyticsPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState({}); // Changed to support arrays: {column: [value1, value2, ...]}
   const [filteredData, setFilteredData] = useState(null);
-  const [selectedChart, setSelectedChart] = useState('overview');
-  const [customQuery, setCustomQuery] = useState('');
   const [topN, setTopN] = useState(10);
   const [selectedColumn, setSelectedColumn] = useState('');
   const [showAllData, setShowAllData] = useState(false);
   const [chartData, setChartData] = useState(null);
   const [selectedChartColumn, setSelectedChartColumn] = useState('');
   const [chartType, setChartType] = useState('bar');
+  const [showAllChartValues, setShowAllChartValues] = useState(false);
+  const [showAllTopN, setShowAllTopN] = useState(false);
+  const [expandTopNList, setExpandTopNList] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showTopN, setShowTopN] = useState(false);
   const [showCharts, setShowCharts] = useState(false);
@@ -44,38 +45,51 @@ const DynamicAnalyticsPage = () => {
   const [selectedItemName, setSelectedItemName] = useState('');
   const [showItemCharts, setShowItemCharts] = useState(false);
   const [itemChartType, setItemChartType] = useState('bar');
+  const [showAllItemChartValues, setShowAllItemChartValues] = useState(false);
+  const [expandItemAllValues, setExpandItemAllValues] = useState(false);
   const [expandedColumn, setExpandedColumn] = useState(null);
+  const [customDateRanges, setCustomDateRanges] = useState({}); // {column: {from: '', to: ''}}
+  const [expandedFilters, setExpandedFilters] = useState({}); // {column: true/false}
   const fileInputRef = useRef(null);
+  const [showComparative, setShowComparative] = useState(false);
+  const sourceKey = 'Source';
+  const [selectedMetric, setSelectedMetric] = useState('');
+  const [selectedCategoryForCompare, setSelectedCategoryForCompare] = useState('');
+  const [topKCompare] = useState(10);
+  const [multiFiles, setMultiFiles] = useState([]); // [{name, headers, rows, totalRows, totalColumns}]
+  const [activeDatasetIndex, setActiveDatasetIndex] = useState(0);
+  const [selectedCategoryValues, setSelectedCategoryValues] = useState([]); // for multi-line
+  const [categoryShowAll, setCategoryShowAll] = useState(false);
+  const [categoryTopK, setCategoryTopK] = useState(10);
+  const [categoryMetricType, setCategoryMetricType] = useState('count'); // 'count' | 'sum'
+  const [includedDatasets, setIncludedDatasets] = useState(new Set());
 
-  // Handle file upload
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Hanya file CSV yang didukung');
-      return;
+  const getRowsWithSource = () => {
+    if (multiFiles.length > 0) {
+      const included = includedDatasets.size > 0
+        ? new Set(includedDatasets)
+        : new Set(multiFiles.map(ds => ds.name));
+      const rows = [];
+      multiFiles.forEach(ds => {
+        if (!included.has(ds.name)) return;
+        ds.rows.forEach(r => {
+          rows.push({ ...r, [sourceKey]: ds.name });
+        });
+      });
+      return rows;
     }
+    return (filteredData || data)?.rows || [];
+  };
+  // Future: two-source diff controls
 
-    setLoading(true);
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        const csv = e.target.result;
-        const lines = csv.split('\n').filter(line => line.trim());
-        
-        if (lines.length === 0) {
-          toast.error('File CSV kosong');
-          return;
-        }
-
-        // Better CSV parsing that handles commas within quotes
+  // Parse single CSV text to dataset
+  const parseCsvText = (text) => {
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return null;
         const parseCSVLine = (line) => {
           const result = [];
           let current = '';
           let inQuotes = false;
-          
           for (let i = 0; i < line.length; i++) {
             const char = line[i];
             if (char === '"') {
@@ -88,50 +102,72 @@ const DynamicAnalyticsPage = () => {
             }
           }
           result.push(current.trim());
-          return result;
+      return result.map(v => v.replace(/"/g, ''));
         };
-
         const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, ''));
-        
         const rows = lines.slice(1)
           .filter(line => line.trim())
           .map(line => {
-            const values = parseCSVLine(line).map(v => v.replace(/"/g, ''));
+        const values = parseCSVLine(line);
             const row = {};
-            headers.forEach((header, index) => {
-              row[header] = values[index] || '';
-            });
+        headers.forEach((h, i) => { row[h] = values[i] || ''; });
             return row;
           });
+    return { headers, rows, totalRows: rows.length, totalColumns: headers.length };
+  };
 
-        const processedData = {
-          headers,
-          rows,
-          totalRows: rows.length,
-          totalColumns: headers.length
-        };
+  const detectYear = (fname) => {
+    const m = String(fname).match(/(20\d{2})/);
+    return m ? parseInt(m[1]) : null;
+  };
 
-        setData(processedData);
-        // Reset states
+  // Handle multi-file upload (CSV only) - keep datasets separate
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    setLoading(true);
+    try {
+      const datasets = [];
+      for (const f of files) {
+        const ext = f.name.toLowerCase().split('.').pop();
+        if (ext === 'csv') {
+          const text = await f.text();
+          const ds = parseCsvText(text);
+          if (ds) datasets.push({ name: f.name, year: detectYear(f.name), ...ds });
+        } else {
+          toast.error(`Hanya CSV yang didukung: ${f.name}`);
+        }
+      }
+      if (datasets.length === 0) {
+        toast.error('Tidak ada file yang berhasil diproses');
+        return;
+      }
+      // Append to existing list
+      const updated = [...multiFiles, ...datasets];
+      setMultiFiles(updated);
+      // initialize included set
+      const newIncluded = new Set(includedDatasets);
+      datasets.forEach(d => newIncluded.add(d.name));
+      setIncludedDatasets(newIncluded);
+      // set active dataset to the first newly added if none active
+      const nextActive = activeDatasetIndex ?? 0;
+      const useIndex = updated.length > 0 ? nextActive : 0;
+      const active = updated[useIndex] || datasets[0];
+      if (active) {
+        setData(active);
         setAnalysis(null);
         setFilteredData(null);
         setFilters({});
-        
-        // Analyze data after setting it
-        setTimeout(() => {
-          analyzeData(processedData);
-        }, 100);
-        
-        toast.success(`File berhasil diunggah: ${processedData.totalRows} baris, ${processedData.totalColumns} kolom`);
-      } catch (error) {
-        console.error('Error parsing CSV:', error);
-        toast.error('Error parsing file CSV');
+        setTimeout(() => { analyzeData(active); }, 50);
+      }
+      toast.success(`Berhasil memuat ${datasets.length} file (tanpa menggabungkan)`);
+      setShowComparative(updated.length > 1);
+    } catch (e) {
+      console.error(e);
+      toast.error('Gagal memproses file');
       } finally {
         setLoading(false);
       }
-    };
-
-    reader.readAsText(file);
   };
 
   // Analyze the data
@@ -156,9 +192,20 @@ const DynamicAnalyticsPage = () => {
     headers.forEach(header => {
       const values = rows.map(row => row[header]).filter(val => val !== '');
       
-      // Determine data type
+      // Determine data type with improved date detection
       const numericValues = values.filter(val => !isNaN(parseFloat(val)) && isFinite(val));
-      const dateValues = values.filter(val => !isNaN(Date.parse(val)));
+      
+      // Enhanced date detection - check multiple date formats
+      const dateValues = values.filter(val => {
+        if (!val || val.trim() === '') return false;
+        
+        // Try different date parsing methods
+        const date1 = new Date(val);
+        const date2 = Date.parse(val);
+        const date3 = new Date(val.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')); // YYYYMMDD format
+        
+        return !isNaN(date1.getTime()) || !isNaN(date2) || !isNaN(date3.getTime());
+      });
       
       if (numericValues.length > values.length * 0.8) {
         analysis.dataTypes[header] = 'numeric';
@@ -184,6 +231,51 @@ const DynamicAnalyticsPage = () => {
         
       } else if (dateValues.length > values.length * 0.8) {
         analysis.dataTypes[header] = 'date';
+        
+        // Calculate date statistics
+        const dates = dateValues.map(val => {
+          // Try different parsing methods
+          let date = new Date(val);
+          if (isNaN(date.getTime())) {
+            date = new Date(val.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'));
+          }
+          return date;
+        }).filter(date => !isNaN(date.getTime()));
+        
+        if (dates.length > 0) {
+          const sortedDates = [...dates].sort((a, b) => a - b);
+          const minDate = sortedDates[0];
+          const maxDate = sortedDates[sortedDates.length - 1];
+          const dateRange = maxDate - minDate;
+          const medianDate = sortedDates[Math.floor(sortedDates.length / 2)];
+          
+          // Calculate common date ranges
+          const today = new Date();
+          const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          const oneYearAgo = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+          
+          analysis.statistics[header] = {
+            count: dates.length,
+            min: minDate,
+            max: maxDate,
+            median: medianDate,
+            range: dateRange,
+            rangeDays: Math.ceil(dateRange / (24 * 60 * 60 * 1000)),
+            today: today,
+            oneWeekAgo: oneWeekAgo,
+            oneMonthAgo: oneMonthAgo,
+            oneYearAgo: oneYearAgo
+          };
+          
+          // Detect date outliers (dates that are significantly different from the median)
+          const medianTime = medianDate.getTime();
+          const timeRange = dateRange;
+          const outlierThreshold = timeRange * 0.3; // 30% of the range
+          analysis.outliers[header] = dates.filter(date => 
+            Math.abs(date.getTime() - medianTime) > outlierThreshold
+          );
+        }
       } else {
         analysis.dataTypes[header] = 'categorical';
         
@@ -259,7 +351,7 @@ const DynamicAnalyticsPage = () => {
 
     // 3. MISSING DATA ANALYSIS
     const columnsWithMissing = Object.entries(missingData)
-      .filter(([_, count]) => count > 0);
+      .filter(([, count]) => count > 0);
     if (columnsWithMissing.length > 0) {
       const missingPercentage = columnsWithMissing.map(([col, count]) => {
         const percentage = totalRows > 0 ? ((count / totalRows) * 100).toFixed(1) : '0.0';
@@ -297,7 +389,7 @@ const DynamicAnalyticsPage = () => {
 
     // 5. OUTLIER ANALYSIS
     const columnsWithOutliers = Object.entries(outliers)
-      .filter(([_, outliers]) => outliers.length > 0);
+      .filter(([, outlierArr]) => outlierArr.length > 0);
     if (columnsWithOutliers.length > 0) {
       const outlierDetails = columnsWithOutliers.map(([col, outliers]) => {
         const total = statistics[col]?.count || 0;
@@ -434,16 +526,19 @@ const DynamicAnalyticsPage = () => {
     return (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
   };
 
-  // Apply filters
+  // Apply filters with multiple selections support
   const applyFilters = () => {
     if (!data) return;
     
     let filtered = data.rows;
     
-    Object.entries(filters).forEach(([column, filterValue]) => {
-      if (filterValue && filterValue.trim()) {
+    Object.entries(filters).forEach(([column, filterValues]) => {
+      if (filterValues && filterValues.length > 0) {
         filtered = filtered.filter(row => {
           const value = row[column];
+          
+          // Check if any of the selected filter values match
+          return filterValues.some(filterValue => {
           if (analysis.dataTypes[column] === 'numeric') {
             // Handle numeric filters (>, <, =, >=, <=)
             if (filterValue.includes('>')) {
@@ -461,10 +556,46 @@ const DynamicAnalyticsPage = () => {
             } else {
               return parseFloat(value) === parseFloat(filterValue);
             }
+            } else if (analysis.dataTypes[column] === 'date') {
+              // Handle date filters
+              if (filterValue.startsWith('custom_range:')) {
+                // Handle custom date range
+                const rangePart = filterValue.replace('custom_range:', '');
+                const [fromStr, toStr] = rangePart.split(' to ');
+                if (fromStr && toStr) {
+                  const fromDate = new Date(fromStr);
+                  const toDate = new Date(toStr);
+                  const rowDate = new Date(value);
+                  return rowDate >= fromDate && rowDate <= toDate;
+                }
+                return false;
+              } else if (filterValue.includes('>=')) {
+                const filterDate = new Date(filterValue.replace('>=', ''));
+                const rowDate = new Date(value);
+                return rowDate >= filterDate;
+              } else if (filterValue.includes('<=')) {
+                const filterDate = new Date(filterValue.replace('<=', ''));
+                const rowDate = new Date(value);
+                return rowDate <= filterDate;
+              } else if (filterValue.includes('>')) {
+                const filterDate = new Date(filterValue.replace('>', ''));
+                const rowDate = new Date(value);
+                return rowDate > filterDate;
+              } else if (filterValue.includes('<')) {
+                const filterDate = new Date(filterValue.replace('<', ''));
+                const rowDate = new Date(value);
+                return rowDate < filterDate;
           } else {
-            // Handle text filters
-            return value.toLowerCase().includes(filterValue.toLowerCase());
-          }
+                // Exact date match
+                const filterDate = new Date(filterValue);
+                const rowDate = new Date(value);
+                return rowDate.getTime() === filterDate.getTime();
+              }
+            } else {
+              // Handle categorical/text filters - exact match
+              return value === filterValue;
+            }
+          });
         });
       }
     });
@@ -472,71 +603,150 @@ const DynamicAnalyticsPage = () => {
     setFilteredData({ ...data, rows: filtered });
   };
 
-  // Handle filter change with contextual clearing
-  const handleFilterChange = (column, value) => {
-    const newFilters = { ...filters, [column]: value };
+  // Handle multiple filter selection
+  const handleFilterChange = (column, value, isChecked) => {
+    const currentFilters = { ...filters };
+    const currentColumnFilters = currentFilters[column] || [];
     
-    // If setting a new filter, clear filters that become invalid
-    if (value) {
-      // Check which other filters become invalid with this new filter
-      const validFilters = { [column]: value };
-      
-      // Test each existing filter to see if it's still valid
-      Object.entries(newFilters).forEach(([filterColumn, filterValue]) => {
-        if (filterColumn !== column && filterValue) {
-          // Apply the new filter first
-          let testRows = data.rows;
-          Object.entries(validFilters).forEach(([testColumn, testValue]) => {
-            if (testValue) {
-              testRows = testRows.filter(row => {
-                if (testValue.startsWith('>=')) {
-                  const threshold = parseFloat(testValue.replace('>=', '').trim());
-                  return !isNaN(parseFloat(row[testColumn])) && parseFloat(row[testColumn]) >= threshold;
-                } else if (testValue.startsWith('<=')) {
-                  const threshold = parseFloat(testValue.replace('<=', '').trim());
-                  return !isNaN(parseFloat(row[testColumn])) && parseFloat(row[testColumn]) <= threshold;
-                } else if (testValue.startsWith('>')) {
-                  const threshold = parseFloat(testValue.replace('>', '').trim());
-                  return !isNaN(parseFloat(row[testColumn])) && parseFloat(row[testColumn]) > threshold;
-                } else if (testValue.startsWith('<')) {
-                  const threshold = parseFloat(testValue.replace('<', '').trim());
-                  return !isNaN(parseFloat(row[testColumn])) && parseFloat(row[testColumn]) < threshold;
+    if (isChecked) {
+      // Add value to the filter array
+      if (!currentColumnFilters.includes(value)) {
+        currentFilters[column] = [...currentColumnFilters, value];
+      }
                 } else {
-                  return row[testColumn] === testValue;
-                }
-              });
-            }
+      // Remove value from the filter array
+      currentFilters[column] = currentColumnFilters.filter(v => v !== value);
+      // If no filters left for this column, remove the column entirely
+      if (currentFilters[column].length === 0) {
+        delete currentFilters[column];
+      }
+    }
+    
+    setFilters(currentFilters);
+  };
+
+  // Toggle filter column expansion
+  const toggleFilterExpansion = (column) => {
+    setExpandedFilters(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
+
+  // Handle custom date range selection
+  const handleCustomDateRange = (column, fromDate, toDate) => {
+    if (!fromDate || !toDate) return;
+    
+    const currentFilters = { ...filters };
+    const currentColumnFilters = currentFilters[column] || [];
+    
+    // Remove any existing custom range
+    const filteredValues = currentColumnFilters.filter(v => !v.startsWith('custom_range:'));
+    
+    // Add the new custom range
+    const customRangeValue = `custom_range:${fromDate} to ${toDate}`;
+    currentFilters[column] = [...filteredValues, customRangeValue];
+    
+    setFilters(currentFilters);
+  };
+
+  // Clear all filters for a specific column
+  const clearColumnFilters = (column) => {
+    const newFilters = { ...filters };
+    delete newFilters[column];
+    setFilters(newFilters);
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({});
+    setFilteredData(data);
+  };
+
+  // Generate insights based on filtered data
+  const generateFilteredInsights = () => {
+    if (!analysis || !data) return [];
+    
+    const dataToAnalyze = filteredData || data;
+    const insights = [];
+    
+    // Dataset overview for filtered data
+    if (filteredData) {
+      const originalCount = data.totalRows;
+      const filteredCount = filteredData.rows.length;
+      const percentage = ((filteredCount / originalCount) * 100).toFixed(1);
+      
+      insights.push({
+        type: 'info',
+        title: 'Data yang Difilter',
+        description: `Menampilkan ${filteredCount} dari ${originalCount} baris data (${percentage}% dari total)`
+      });
+    }
+    
+    // Analyze filtered data for each column
+    data.headers.forEach(header => {
+      const values = dataToAnalyze.rows.map(row => row[header]).filter(val => val !== '');
+      const dataType = analysis.dataTypes[header];
+      
+      if (dataType === 'categorical' && values.length > 0) {
+        const frequencies = {};
+        values.forEach(val => {
+          frequencies[val] = (frequencies[val] || 0) + 1;
+        });
+        
+        const sortedFreq = Object.entries(frequencies).sort(([,a], [,b]) => b - a);
+        const mostCommon = sortedFreq[0];
+        const uniqueCount = sortedFreq.length;
+        
+        if (mostCommon) {
+          const percentage = ((mostCommon[1] / values.length) * 100).toFixed(1);
+          insights.push({
+            type: 'info',
+            title: `Distribusi ${header}`,
+            description: `Nilai paling sering: "${mostCommon[0]}" (${mostCommon[1]} kali, ${percentage}%). Total ${uniqueCount} nilai unik.`
           });
+        }
+      } else if (dataType === 'numeric' && values.length > 0) {
+        const nums = values.map(Number).filter(n => !isNaN(n));
+        if (nums.length > 0) {
+          const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+          const min = Math.min(...nums);
+          const max = Math.max(...nums);
+          const range = max - min;
           
-          // Check if this filter value still exists in the filtered data
-          const stillValid = testRows.some(row => {
-            if (filterValue.startsWith('>=')) {
-              const threshold = parseFloat(filterValue.replace('>=', '').trim());
-              return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) >= threshold;
-            } else if (filterValue.startsWith('<=')) {
-              const threshold = parseFloat(filterValue.replace('<=', '').trim());
-              return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) <= threshold;
-            } else if (filterValue.startsWith('>')) {
-              const threshold = parseFloat(filterValue.replace('>', '').trim());
-              return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) > threshold;
-            } else if (filterValue.startsWith('<')) {
-              const threshold = parseFloat(filterValue.replace('<', '').trim());
-              return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) < threshold;
-            } else {
-              return row[filterColumn] === filterValue;
-            }
+          insights.push({
+            type: 'info',
+            title: `Statistik ${header}`,
+            description: `Rata-rata: ${mean.toFixed(2)}, Range: ${min} - ${max} (${range.toFixed(2)}), Total: ${nums.length} nilai`
           });
+        }
+      } else if (dataType === 'date' && values.length > 0) {
+        const dates = values.map(val => new Date(val)).filter(date => !isNaN(date.getTime()));
+        if (dates.length > 0) {
+          const sortedDates = [...dates].sort((a, b) => a - b);
+          const minDate = sortedDates[0];
+          const maxDate = sortedDates[sortedDates.length - 1];
+          const rangeDays = Math.ceil((maxDate - minDate) / (24 * 60 * 60 * 1000));
           
-          if (stillValid) {
-            validFilters[filterColumn] = filterValue;
+          insights.push({
+            type: 'info',
+            title: `Rentang Tanggal ${header}`,
+            description: `Dari ${minDate.toLocaleDateString('id-ID')} hingga ${maxDate.toLocaleDateString('id-ID')} (${rangeDays} hari), Total: ${dates.length} tanggal`
+          });
           }
         }
       });
       
-      setFilters(validFilters);
-    } else {
-      setFilters(newFilters);
+    // If no insights generated, show a message
+    if (insights.length === 0) {
+      insights.push({
+        type: 'info',
+        title: 'Tidak Ada Data',
+        description: 'Tidak ada data yang dapat dianalisis dengan filter saat ini'
+      });
     }
+    
+    return insights;
   };
 
   // Get filter options for a column with contextual filtering
@@ -547,31 +757,60 @@ const DynamicAnalyticsPage = () => {
     let relevantRows = data.rows;
     
     // Apply existing filters to get contextual data
-    Object.entries(filters).forEach(([filterColumn, filterValue]) => {
-      if (filterColumn !== column && filterValue) {
+    Object.entries(filters).forEach(([filterColumn, filterValues]) => {
+      if (filterColumn !== column && filterValues && filterValues.length > 0) {
         relevantRows = relevantRows.filter(row => {
-          if (filterValue.startsWith('>=')) {
+          // Check if any of the selected filter values match
+          return filterValues.some(filterValue => {
+            if (analysis.dataTypes[filterColumn] === 'numeric') {
+              if (filterValue.includes('>=')) {
             const threshold = parseFloat(filterValue.replace('>=', '').trim());
             return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) >= threshold;
-          } else if (filterValue.startsWith('<=')) {
+              } else if (filterValue.includes('<=')) {
             const threshold = parseFloat(filterValue.replace('<=', '').trim());
             return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) <= threshold;
-          } else if (filterValue.startsWith('>')) {
+              } else if (filterValue.includes('>')) {
             const threshold = parseFloat(filterValue.replace('>', '').trim());
             return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) > threshold;
-          } else if (filterValue.startsWith('<')) {
+              } else if (filterValue.includes('<')) {
             const threshold = parseFloat(filterValue.replace('<', '').trim());
             return !isNaN(parseFloat(row[filterColumn])) && parseFloat(row[filterColumn]) < threshold;
+              } else {
+                return parseFloat(row[filterColumn]) === parseFloat(filterValue);
+              }
+            } else if (analysis.dataTypes[filterColumn] === 'date') {
+              if (filterValue.includes('>=')) {
+                const filterDate = new Date(filterValue.replace('>=', ''));
+                const rowDate = new Date(row[filterColumn]);
+                return rowDate >= filterDate;
+              } else if (filterValue.includes('<=')) {
+                const filterDate = new Date(filterValue.replace('<=', ''));
+                const rowDate = new Date(row[filterColumn]);
+                return rowDate <= filterDate;
+              } else if (filterValue.includes('>')) {
+                const filterDate = new Date(filterValue.replace('>', ''));
+                const rowDate = new Date(row[filterColumn]);
+                return rowDate > filterDate;
+              } else if (filterValue.includes('<')) {
+                const filterDate = new Date(filterValue.replace('<', ''));
+                const rowDate = new Date(row[filterColumn]);
+                return rowDate < filterDate;
+              } else {
+                const filterDate = new Date(filterValue);
+                const rowDate = new Date(row[filterColumn]);
+                return rowDate.getTime() === filterDate.getTime();
+              }
           } else {
             // Exact match for categorical data
             return row[filterColumn] === filterValue;
           }
+          });
         });
       }
     });
     
-    // Get unique values from the filtered rows for this column
-    const uniqueValues = [...new Set(relevantRows.map(row => row[column]).filter(val => val !== '' && val !== null && val !== undefined))];
+    // Get unique values from the filtered rows for this column (limit for performance)
+    const uniqueValues = [...new Set(relevantRows.slice(0, 1000).map(row => row[column]).filter(val => val !== '' && val !== null && val !== undefined))];
     
     if (!analysis || !analysis.dataTypes || !analysis.dataTypes[column]) {
       // If analysis not ready, just show unique values
@@ -593,6 +832,7 @@ const DynamicAnalyticsPage = () => {
       
       return uniqueValues
         .sort((a, b) => (frequencies[b] || 0) - (frequencies[a] || 0))
+        .slice(0, 50) // Limit to top 50 for performance
         .map(value => ({ 
           value, 
           label: `${value} (${frequencies[value] || 0} kali)` 
@@ -631,6 +871,39 @@ const DynamicAnalyticsPage = () => {
           label: `= ${val}` 
         }))
       ];
+    } else if (analysis.dataTypes[column] === 'date') {
+      const stats = analysis.statistics[column];
+      if (!stats) {
+        return [];
+      }
+      
+      // Minimal preset set; detailed format helpers removed
+      
+      // const formatDateTime = (date) => {
+      //   return date.toLocaleString('id-ID', {
+      //     year: 'numeric',
+      //     month: '2-digit',
+      //     day: '2-digit',
+      //     hour: '2-digit',
+      //     minute: '2-digit'
+      //   });
+      // };
+      
+      // Calculate more preset dates
+      // Reduced: remove additional relative presets
+      
+      // Current quarter calculations
+      // Keep currentQuarter calculation removed from use
+      // const lastQuarterEnd = new Date(stats.today.getFullYear(), (currentQuarter - 1) * 3, 0);
+      
+      return [
+        // Minimal, useful presets
+        { value: `>= ${stats.oneWeekAgo.toISOString().split('T')[0]}`, label: `📅 Last 7 days`, type: 'preset' },
+        { value: `>= ${stats.oneMonthAgo.toISOString().split('T')[0]}`, label: `📅 Last 30 days`, type: 'preset' },
+        { value: `>= ${new Date(stats.today.getFullYear(), 0, 1).toISOString().split('T')[0]}`, label: `📅 This year`, type: 'preset' },
+        // Custom range option
+        { value: 'custom_range', label: `🎯 Custom date range...`, type: 'custom' }
+      ];
     }
     
     return uniqueValues
@@ -640,10 +913,10 @@ const DynamicAnalyticsPage = () => {
   };
 
   // Get color intensity based on row index
-  const getRowColor = (index, totalRows) => {
-    const intensity = Math.floor((index / totalRows) * 100);
-    return `bg-gray-${Math.max(50, 100 - intensity)}`;
-  };
+  // const getRowColor = (index, totalRows) => {
+  //   const intensity = Math.floor((index / totalRows) * 100);
+  //   return `bg-gray-${Math.max(50, 100 - intensity)}`;
+  // };
 
   // Get detailed information for a selected item
   const getItemDetails = (itemName, columnName) => {
@@ -695,33 +968,88 @@ const DynamicAnalyticsPage = () => {
   };
 
   // Generate chart data for item details
-  const generateItemDetailChartData = (detail, chartType = 'bar') => {
-    if (!detail || !detail.uniqueValues) return [];
+  const generateItemDetailChartData = (detail, header, includeAll = false) => {
+    if (!detail) return [];
+    const type = analysis?.dataTypes?.[header];
+    const values = detail.allValues.filter(v => v !== '' && v !== null && v !== undefined);
     
-    return detail.uniqueValues.map(value => {
-      const count = detail.allValues.filter(v => v === value).length;
-      const percentage = ((count / detail.allValues.length) * 100).toFixed(1);
-      return {
-        name: value.length > 20 ? `${value.substring(0, 20)}...` : value,
-        value: count,
-        percentage: percentage,
-        fullName: value
-      };
-    }).sort((a, b) => b.value - a.value).slice(0, 10); // Top 10 only
+    if (type === 'numeric') {
+      const nums = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+      if (nums.length === 0) return [];
+      const bins = 10;
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      const binSize = (max - min) / bins || 1;
+      const histogram = Array(bins).fill(0).map((_, i) => ({
+        name: `${(min + i * binSize).toFixed(1)}-${(min + (i + 1) * binSize).toFixed(1)}`,
+        value: 0
+      }));
+      nums.forEach(n => {
+        const idx = Math.min(Math.floor((n - min) / binSize), bins - 1);
+        histogram[idx].value++;
+      });
+      return histogram.filter(b => b.value > 0);
+    }
+    
+    if (type === 'date') {
+      const dates = values.map(v => new Date(v)).filter(d => !isNaN(d.getTime())).sort((a,b)=>a-b);
+      if (dates.length === 0) return [];
+      const formatDay = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const formatMonth = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const dayCounts = {};
+      dates.forEach(d=>{ const k = formatDay(d); dayCounts[k] = (dayCounts[k]||0)+1; });
+      const distinctDays = Object.keys(dayCounts).length;
+      if (distinctDays > 100) {
+        const monthCounts = {};
+        dates.forEach(d=>{ const k = formatMonth(d); monthCounts[k] = (monthCounts[k]||0)+1; });
+        const entries = Object.entries(monthCounts).sort(([a],[b])=>a.localeCompare(b)).map(([name,value])=>({name,value}));
+        return includeAll ? entries : entries.slice(-24);
+      }
+      const dayEntries = Object.entries(dayCounts).sort(([a],[b])=>a.localeCompare(b)).map(([name,value])=>({name,value}));
+      return includeAll ? dayEntries : dayEntries.slice(-50);
+    }
+    
+    // categorical (default)
+    const freq = {};
+    values.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+    const entries = Object.entries(freq)
+      .map(([name,value])=>({
+        name: name.length > 20 ? `${name.substring(0,20)}...` : name,
+        fullName: name,
+        value,
+        percentage: ((value / values.length) * 100).toFixed(1)
+      }))
+      .sort((a,b)=>b.value - a.value);
+    return includeAll ? entries : entries.slice(0, 10);
   };
 
-  // Get top N values for a column
+  // Get top N values for a column (works with filtered data)
   const getTopNValues = (column, n = 10) => {
     if (!data || !analysis) return [];
     
+    // Use filtered data if available, otherwise use original data
+    const dataToAnalyze = filteredData || data;
+    
     if (analysis.dataTypes[column] === 'categorical') {
-      const frequencies = analysis.statistics[column];
+      // Calculate frequencies from the current dataset (filtered or original)
+      const frequencies = {};
+      dataToAnalyze.rows.forEach(row => {
+        const val = row[column];
+        if (val !== '' && val !== null && val !== undefined) {
+          frequencies[val] = (frequencies[val] || 0) + 1;
+        }
+      });
+      
       return Object.entries(frequencies)
         .sort(([,a], [,b]) => b - a)
         .slice(0, n)
-        .map(([value, count]) => ({ value, count, percentage: (count / data.totalRows * 100).toFixed(1) }));
+        .map(([value, count]) => ({ 
+          value, 
+          count, 
+          percentage: (count / dataToAnalyze.rows.length * 100).toFixed(1) 
+        }));
     } else if (analysis.dataTypes[column] === 'numeric') {
-      const values = data.rows
+      const values = dataToAnalyze.rows
         .map(row => parseFloat(row[column]))
         .filter(val => !isNaN(val))
         .sort((a, b) => b - a)
@@ -732,12 +1060,24 @@ const DynamicAnalyticsPage = () => {
         count: index + 1,
         percentage: ((n - index) / values.length * 100).toFixed(1)
       }));
+    } else if (analysis.dataTypes[column] === 'date') {
+      const values = dataToAnalyze.rows
+        .map(row => new Date(row[column]))
+        .filter(date => !isNaN(date.getTime()))
+        .sort((a, b) => b - a)
+        .slice(0, n);
+      
+      return values.map((value, index) => ({
+        value: value.toLocaleDateString('id-ID'),
+        count: index + 1,
+        percentage: ((n - index) / values.length * 100).toFixed(1)
+      }));
     }
     return [];
   };
 
   // Generate chart data for filtered results
-  const generateChartData = (column) => {
+  const generateChartData = (column, includeAll = false) => {
     if (!filteredData || !column) return null;
     
     const columnData = filteredData.rows.map(row => row[column]).filter(val => val !== '');
@@ -748,10 +1088,11 @@ const DynamicAnalyticsPage = () => {
         frequency[val] = (frequency[val] || 0) + 1;
       });
       
-      return Object.entries(frequency)
+      const entries = Object.entries(frequency)
         .sort(([,a], [,b]) => b - a)
-        .slice(0, 20) // Top 20 for better visualization
         .map(([name, value]) => ({ name, value }));
+      
+      return includeAll ? entries : entries.slice(0, 20);
     } else if (analysis?.dataTypes[column] === 'numeric') {
       const numericValues = columnData.map(val => parseFloat(val)).filter(val => !isNaN(val));
       const bins = 10;
@@ -770,6 +1111,43 @@ const DynamicAnalyticsPage = () => {
       });
       
       return histogram.filter(bin => bin.value > 0);
+    } else if (analysis?.dataTypes[column] === 'date') {
+      // Group dates by day or by month depending on volume
+      const dates = columnData
+        .map(val => new Date(val))
+        .filter(d => !isNaN(d.getTime()))
+        .sort((a, b) => a - b);
+      if (dates.length === 0) return [];
+      
+      // If too many distinct days, bucket by month
+      const formatDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const formatMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      
+      const dayCounts = {};
+      dates.forEach(d => {
+        const key = formatDay(d);
+        dayCounts[key] = (dayCounts[key] || 0) + 1;
+      });
+      const distinctDays = Object.keys(dayCounts).length;
+      
+      if (distinctDays > 100) {
+        // Bucket by month
+        const monthCounts = {};
+        dates.forEach(d => {
+          const key = formatMonth(d);
+          monthCounts[key] = (monthCounts[key] || 0) + 1;
+        });
+        const entries = Object.entries(monthCounts)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, value]) => ({ name, value }));
+        return includeAll ? entries : entries.slice(-24); // last 24 months
+      }
+      
+      // Use daily counts
+      const dayEntries = Object.entries(dayCounts)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, value]) => ({ name, value }));
+      return includeAll ? dayEntries : dayEntries.slice(-50); // last 50 days
     }
     
     return null;
@@ -795,12 +1173,12 @@ const DynamicAnalyticsPage = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const chartOptions = [
-    { value: 'overview', label: 'Ringkasan Dataset' },
-    { value: 'distribution', label: 'Distribusi Data' },
-    { value: 'correlation', label: 'Matriks Korelasi' },
-    { value: 'missing', label: 'Analisis Data Hilang' }
-  ];
+  // const chartOptions = [
+  //   { value: 'overview', label: 'Ringkasan Dataset' },
+  //   { value: 'distribution', label: 'Distribusi Data' },
+  //   { value: 'correlation', label: 'Matriks Korelasi' },
+  //   { value: 'missing', label: 'Analisis Data Hilang' }
+  // ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -836,6 +1214,7 @@ const DynamicAnalyticsPage = () => {
               ref={fileInputRef}
               type="file"
               accept=".csv"
+              multiple
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -896,15 +1275,282 @@ const DynamicAnalyticsPage = () => {
           </div>
         )}
 
-        {/* Add-ons Section */}
+
+
+        {/* Filters */}
+        {data && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Filter size={20} className="text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Filter Data</h3>
+              {!analysis && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                  Menganalisis data...
+                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
+              {data.headers.map(header => {
+                const filterOptions = getFilterOptions(header);
+                const dataType = analysis?.dataTypes[header] || 'loading...';
+                const selectedFilters = filters[header] || [];
+                const hasSelections = selectedFilters.length > 0;
+                
+                const isExpanded = expandedFilters[header] === true; // Default to closed
+                
+                return (
+                  <div key={header} className="border rounded-lg bg-gray-50">
+                    <div 
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleFilterExpansion(header)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700">
+                          {header} ({dataType})
+                        </label>
+                        {hasSelections && (
+                          <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
+                            {selectedFilters.length} selected
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasSelections && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearColumnFilters(header);
+                            }}
+                            className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 hover:bg-red-50 rounded"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <div className="text-gray-400">
+                          {isExpanded ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                    
+                    {filterOptions.length > 0 ? (
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {filterOptions.map((option, index) => {
+                          const isSelected = selectedFilters.includes(option.value);
+                          const isCustomRange = option.value === 'custom_range';
+                          const hasCustomRange = selectedFilters.some(f => f.startsWith('custom_range:'));
+                          
+                          return (
+                            <div key={index}>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={`${header}-${index}`}
+                                  checked={isSelected || hasCustomRange || (isCustomRange && customDateRanges[header])}
+                                  onChange={(e) => {
+                                    if (isCustomRange) {
+                                      // For custom range, just toggle the checkbox state
+                                      if (e.target.checked) {
+                                        // Initialize custom date range state
+                                        const newRanges = { ...customDateRanges };
+                                        if (!newRanges[header]) {
+                                          newRanges[header] = { from: '', to: '' };
+                                        }
+                                        setCustomDateRanges(newRanges);
+                                      } else {
+                                        // Remove custom range if unchecked
+                                        const newFilters = { ...filters };
+                                        const currentColumnFilters = newFilters[header] || [];
+                                        newFilters[header] = currentColumnFilters.filter(v => !v.startsWith('custom_range:'));
+                                        if (newFilters[header].length === 0) {
+                                          delete newFilters[header];
+                                        }
+                                        setFilters(newFilters);
+                                        
+                                        // Clear custom date ranges
+                                        const newRanges = { ...customDateRanges };
+                                        delete newRanges[header];
+                                        setCustomDateRanges(newRanges);
+                                      }
+                                    } else {
+                                      handleFilterChange(header, option.value, e.target.checked);
+                                    }
+                                  }}
+                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                />
+                                <label
+                                  htmlFor={`${header}-${index}`}
+                                  className="text-sm text-gray-700 cursor-pointer flex-1"
+                                >
+                                  {option.label}
+                                </label>
+                              </div>
+                              
+                              {/* Custom Date Range Picker */}
+                              {isCustomRange && (isSelected || hasCustomRange || customDateRanges[header]) && analysis?.dataTypes[header] === 'date' && (
+                                <div className="ml-6 mt-2 p-3 bg-white border border-gray-200 rounded-lg">
+                                  <div className="text-xs font-medium text-gray-600 mb-2">Custom Date Range:</div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">From:</label>
+                                      <input
+                                        type="date"
+                                        value={customDateRanges[header]?.from || ''}
+                                        onChange={(e) => {
+                                          const newRanges = { ...customDateRanges };
+                                          if (!newRanges[header]) newRanges[header] = {};
+                                          newRanges[header].from = e.target.value;
+                                          setCustomDateRanges(newRanges);
+                                          
+                                          // Auto-apply if both dates are set
+                                          if (newRanges[header].to) {
+                                            handleCustomDateRange(header, e.target.value, newRanges[header].to);
+                                          }
+                                        }}
+                                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-red-500 focus:border-red-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">To:</label>
+                                      <input
+                                        type="date"
+                                        value={customDateRanges[header]?.to || ''}
+                                        onChange={(e) => {
+                                          const newRanges = { ...customDateRanges };
+                                          if (!newRanges[header]) newRanges[header] = {};
+                                          newRanges[header].to = e.target.value;
+                                          setCustomDateRanges(newRanges);
+                                          
+                                          // Auto-apply if both dates are set
+                                          if (newRanges[header].from) {
+                                            handleCustomDateRange(header, newRanges[header].from, e.target.value);
+                                          }
+                                        }}
+                                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-red-500 focus:border-red-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      // Remove custom range
+                                      const newFilters = { ...filters };
+                                      const currentColumnFilters = newFilters[header] || [];
+                                      newFilters[header] = currentColumnFilters.filter(v => !v.startsWith('custom_range:'));
+                                      if (newFilters[header].length === 0) {
+                                        delete newFilters[header];
+                                      }
+                                      setFilters(newFilters);
+                                      
+                                      // Clear custom date ranges
+                                      const newRanges = { ...customDateRanges };
+                                      delete newRanges[header];
+                                      setCustomDateRanges(newRanges);
+                                    }}
+                                    className="mt-2 text-xs text-red-600 hover:text-red-700"
+                                  >
+                                    Remove custom range
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-500 italic">
+                        {analysis ? 'Tidak ada opsi filter tersedia' : 'Menganalisis data...'}
+                      </div>
+                    )}
+                    
+                    {hasSelections && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="text-xs text-gray-600 mb-2">Selected:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedFilters.slice(0, 3).map((value, index) => {
+                            const option = filterOptions.find(opt => opt.value === value);
+                            return (
+                              <span
+                                key={index}
+                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                              >
+                                {option?.label || value}
+                              </span>
+                            );
+                          })}
+                          {selectedFilters.length > 3 && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                              +{selectedFilters.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                        {filterOptions.length > 0 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            {filterOptions.length} opsi tersedia
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={applyFilters}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+              >
+                <Search size={16} />
+                Terapkan Filter
+              </button>
+              <button
+                onClick={clearAllFilters}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
+              >
+                Reset
+              </button>
+              {filteredData && (
+                <button
+                  onClick={exportData}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Ekspor Data
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        
+
+        
         {data && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center gap-3 mb-4">
               <Settings size={20} className="text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Add-ons Analisis</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Analisis Data</h3>
+              <span className="text-sm text-gray-500">
+                {filteredData ? `Menganalisis ${filteredData.rows.length} baris data yang difilter` : `Menganalisis ${data.totalRows} baris data`}
+              </span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <button
                 onClick={() => setShowInsights(!showInsights)}
                 className={`p-4 rounded-lg border-2 transition-all ${
@@ -917,7 +1563,9 @@ const DynamicAnalyticsPage = () => {
                   <Info size={20} />
                   <span className="font-medium">Wawasan Data</span>
                 </div>
-                <p className="text-sm text-gray-600">Temukan insight dan pola tersembunyi</p>
+                <p className="text-sm text-gray-600">
+                  {filteredData ? 'Temukan insight dari data yang difilter' : 'Temukan insight dan pola tersembunyi'}
+                </p>
               </button>
               
               <button
@@ -932,7 +1580,9 @@ const DynamicAnalyticsPage = () => {
                   <TrendingUp size={20} />
                   <span className="font-medium">Analisis Top N</span>
                 </div>
-                <p className="text-sm text-gray-600">Lihat nilai teratas dari setiap kolom</p>
+                <p className="text-sm text-gray-600">
+                  {filteredData ? 'Lihat nilai teratas dari data yang difilter' : 'Lihat nilai teratas dari setiap kolom'}
+                </p>
               </button>
               
               <button
@@ -947,18 +1597,461 @@ const DynamicAnalyticsPage = () => {
                   <BarChart3 size={20} />
                   <span className="font-medium">Grafik Visual</span>
                 </div>
-                <p className="text-sm text-gray-600">Buat grafik dari data yang difilter</p>
+                <p className="text-sm text-gray-600">
+                  {filteredData ? 'Buat grafik dari data yang difilter' : 'Buat grafik dari data yang difilter'}
+                </p>
               </button>
+
+              <button
+                onClick={() => setShowComparative(!showComparative)}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  showComparative 
+                    ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Settings size={20} />
+                  <span className="font-medium">Analisis Komparatif</span>
+                </div>
+                <p className="text-sm text-gray-600">Bandingkan antar file</p>
+              </button>
+
+              {/* Active dataset selector */}
+              <div className="p-4 rounded-lg border-2 border-gray-200">
+                <div className="text-sm font-medium text-gray-900 mb-2">Pilih Dataset Aktif</div>
+                {multiFiles.length === 0 ? (
+                  <div className="text-xs text-gray-500">Hanya 1 dataset.</div>
+                ) : (
+                  <select
+                    className="w-full text-sm border rounded px-2 py-1"
+                    value={activeDatasetIndex}
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value) || 0;
+                      setActiveDatasetIndex(idx);
+                      const ds = multiFiles[idx];
+                      if (ds) {
+                        setData(ds);
+                        setAnalysis(null);
+                        setFilteredData(null);
+                        setFilters({});
+                        setTimeout(() => analyzeData(ds), 50);
+                      }
+                    }}
+                  >
+                    {multiFiles.map((ds, i) => (
+                      <option key={i} value={i}>{ds.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Insights Add-on */}
-        {showInsights && analysis && analysis.insights.length > 0 && (
+        {/* Comparative Analysis Section */}
+        {showComparative && analysis && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Wawasan Data</h3>
+            <div className="flex items-center gap-3 mb-4">
+              <BarChart3 size={20} className="text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Analisis Komparatif</h3>
+              <span className="text-sm text-gray-500">Sumber: {sourceKey}</span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Metric (numerik)</label>
+                <CustomDropdown
+                  options={[{ value: '', label: 'Pilih metric' }, ...data.headers
+                    .filter(h => analysis.dataTypes[h] === 'numeric')
+                    .map(h => ({ value: h, label: h }))]}
+                  value={selectedMetric}
+                  onChange={(v) => setSelectedMetric(v)}
+                  placeholder="Pilih metric"
+                />
+              </div>
+              {/* Removed duplicate category/topK controls to avoid confusion */}
+            </div>
+
+            {selectedMetric && (
+              <div className="space-y-8">
+                {/* Perbandingan Kategori (Multi-line by file) */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Perbandingan Kategori per File (Multi-line)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Kolom Kategori</label>
+                      <CustomDropdown
+                        options={[...data.headers
+                          .filter(h => analysis.dataTypes[h] === 'categorical')
+                          .map(h => ({ value: h, label: h }))]}
+                        value={selectedCategoryForCompare}
+                        onChange={(v) => setSelectedCategoryForCompare(v)}
+                        placeholder="Pilih kolom kategori"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Metric</label>
+                      <CustomDropdown
+                        options={[
+                          { value: 'count', label: 'Count (jumlah baris)' },
+                          { value: 'sum', label: 'Sum (jumlah nilai numerik)' }
+                        ]}
+                        value={categoryMetricType}
+                        onChange={(v) => setCategoryMetricType(v)}
+                        placeholder="Pilih metric"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Top K</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={categoryTopK}
+                        onChange={(e) => setCategoryTopK(parseInt(e.target.value) || 10)}
+                        className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={categoryShowAll}
+                          onChange={(e) => setCategoryShowAll(e.target.checked)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm text-gray-700">Tampilkan semua kategori</span>
+                      </label>
+                    </div>
+                  </div>
+                  {selectedCategoryForCompare && (
+                    <div className="p-3 bg-gray-50 rounded border">
+                      {(() => {
+                        const rows = getRowsWithSource();
+                        const included = includedDatasets.size > 0 ? new Set(includedDatasets) : new Set(Array.from(new Set(rows.map(r => r[sourceKey] || 'Unknown'))));
+                        const sources = Array.from(included).sort();
+                        const cat = selectedCategoryForCompare;
+                        // Compute per-file metric for each category value
+                        const valueSet = new Set(rows.map(r => r[cat] || '-'));
+                        const valueList = Array.from(valueSet);
+                        const metricOf = (list) => {
+                          if (categoryMetricType === 'count') return list.length;
+                          const nums = list.map(x => parseFloat(x[selectedMetric])).filter(n => !isNaN(n));
+                          return nums.reduce((a,b)=>a+b,0);
+                        };
+                        // total per value across included sources
+                        const totals = {};
+                        valueList.forEach(v => {
+                          const rel = rows.filter(r => (r[cat] || '-') === v && included.has(r[sourceKey] || 'Unknown'));
+                          totals[v] = metricOf(rel);
+                        });
+                        const orderedValues = valueList
+                          .map(v => ({ v, t: totals[v] }))
+                          .sort((a,b)=>b.t - a.t)
+                          .map(o => o.v);
+                        const usedValues = categoryShowAll ? orderedValues : orderedValues.slice(0, categoryTopK);
+                        if (usedValues.length === 0) return <div className="text-sm text-gray-500">Tidak ada kategori.</div>;
+                        // Build lines: one line per source
+                        const series = sources.map((src, si) => ({
+                          name: src,
+                          color: ['#ef4444','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#6366f1','#6b7280'][si % 8],
+                          points: usedValues.map(val => {
+                            const rel = rows.filter(r => (r[cat] || '-') === val && (r[sourceKey] || 'Unknown') === src);
+                            return { x: val, y: metricOf(rel) };
+                          })
+                        }));
+                        const yMax = Math.max(1, ...series.flatMap(s => s.points.map(p => p.y)));
+                        const width = 720; const height = 300; const padding = 60;
+                        const xPositions = usedValues.reduce((acc, v, idx) => {
+                          acc[v] = padding + (idx / Math.max(1, usedValues.length - 1)) * (width - padding * 2);
+                          return acc;
+                        }, {});
+                        const yScale = (y) => height - padding - (y / yMax) * (height - padding * 2);
+                        return (
+                          <div>
+                            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+                              {/* Axes */}
+                              <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#9CA3AF" strokeWidth="1" />
+                              <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#9CA3AF" strokeWidth="1" />
+                              {/* X labels */}
+                              {usedValues.map((v, i) => (
+                                <g key={i}>
+                                  <line x1={xPositions[v]} y1={height - padding} x2={xPositions[v]} y2={height - padding + 4} stroke="#9CA3AF" />
+                                  <text x={xPositions[v]} y={height - padding + 22} fontSize="10" textAnchor="end" transform={`rotate(45 ${xPositions[v]} ${height - padding + 22})`} fill="#4B5563">{v}</text>
+                                </g>
+                              ))}
+                              {/* Y ticks */}
+                              {[0,0.25,0.5,0.75,1].map((t,i)=>{
+                                const yy = yScale(t * yMax);
+                                return (
+                                  <g key={i}>
+                                    <line x1={padding - 4} y1={yy} x2={padding} y2={yy} stroke="#9CA3AF" />
+                                    <text x={padding - 6} y={yy + 3} fontSize="10" textAnchor="end" fill="#4B5563">{(t * yMax).toFixed(0)}</text>
+                                  </g>
+                                );
+                              })}
+                              {/* Lines */}
+                              {series.map((s, si) => {
+                                const d = s.points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xPositions[p.x]} ${yScale(p.y)}`).join(' ');
+                                return <path key={si} d={d} fill="none" stroke={s.color} strokeWidth="2" />;
+                              })}
+                              {/* Dots */}
+                              {series.map((s, si) => s.points.map((p, pi) => (
+                                <circle key={`${si}-${pi}`} cx={xPositions[p.x]} cy={yScale(p.y)} r="3" fill={s.color} />
+                              )))}
+                            </svg>
+                            {/* Legend */}
+                            <div className="flex flex-wrap gap-3 mt-2">
+                              {series.map((s, si) => (
+                                <div key={si} className="flex items-center gap-2 text-xs bg-white border px-2 py-1 rounded">
+                                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></span>
+                                  <span className="text-gray-800">{s.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+                {/* Trend kategori: multi-line per Source */}
+                <div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Kolom Kategori</label>
+                      <CustomDropdown
+                        options={[...data.headers
+                          .filter(h => analysis.dataTypes[h] === 'categorical')
+                          .map(h => ({ value: h, label: h }))]}
+                        value={selectedCategoryForCompare}
+                        onChange={(v) => setSelectedCategoryForCompare(v)}
+                        placeholder="Pilih kolom kategori"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Nilai Kategori (multi)</label>
+                      <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 border rounded">
+                        {selectedCategoryForCompare && Array.from(new Set(getRowsWithSource().map(r => r[selectedCategoryForCompare] || '-')))
+                          .sort()
+                          .map(val => (
+                            <label key={val} className="flex items-center gap-1 text-xs bg-gray-50 px-2 py-1 rounded border">
+                              <input
+                                type="checkbox"
+                                checked={selectedCategoryValues.includes(val)}
+                                onChange={(e) => {
+                                  const next = new Set(selectedCategoryValues);
+                                  if (e.target.checked) next.add(val); else next.delete(val);
+                                  setSelectedCategoryValues(Array.from(next));
+                                }}
+                              />
+                              <span>{val}</span>
+                            </label>
+                          ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Sumber ditampilkan</label>
+                      <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 border rounded">
+                        {Array.from(new Set(getRowsWithSource().map(r => r[sourceKey] || 'Unknown')))
+                          .sort()
+                          .map(src => (
+                            <label key={src} className="flex items-center gap-1 text-xs bg-gray-50 px-2 py-1 rounded border">
+                              <input
+                                type="checkbox"
+                                defaultChecked
+                                onChange={(e) => {
+                                  const next = new Set(includedDatasets);
+                                  if (!e.target.checked) next.delete(src); else next.add(src);
+                                  setIncludedDatasets(next);
+                                }}
+                              />
+                              <span>{src}</span>
+                            </label>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                  {selectedCategoryForCompare && selectedCategoryValues.length > 0 && (
+                    <div className="p-3 bg-gray-50 rounded border">
+                      {(() => {
+                        // Prepare multi-line data by year (from filename) and category values
+                        const rows = getRowsWithSource();
+                        const parseYear = (s) => {
+                          const m = String(s).match(/(20\d{2})/);
+                          return m ? parseInt(m[1]) : null;
+                        };
+                        // Aggregate sum per year per category value for included sources
+                        const included = includedDatasets.size > 0 ? new Set(includedDatasets) : new Set(Array.from(new Set(rows.map(r => r[sourceKey] || 'Unknown'))));
+                        const map = {}; // {year: {valueName: sum}}
+                        rows.forEach(r => {
+                          const src = r[sourceKey] || 'Unknown';
+                          if (!included.has(src)) return;
+                          const yr = parseYear(src);
+                          if (!yr) return;
+                          const catVal = (r[selectedCategoryForCompare] || '-');
+                          if (!selectedCategoryValues.includes(catVal)) return;
+                          const num = parseFloat(r[selectedMetric]);
+                          if (isNaN(num)) return;
+                          if (!map[yr]) map[yr] = {};
+                          map[yr][catVal] = (map[yr][catVal] || 0) + num;
+                        });
+                        const years = Object.keys(map).map(n => parseInt(n,10)).sort((a,b)=>a-b);
+                        if (years.length === 0) return <div className="text-sm text-gray-500">Tidak ada data untuk pilihan ini.</div>;
+                        // Build polylines per selected category value
+                        const series = selectedCategoryValues.map(val => ({ name: val, points: years.map(y => ({ x: y, y: map[y]?.[val] || 0 })) }));
+                        // SVG chart
+                        const width = 640; const height = 260; const padding = 40;
+                        const xMin = years[0]; const xMax = years[years.length - 1];
+                        const yMax = Math.max(1, ...series.flatMap(s => s.points.map(p => p.y)));
+                        const xScale = (x) => padding + (years.length > 1 ? (x - xMin) / (xMax - xMin) : 0) * (width - padding * 2);
+                        const yScale = (y) => height - padding - (y / yMax) * (height - padding * 2);
+                        const colors = ['#ef4444','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#6366f1','#6b7280'];
+                        return (
+                          <div>
+                            <div className="text-sm font-medium text-gray-700 mb-2">Trend: {selectedCategoryForCompare} ({selectedCategoryValues.join(', ')})</div>
+                            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+                              {/* Axes */}
+                              <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#9CA3AF" strokeWidth="1" />
+                              <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#9CA3AF" strokeWidth="1" />
+                              {/* X ticks (years) */}
+                              {years.map((y,i)=> (
+                                <g key={i}>
+                                  <line x1={xScale(y)} y1={height - padding} x2={xScale(y)} y2={height - padding + 4} stroke="#9CA3AF" />
+                                  <text x={xScale(y)} y={height - padding + 16} fontSize="10" textAnchor="middle" fill="#4B5563">{y}</text>
+                                </g>
+                              ))}
+                              {/* Y ticks */}
+                              {[0,0.25,0.5,0.75,1].map((t,i)=>{
+                                const yy = yScale(t * yMax);
+                                return (
+                                  <g key={i}>
+                                    <line x1={padding - 4} y1={yy} x2={padding} y2={yy} stroke="#9CA3AF" />
+                                    <text x={padding - 6} y={yy + 3} fontSize="10" textAnchor="end" fill="#4B5563">{(t * yMax).toFixed(0)}</text>
+                                  </g>
+                                );
+                              })}
+                              {/* Lines */}
+                              {series.map((s, si) => {
+                                const d = s.points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${xScale(p.x)} ${yScale(p.y)}`).join(' ');
+                                return <path key={si} d={d} fill="none" stroke={colors[si % colors.length]} strokeWidth="2" />;
+                              })}
+                              {/* Dots */}
+                              {series.map((s, si) => s.points.map((p, pi) => (
+                                <circle key={`${si}-${pi}`} cx={xScale(p.x)} cy={yScale(p.y)} r="3" fill={colors[si % colors.length]} />
+                              )))}
+                            </svg>
+                            {/* Legend */}
+                            <div className="flex flex-wrap gap-3 mt-2">
+                              {series.map((s, si) => (
+                                <div key={si} className="flex items-center gap-2 text-xs bg-white border px-2 py-1 rounded">
+                                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[si % colors.length] }}></span>
+                                  <span className="text-gray-800">{s.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+                {/* Per-source metric summary */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Ringkasan {selectedMetric} per {sourceKey}</h4>
+                  <div className="space-y-2">
+                    {(() => {
+                      const bySource = {};
+                      getRowsWithSource().forEach(r => {
+                        const src = r[sourceKey] || 'Unknown';
+                        const val = parseFloat(r[selectedMetric]);
+                        if (!isNaN(val)) {
+                          bySource[src] = (bySource[src] || 0) + val;
+                        }
+                      });
+                      const entries = Object.entries(bySource).sort((a,b)=>b[1]-a[1]);
+                      const maxVal = Math.max(...entries.map(([,v]) => v), 1);
+                      return entries.map(([src, total]) => (
+                        <div key={src} className="flex items-center gap-3">
+                          <div className="w-32 text-sm text-gray-600">{src}</div>
+                          <div className="flex-1 bg-gray-200 rounded-full h-4">
+                            <div className="bg-blue-600 h-4 rounded-full" style={{ width: `${(total / maxVal) * 100}%` }}></div>
+                          </div>
+                          <div className="w-24 text-sm text-gray-700 text-right">{total.toFixed(2)}</div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                {/* Grouped bar: category vs source */}
+                {selectedCategoryForCompare && (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Perbandingan {selectedMetric} per {selectedCategoryForCompare} dan {sourceKey}</h4>
+                    {(() => {
+                      const rows = getRowsWithSource();
+                      const sources = Array.from(new Set(rows.map(r => r[sourceKey] || 'Unknown')));
+                      const map = {};
+                      rows.forEach(r => {
+                        const cat = r[selectedCategoryForCompare] || '-';
+                        const src = r[sourceKey] || 'Unknown';
+                        const val = parseFloat(r[selectedMetric]);
+                        if (isNaN(val)) return;
+                        if (!map[cat]) map[cat] = {};
+                        map[cat][src] = (map[cat][src] || 0) + val;
+                      });
+                      const cats = Object.keys(map).map(c => ({
+                        name: c,
+                        total: sources.reduce((s, src) => s + (map[c][src] || 0), 0)
+                      }))
+                      .sort((a,b)=>b.total - a.total)
+                      .slice(0, topKCompare)
+                      .map(o => o.name);
+                      const maxVal = Math.max(1, ...cats.map(c => Math.max(...sources.map(src => map[c][src] || 0))));
+                      return (
+                        <div className="space-y-4">
+                          {cats.map(cat => (
+                            <div key={cat} className="border rounded-lg p-3">
+                              <div className="font-medium text-gray-800 mb-2">{cat}</div>
+                              <div className="space-y-2">
+                                {sources.map(src => {
+                                  const val = map[cat][src] || 0;
+                                  const width = (val / maxVal) * 100;
+                                  return (
+                                    <div key={src} className="flex items-center gap-3">
+                                      <div className="w-32 text-xs text-gray-600">{src}</div>
+                                      <div className="flex-1 bg-gray-200 rounded-full h-3">
+                                        <div className="bg-purple-600 h-3 rounded-full" style={{ width: `${width}%` }}></div>
+                                      </div>
+                                      <div className="w-20 text-xs text-gray-700 text-right">{val.toFixed(2)}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Insights Add-on - Now below add-ons */}
+        {showInsights && analysis && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Info size={20} className="text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Wawasan Data</h3>
+              <span className="text-sm text-gray-500">
+                {filteredData ? `dari ${filteredData.rows.length} baris data yang difilter` : `dari ${data.totalRows} baris data`}
+              </span>
+            </div>
             <div className="space-y-3">
-              {analysis.insights.map((insight, index) => (
+              {generateFilteredInsights().map((insight, index) => (
                 <div key={index} className={`flex items-start gap-3 p-3 rounded-lg ${
                   insight.type === 'success' ? 'bg-green-50 border border-green-200' :
                   insight.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
@@ -981,86 +2074,15 @@ const DynamicAnalyticsPage = () => {
           </div>
         )}
 
-        {/* Filters */}
-        {data && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Filter size={20} className="text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Filter Data</h3>
-              {!analysis && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                  Menganalisis data...
-                </div>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {data.headers.map(header => {
-                const filterOptions = getFilterOptions(header);
-                const dataType = analysis?.dataTypes[header] || 'loading...';
-                
-                return (
-                  <div key={header}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {header} ({dataType})
-                    </label>
-                    <CustomDropdown
-                      options={[
-                        { value: '', label: `Pilih filter untuk ${header}` },
-                        ...filterOptions
-                      ]}
-                      value={filters[header] || ''}
-                      onChange={(value) => handleFilterChange(header, value)}
-                      placeholder={filterOptions.length > 0 ? `Filter ${header}...` : 'Loading options...'}
-                      disabled={filterOptions.length === 0}
-                    />
-                    {filterOptions.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {filterOptions.length} opsi tersedia
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={applyFilters}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
-              >
-                <Search size={16} />
-                Terapkan Filter
-              </button>
-              <button
-                onClick={() => {
-                  setFilters({});
-                  setFilteredData(data);
-                }}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
-              >
-                Reset
-              </button>
-              {filteredData && (
-                <button
-                  onClick={exportData}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
-                >
-                  <Download size={16} />
-                  Ekspor Data
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Top N Analysis Add-on */}
         {showTopN && data && analysis && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center gap-3 mb-4">
               <TrendingUp size={20} className="text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">Analisis Top N</h3>
+              <span className="text-sm text-gray-500">
+                {filteredData ? `dari ${filteredData.rows.length} baris data yang difilter` : `dari ${data.totalRows} baris data`}
+              </span>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1085,21 +2107,35 @@ const DynamicAnalyticsPage = () => {
                   <input
                     type="number"
                     min="1"
-                    max="50"
+                    max="200"
                     value={topN}
                     onChange={(e) => setTopN(parseInt(e.target.value) || 10)}
                     className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                 </div>
+                {selectedColumn && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <input
+                      id="show-all-topn"
+                      type="checkbox"
+                      checked={showAllTopN}
+                      onChange={(e) => setShowAllTopN(e.target.checked)}
+                      className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <label htmlFor="show-all-topn" className="text-sm text-gray-700">
+                      Tampilkan semua nilai unik
+                    </label>
+                  </div>
+                )}
               </div>
               
               {selectedColumn && (
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">
-                    Top {topN} dari {selectedColumn}
+                    {showAllTopN ? 'Semua nilai dari' : `Top ${topN} dari`} {selectedColumn}
                   </h4>
-                  <div className="max-h-64 overflow-y-auto">
-                    {getTopNValues(selectedColumn, topN).map((item, index) => (
+                    <div className={`${expandTopNList ? 'max-h-[600px]' : 'max-h-64'} overflow-y-auto`}>
+                    {(showAllTopN ? getTopNValues(selectedColumn, 100000) : getTopNValues(selectedColumn, topN)).map((item, index) => (
                       <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
                         <div className="flex items-center gap-3">
                           <span className="w-6 h-6 bg-red-100 text-red-800 rounded-full flex items-center justify-center text-xs font-medium">
@@ -1119,6 +2155,17 @@ const DynamicAnalyticsPage = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                    <div className="mt-3 flex items-center gap-4">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={expandTopNList}
+                          onChange={(e) => setExpandTopNList(e.target.checked)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm text-gray-700">Perluas daftar (lebih tinggi)</span>
+                      </label>
                   </div>
                 </div>
               )}
@@ -1188,7 +2235,7 @@ const DynamicAnalyticsPage = () => {
                 const detail = selectedItemDetails.details[header];
                 if (!detail || detail.uniqueValues.length === 0) return null;
                 
-                const chartData = generateItemDetailChartData(detail, itemChartType);
+                const chartData = generateItemDetailChartData(detail, header, showAllItemChartValues);
                 const isExpanded = expandedColumn === header;
                 
                 return (
@@ -1246,13 +2293,28 @@ const DynamicAnalyticsPage = () => {
 
                         {/* Right Column - Charts */}
                         {showItemCharts && chartData.length > 0 && (
-                          <div>
+                          <div onClick={(e) => e.stopPropagation()}>
                             <h5 className="font-medium text-gray-900 mb-3">Distribusi Nilai</h5>
-                            {itemChartType === 'bar' ? (
+                            <div className="mb-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                id={`show-all-item-${header}`}
+                                type="checkbox"
+                                checked={showAllItemChartValues}
+                                onChange={(e) => setShowAllItemChartValues(e.target.checked)}
+                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                              />
+                              <label htmlFor={`show-all-item-${header}`} className="text-xs text-gray-700">Tampilkan semua nilai</label>
+                            </div>
+                            {(() => {
+                              const visibleData = showAllItemChartValues ? chartData : chartData.slice(0, 8);
+                              const dataSortedByValue = [...visibleData].sort((a, b) => b.value - a.value);
+                              return itemChartType === 'bar' ? (
                               <div className="space-y-3">
-                                {chartData.slice(0, 8).map((item, index) => {
-                                  const maxValue = Math.max(...chartData.map(d => d.value));
+                                {dataSortedByValue.map((item, index) => {
+                                  const maxValue = Math.max(...dataSortedByValue.map(d => d.value));
+                                  const totalValue = dataSortedByValue.reduce((sum, d) => sum + d.value, 0);
                                   const percentage = (item.value / maxValue) * 100;
+                                  const percentOfTotal = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(1) : '0.0';
                                   return (
                                     <div key={index} className="p-3 bg-white rounded-lg border">
                                       <div className="flex justify-between items-center mb-2">
@@ -1260,7 +2322,7 @@ const DynamicAnalyticsPage = () => {
                                           {item.name}
                                         </span>
                                         <span className="text-sm font-bold text-gray-600">
-                                          {item.value} ({item.percentage}%)
+                                          {item.value} ({percentOfTotal}%)
                                         </span>
                                       </div>
                                       <div className="w-full bg-gray-200 rounded-full h-4">
@@ -1283,11 +2345,11 @@ const DynamicAnalyticsPage = () => {
                                 <div className="flex-1 flex justify-center items-center">
                                   <div className="relative w-48 h-48">
                                     <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                                      {chartData.slice(0, 8).map((item, index) => {
+                                      {dataSortedByValue.map((item, index) => {
                                         const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#6b7280'];
-                                        const total = chartData.reduce((sum, d) => sum + d.value, 0);
+                                        const total = dataSortedByValue.reduce((sum, d) => sum + d.value, 0);
                                         const percentage = (item.value / total) * 100;
-                                        const startAngle = chartData.slice(0, index).reduce((sum, d) => sum + (d.value / total) * 360, 0);
+                                        const startAngle = dataSortedByValue.slice(0, index).reduce((sum, d) => sum + (d.value / total) * 360, 0);
                                         const endAngle = startAngle + (percentage * 360 / 100);
                                         
                                         const startAngleRad = (startAngle * Math.PI) / 180;
@@ -1322,7 +2384,7 @@ const DynamicAnalyticsPage = () => {
                                     <div className="absolute inset-0 flex items-center justify-center">
                                       <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center border-2 border-gray-200">
                                         <span className="text-xs font-medium text-gray-600">
-                                          {selectedItemDetails.totalRows}
+                                          {(showAllItemChartValues ? chartData : chartData.slice(0, 8)).reduce((sum, d) => sum + d.value, 0)}
                                         </span>
                                       </div>
                                     </div>
@@ -1331,8 +2393,10 @@ const DynamicAnalyticsPage = () => {
                                 
                                 {/* Legend */}
                                 <div className="flex-1 space-y-2">
-                                  {chartData.slice(0, 8).map((item, index) => {
+                                  {dataSortedByValue.map((item, index) => {
                                     const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#6b7280'];
+                                    const total = dataSortedByValue.reduce((sum, d) => sum + d.value, 0);
+                                    const percentOfTotal = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0.0';
                                     return (
                                       <div key={index} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-300">
                                         <div 
@@ -1344,7 +2408,7 @@ const DynamicAnalyticsPage = () => {
                                             {item.name}
                                           </div>
                                           <div className="text-sm text-gray-500">
-                                            {item.value} ({item.percentage}%)
+                                            {item.value} ({percentOfTotal}%)
                                           </div>
                                         </div>
                                       </div>
@@ -1352,25 +2416,43 @@ const DynamicAnalyticsPage = () => {
                                   })}
                                 </div>
                               </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         )}
 
                         {/* Full Width - All Values */}
                         <div className={`${showItemCharts && chartData.length > 0 ? 'lg:col-span-2' : 'lg:col-span-2'}`}>
                           <h5 className="font-medium text-gray-900 mb-3">Semua Nilai ({detail.uniqueValues.length})</h5>
-                          <div className="max-h-48 overflow-y-auto">
+                          <div className={`${expandItemAllValues ? 'max-h-none' : 'max-h-48'} overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
                             <div className="flex flex-wrap gap-2">
-                              {detail.uniqueValues.map((value, index) => (
+                              {(() => {
+                                const counts = {};
+                                detail.allValues.forEach(v => { if (v !== '' && v !== null && v !== undefined) counts[v] = (counts[v] || 0) + 1; });
+                                return Object.entries(counts)
+                                  .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+                                  .map(([value, count], index) => (
                                 <span
                                   key={index}
                                   className="px-3 py-2 bg-white border border-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-                                  title={value}
+                                      title={`${value} — ${count} kali`}
                                 >
                                   {value}
                                 </span>
-                              ))}
+                                  ));
+                              })()}
                             </div>
+                          </div>
+                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={expandItemAllValues}
+                                onChange={(e) => setExpandItemAllValues(e.target.checked)}
+                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                              />
+                              <span className="text-xs text-gray-700">Perluas daftar nilai</span>
+                            </label>
                           </div>
                         </div>
                       </div>
@@ -1543,7 +2625,7 @@ const DynamicAnalyticsPage = () => {
                   value={selectedChartColumn}
                   onChange={(value) => {
                     setSelectedChartColumn(value);
-                    setChartData(generateChartData(value));
+                    setChartData(generateChartData(value, showAllChartValues));
                   }}
                   placeholder="Pilih kolom"
                 />
@@ -1563,6 +2645,21 @@ const DynamicAnalyticsPage = () => {
                     onChange={(value) => setChartType(value)}
                     placeholder="Pilih jenis grafik"
                   />
+                  <div className="mt-4 flex items-center gap-2">
+                    <input
+                      id="show-all-chart-values"
+                      type="checkbox"
+                      checked={showAllChartValues}
+                      onChange={(e) => {
+                        setShowAllChartValues(e.target.checked);
+                        setChartData(generateChartData(selectedChartColumn, e.target.checked));
+                      }}
+                      className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <label htmlFor="show-all-chart-values" className="text-sm text-gray-700">
+                      Tampilkan semua nilai (mungkin panjang)
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
