@@ -168,7 +168,8 @@ const DrawingSpecificationsPage = () => {
   // Download file
   const downloadFile = async (drawingId, fileId, originalName) => {
     try {
-      const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
+      //const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
+      const baseURL = "https://stm-be.onrender.com";
       const token = localStorage.getItem('asb-token');
       const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;
       
