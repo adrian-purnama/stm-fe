@@ -238,7 +238,8 @@ const DrawingSpecificationsPage = () => {
   // Get asset URL for viewing uploaded files
   const getAssetUrl = (drawingId, fileId) => {
     // Use the same base URL as ApiHelper
-    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
+    //const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
+    const baseURL = "https://stm-be.onrender.com";
     const token = localStorage.getItem('asb-token');
     
     if (!token) {
