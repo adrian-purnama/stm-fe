@@ -41,7 +41,7 @@ export const NotificationsProvider = ({ children }) => {
     // const apiPort = import.meta.env.VITE_API_PORT || 5000; // assume backend port
     const apiPort = "stm-be.onrender.com";
     //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
-    const wsUrl = `${protocol}://:${apiPort}/notification`;
+    const wsUrl = `${protocol}://${apiPort}/notification`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
