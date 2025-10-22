@@ -36,7 +36,7 @@ export const NotificationsProvider = ({ children }) => {
 
 
     //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
-    const wsUrl = `'wss://${import.meta.env.VITE_BACKEND_URL}/notification`;
+    const wsUrl = `wss://${import.meta.env.VITE_BACKEND_URL}/notification`;
     // const wsUrl = `${import.meta.env.VITE_NODE_ENV === 'production' ? 'wss://' : 'ws://'}${import.meta.env.VITE_BACKEND_URL}/notification`;
 
     const ws = new WebSocket(wsUrl);
