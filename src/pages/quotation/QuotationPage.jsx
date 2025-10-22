@@ -5,7 +5,6 @@ import Navigation from '../../components/Navigation';
 import QuotationList from '../../components/quotations/QuotationList';
 import RequestQuotationTab from '../../components/quotations/RequestQuotationTab';
 import ApproveQuotationTab from '../../components/quotations/ApproveQuotationTab';
-import CreateQuotationFromRFQTab from '../../components/quotations/CreateQuotationFromRFQTab';
 import RequestQuotationListTab from '../../components/quotations/RequestQuotationListTab';
 import RFQDetailsView from '../../components/quotations/RFQDetailsView';
 import { UserContext } from '../../utils/UserContext';
@@ -348,7 +347,7 @@ const QuotationPage = () => {
 
                 {/* Creator Role Content */}
                 {activeTab === 'rfq-list' && hasQuotationCreatePermission && (
-                  <CreateQuotationFromRFQTab />
+                  <RequestQuotationListTab />
                 )}
                 {activeTab === 'quotation-list' && hasQuotationCreatePermission && (
                   <QuotationList
