@@ -31,11 +31,62 @@ const TruckTypesPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: 'Commercial'
+    category: 'Commercial',
+    defaultSpecifications: []
   });
   
   // State for selected truck type
   const [selectedTruckType, setSelectedTruckType] = useState(null);
+
+  // Helper functions for managing specifications
+  const addSpecificationCategory = () => {
+    setFormData({
+      ...formData,
+      defaultSpecifications: [
+        ...(formData.defaultSpecifications || []),
+        { category: '', items: [] }
+      ]
+    });
+  };
+
+  const removeSpecificationCategory = (index) => {
+    setFormData({
+      ...formData,
+      defaultSpecifications: (formData.defaultSpecifications || []).filter((_, i) => i !== index)
+    });
+  };
+
+  const updateSpecificationCategory = (index, field, value) => {
+    const updated = [...(formData.defaultSpecifications || [])];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormData({ ...formData, defaultSpecifications: updated });
+  };
+
+  const addSpecificationItem = (categoryIndex) => {
+    const updated = [...(formData.defaultSpecifications || [])];
+    updated[categoryIndex].items = [
+      ...(updated[categoryIndex].items || []),
+      { name: '', specification: '' }
+    ];
+    setFormData({ ...formData, defaultSpecifications: updated });
+  };
+
+  const removeSpecificationItem = (categoryIndex, itemIndex) => {
+    const updated = [...(formData.defaultSpecifications || [])];
+    updated[categoryIndex].items = (updated[categoryIndex].items || []).filter((_, i) => i !== itemIndex);
+    setFormData({ ...formData, defaultSpecifications: updated });
+  };
+
+  const updateSpecificationItem = (categoryIndex, itemIndex, field, value) => {
+    const updated = [...(formData.defaultSpecifications || [])];
+    if (updated[categoryIndex] && updated[categoryIndex].items && updated[categoryIndex].items[itemIndex]) {
+      updated[categoryIndex].items[itemIndex] = {
+        ...updated[categoryIndex].items[itemIndex],
+        [field]: value
+      };
+      setFormData({ ...formData, defaultSpecifications: updated });
+    }
+  };
 
   // Load truck types
   const loadTruckTypes = useCallback(async () => {
@@ -66,7 +117,7 @@ const TruckTypesPage = () => {
       await ApiHelper.post('/api/truck-types', formData);
       toast.success('Truck type created successfully');
       setShowCreateModal(false);
-      setFormData({ name: '', description: '', category: 'Commercial' });
+      setFormData({ name: '', description: '', category: 'Commercial', defaultSpecifications: [] });
       loadTruckTypes();
     } catch (error) {
       console.error('Error creating truck type:', error);
@@ -86,7 +137,7 @@ const TruckTypesPage = () => {
       toast.success('Truck type updated successfully');
       setShowEditModal(false);
       setSelectedTruckType(null);
-      setFormData({ name: '', description: '', category: 'Commercial' });
+      setFormData({ name: '', description: '', category: 'Commercial', defaultSpecifications: [] });
       loadTruckTypes();
     } catch (error) {
       console.error('Error updating truck type:', error);
@@ -116,7 +167,8 @@ const TruckTypesPage = () => {
     setFormData({
       name: truckType.name,
       description: truckType.description || '',
-      category: truckType.category
+      category: truckType.category,
+      defaultSpecifications: Array.isArray(truckType.defaultSpecifications) ? truckType.defaultSpecifications : []
     });
     setShowEditModal(true);
   };
@@ -321,13 +373,88 @@ const TruckTypesPage = () => {
                 placeholder="Select category"
               />
             </div>
+
+            {/* Default Specifications Section */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Default Specifications
+                </label>
+                <button
+                  type="button"
+                  onClick={addSpecificationCategory}
+                  className="inline-flex items-center px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Category
+                </button>
+              </div>
+              
+              {formData.defaultSpecifications && formData.defaultSpecifications.length > 0 && formData.defaultSpecifications.map((spec, categoryIndex) => (
+                <div key={categoryIndex} className="border border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <input
+                      type="text"
+                      value={spec.category || ''}
+                      onChange={(e) => updateSpecificationCategory(categoryIndex, 'category', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
+                      placeholder="Category name (e.g., Engine, Dimensions)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecificationCategory(categoryIndex)}
+                      className="inline-flex items-center px-2 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {spec.items && spec.items.length > 0 && spec.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item.name || ''}
+                          onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'name', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Item name (e.g., Engine Type)"
+                        />
+                        <input
+                          type="text"
+                          value={item.specification || ''}
+                          onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'specification', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Specification (e.g., Diesel V8)"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeSpecificationItem(categoryIndex, itemIndex)}
+                          className="inline-flex items-center px-2 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    <button
+                      type="button"
+                      onClick={() => addSpecificationItem(categoryIndex)}
+                      className="inline-flex items-center px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Item
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           
           <div className="flex justify-end gap-3 mt-6">
             <button
               onClick={() => {
                 setShowCreateModal(false);
-                setFormData({ name: '', description: '', category: 'Commercial' });
+                setFormData({ name: '', description: '', category: 'Commercial', defaultSpecifications: [] });
               }}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
@@ -396,6 +523,81 @@ const TruckTypesPage = () => {
                 placeholder="Select category"
               />
             </div>
+
+            {/* Default Specifications Section */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Default Specifications
+                </label>
+                <button
+                  type="button"
+                  onClick={addSpecificationCategory}
+                  className="inline-flex items-center px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Category
+                </button>
+              </div>
+              
+              {formData.defaultSpecifications && formData.defaultSpecifications.length > 0 && formData.defaultSpecifications.map((spec, categoryIndex) => (
+                <div key={categoryIndex} className="border border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <input
+                      type="text"
+                      value={spec.category || ''}
+                      onChange={(e) => updateSpecificationCategory(categoryIndex, 'category', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
+                      placeholder="Category name (e.g., Engine, Dimensions)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecificationCategory(categoryIndex)}
+                      className="inline-flex items-center px-2 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {spec.items && spec.items.length > 0 && spec.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item.name || ''}
+                          onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'name', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Item name (e.g., Engine Type)"
+                        />
+                        <input
+                          type="text"
+                          value={item.specification || ''}
+                          onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'specification', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Specification (e.g., Diesel V8)"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeSpecificationItem(categoryIndex, itemIndex)}
+                          className="inline-flex items-center px-2 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    <button
+                      type="button"
+                      onClick={() => addSpecificationItem(categoryIndex)}
+                      className="inline-flex items-center px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Item
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           
           <div className="flex justify-end gap-3 mt-6">
@@ -403,7 +605,7 @@ const TruckTypesPage = () => {
               onClick={() => {
                 setShowEditModal(false);
                 setSelectedTruckType(null);
-                setFormData({ name: '', description: '', category: 'Commercial' });
+                setFormData({ name: '', description: '', category: 'Commercial', defaultSpecifications: [] });
               }}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
@@ -451,6 +653,30 @@ const TruckTypesPage = () => {
                     Description
                   </label>
                   <p className="text-gray-900">{selectedTruckType.description}</p>
+                </div>
+              )}
+
+              {/* Default Specifications Display */}
+              {selectedTruckType.defaultSpecifications && selectedTruckType.defaultSpecifications.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Default Specifications
+                  </label>
+                  <div className="space-y-4">
+                    {selectedTruckType.defaultSpecifications.map((spec, categoryIndex) => (
+                      <div key={categoryIndex} className="border border-gray-200 rounded-lg p-4">
+                        <h4 className="font-medium text-gray-900 mb-3">{spec.category}</h4>
+                        <div className="space-y-2">
+                          {spec.items && spec.items.length > 0 && spec.items.map((item, itemIndex) => (
+                            <div key={itemIndex} className="flex justify-between items-center py-1">
+                              <span className="text-sm text-gray-700 font-medium">{item.name}:</span>
+                              <span className="text-sm text-gray-600">{item.specification}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               

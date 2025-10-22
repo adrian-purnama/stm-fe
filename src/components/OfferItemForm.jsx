@@ -132,8 +132,13 @@ const OfferItemForm = ({
   const editSpecification = (index) => {
     setEditingSpecIndex(index);
     const spec = formData.specifications[index];
-    if (formData.specificationMode === 'simple') {
+    if (typeof spec === 'string') {
       setNewSpecification(spec);
+    } else if (spec.category) {
+      // Handle category-based specifications - for now, just show a message
+      // TODO: Implement category-based editing
+      toast.error('Category-based specifications editing not yet implemented');
+      setEditingSpecIndex(-1);
     } else {
       setNewSpecLabel(spec.label || '');
       setNewSpecValue(spec.value || '');
@@ -142,7 +147,8 @@ const OfferItemForm = ({
 
   const updateSpecification = () => {
     if (editingSpecIndex >= 0) {
-      if (formData.specificationMode === 'simple') {
+      const currentSpec = formData.specifications[editingSpecIndex];
+      if (typeof currentSpec === 'string') {
         if (newSpecification.trim()) {
           setFormData(prev => ({
             ...prev,
@@ -153,6 +159,10 @@ const OfferItemForm = ({
           setNewSpecification('');
           setEditingSpecIndex(-1);
         }
+      } else if (currentSpec.category) {
+        // Category-based specifications editing not implemented
+        toast.error('Category-based specifications editing not yet implemented');
+        setEditingSpecIndex(-1);
       } else {
         if (newSpecLabel.trim() && newSpecValue.trim()) {
           setFormData(prev => ({
@@ -588,31 +598,87 @@ const OfferItemForm = ({
 
         <div className="space-y-2">
           {formData.specifications.map((spec, specIndex) => (
-            <div key={specIndex} className="flex items-center gap-3 p-3 bg-gray-50 rounded-md">
-              {formData.specificationMode === 'simple' ? (
-                <span className="flex-1 text-gray-900">{spec}</span>
+            <div key={specIndex} className="p-3 bg-gray-50 rounded-md">
+              {typeof spec === 'string' ? (
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 text-gray-900">{spec}</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editSpecification(specIndex)}
+                      className="px-2 py-1 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSpecification(specIndex)}
+                      className="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ) : spec.category ? (
+                // New category-based structure
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-800 text-sm">{spec.category}</h4>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editSpecification(specIndex)}
+                        className="px-2 py-1 text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeSpecification(specIndex)}
+                        className="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {spec.items && spec.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-start space-x-2">
+                        <span className="font-medium text-gray-600 text-xs min-w-0 flex-shrink-0">
+                          {item.name}:
+                        </span>
+                        <span className="text-gray-800 text-xs break-words">
+                          {item.specification}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
-                <div className="flex-1">
-                  <span className="font-medium text-gray-900">{spec.label}</span>
-                  <span className="text-gray-600 ml-2">: {spec.value}</span>
+                // Legacy label-value structure
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-900">{spec.label}</span>
+                    <span className="text-gray-600 ml-2">: {spec.value}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editSpecification(specIndex)}
+                      className="px-2 py-1 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSpecification(specIndex)}
+                      className="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => editSpecification(specIndex)}
-                  className="px-2 py-1 text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeSpecification(specIndex)}
-                  className="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
-                >
-                  Delete
-                </button>
-              </div>
             </div>
           ))}
           {formData.specifications.length === 0 && (

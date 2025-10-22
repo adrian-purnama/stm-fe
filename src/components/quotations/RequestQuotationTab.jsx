@@ -11,6 +11,7 @@ const RequestQuotationTab = () => {
   const { connected } = useContext(NotificationsContext);
   const [rfqs, setRfqs] = useState([]);
   const [approvers, setApprovers] = useState([]);
+  const [quotationCreators, setQuotationCreators] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
@@ -40,6 +41,17 @@ const RequestQuotationTab = () => {
     }
   };
 
+  // Fetch quotation creators for the dropdown
+  const fetchQuotationCreators = async () => {
+    try {
+      const response = await ApiHelper.get('/api/rfq/quotation-creators');
+      setQuotationCreators(response.data.data.quotationCreators);
+    } catch (error) {
+      console.error('Error fetching quotation creators:', error);
+      toast.error('Failed to fetch quotation creators');
+    }
+  };
+
   // Handle new RFQ creation
   const handleCreateRFQ = async (rfqData) => {
     try {
@@ -56,6 +68,7 @@ const RequestQuotationTab = () => {
   useEffect(() => {
     fetchRFQs();
     fetchApprovers();
+    fetchQuotationCreators();
   }, []);
 
   // Auto-refresh when WebSocket reconnects
@@ -173,6 +186,7 @@ const RequestQuotationTab = () => {
           onClose={() => setShowModal(false)}
           onSubmit={handleCreateRFQ}
           approvers={approvers}
+          quotationCreators={quotationCreators}
         />
       )}
     </div>

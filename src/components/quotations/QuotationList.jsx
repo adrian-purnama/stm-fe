@@ -60,7 +60,7 @@ const statusClassMap = {
   close: 'bg-gray-100 text-gray-800'
 };
 
-const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete }) => {
+const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false }) => {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({
@@ -609,13 +609,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete }) => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Quotations</h2>
-        <button
-          onClick={onCreate}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          New Quotation
-        </button>
+        {showCreateButton && (
+          <button
+            onClick={onCreate}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Quotation
+          </button>
+        )}
       </div>
 
       {/* Filter Header with Favorites */}
@@ -1365,15 +1367,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete }) => {
           <p className="mt-1 text-sm text-gray-500">
             Get started by creating a new quotation.
           </p>
-          <div className="mt-6">
-            <button
-              onClick={onCreate}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Quotation
-            </button>
-          </div>
+          {showCreateButton && (
+            <div className="mt-6">
+              <button
+                onClick={onCreate}
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Quotation
+              </button>
+            </div>
+          )}
         </div>
       )}
 

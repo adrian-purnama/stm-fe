@@ -12,9 +12,10 @@ const QuotationFormPage = () => {
   const { quotationId } = useParams();
   const [searchParams] = useSearchParams();
   
-  // Get mode and offerId from URL parameters
+  // Get mode, offerId, and rfqId from URL parameters
   const mode = searchParams.get('mode') || 'create-quotation';
   const offerId = searchParams.get('offerId') || null;
+  const rfqId = searchParams.get('rfqId') || null;
   
   // State for quotation data
   const [quotation, setQuotation] = useState(null);
@@ -23,9 +24,61 @@ const QuotationFormPage = () => {
   // Always navigate back to quotations list after save
   const stayInCurrentView = false;
 
-  // Fetch quotation data if quotationId is provided
+  // Fetch quotation data if quotationId is provided, or RFQ data if rfqId is provided
   useEffect(() => {
     const fetchQuotation = async () => {
+      if (rfqId && mode === 'create-from-rfq') {
+        // Fetch RFQ data for quotation creation
+        setLoading(true);
+        try {
+          console.log('Fetching RFQ with ID:', rfqId);
+          const response = await ApiHelper.get(`/api/rfq/${rfqId}`);
+          if (response.data.success) {
+            const rfqData = response.data.data.rfq;
+            console.log('QuotationFormPage: Raw RFQ data:', rfqData);
+            console.log('QuotationFormPage: RFQ items:', rfqData.items);
+            console.log('QuotationFormPage: RFQ items length:', rfqData.items?.length);
+            
+            // Transform RFQ data to quotation format
+            const quotationData = {
+              header: {
+                customerName: rfqData.customerName,
+                contactPerson: rfqData.contactPerson
+              },
+              offers: [{
+                offerItems: rfqData.items?.map((item, index) => ({
+                  itemNumber: index + 1,
+                  karoseri: item.karoseri,
+                  chassis: item.chassis,
+                  drawingSpecification: item.drawingSpecification,
+                  specifications: item.specifications,
+                  price: item.price,           // RFQ price -> quotation price
+                  netto: item.priceNet,        // RFQ priceNet -> quotation netto
+                  discountType: 'percentage',  // Default discount type
+                  discountValue: 0,            // Default discount value
+                  notes: item.notes
+                })) || []
+              }]
+            };
+            console.log('QuotationFormPage: Transformed RFQ data to quotation format:', quotationData);
+            console.log('QuotationFormPage: Transformed offerItems:', quotationData.offers[0].offerItems);
+            console.log('QuotationFormPage: offerItems length:', quotationData.offers[0].offerItems.length);
+            setQuotation(quotationData);
+          } else {
+            console.error('API returned success: false', response.data);
+            toast.error(`Failed to load RFQ: ${response.data.message || 'Unknown error'}`);
+            navigate('/quotations');
+          }
+        } catch (error) {
+          console.error('Error fetching RFQ:', error);
+          toast.error('Failed to load RFQ data');
+          navigate('/quotations');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      
       if (!quotationId) {
         // No quotationId means creating new quotation
         setQuotation(null);
@@ -58,7 +111,7 @@ const QuotationFormPage = () => {
     };
 
     fetchQuotation();
-  }, [quotationId, navigate]);
+  }, [quotationId, navigate, rfqId, mode]);
 
   const handleSave = (context = null) => {
     // If context is provided, it means we need to handle special cases
@@ -106,6 +159,14 @@ const QuotationFormPage = () => {
     console.log('Preparing quotation context:', quotation);
     console.log('Quotation offers:', quotation.offers);
     console.log('OfferId from URL:', offerId);
+    console.log('Mode:', mode);
+    console.log('RFQ ID:', rfqId);
+    
+    // For RFQ-based quotation creation, return the full quotation data
+    if (mode === 'create-from-rfq' && rfqId) {
+      console.log('Returning full quotation data for RFQ creation');
+      return quotation;
+    }
     
     // If offerId is specified, find the specific offer
     if (offerId && quotation.offers) {
@@ -153,6 +214,8 @@ const QuotationFormPage = () => {
   };
 
   const quotationContext = prepareQuotationContext();
+  
+  console.log('QuotationFormPage: Final quotationContext being passed to QuotationForm:', quotationContext);
 
   // Show loading state while fetching quotation data
   if (loading) {
@@ -198,6 +261,7 @@ const QuotationFormPage = () => {
               onSave={handleSave}
               onCancel={handleCancel}
               stayInCurrentView={stayInCurrentView}
+              rfqId={rfqId}
             />
           </div>
         </div>

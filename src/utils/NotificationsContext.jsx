@@ -34,14 +34,9 @@ export const NotificationsProvider = ({ children }) => {
     // Only connect when logged in
     if (!user.isLoggedIn) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    //const host = window.location.hostname;
-    //const host = "stm-uat.onrender.com";
-    //const port = window.location.port || '5173';
-    // const apiPort = import.meta.env.VITE_API_PORT || 5000; // assume backend port
-    const apiPort = "stm-be.onrender.com";
+
     //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
-    const wsUrl = `${protocol}://${apiPort}/notification`;
+    const wsUrl = `${import.meta.env.VITE_NODE_ENV === 'production' ? 'wss://' : 'ws://'}${import.meta.env.VITE_BACKEND_URL}/notification`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

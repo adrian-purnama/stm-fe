@@ -75,6 +75,14 @@ function App() {
           } 
         />
         <Route 
+          path="/quotations/rfq/:rfqId" 
+          element={
+            <ProtectedRoute>
+              <QuotationPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
           path="/quotations/analysis" 
           element={
             <ProtectedRoute>

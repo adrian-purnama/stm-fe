@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Save, X, Upload, Image, X as XIcon } from 'lucide-react';
+import { Plus, Trash2, Save, X, Upload, Image, X as XIcon, FileText, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/ApiHelper';
 import CustomDropdown from '../CustomDropdown';
 import PriceInput from '../PriceInput';
 import OfferItemForm from '../OfferItemForm';
+import BaseModal from '../BaseModal';
 import { formatPriceWithCurrency } from '../../utils/priceFormatter';
 
-const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false }) => {
+const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
   const [formData, setFormData] = useState({
     customerName: '',
     contactPerson: {
@@ -36,12 +37,37 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   const [pendingImages, setPendingImages] = useState([]);
   const [refreshingImages, setRefreshingImages] = useState(false);
   const [removedImages, setRemovedImages] = useState([]); // Track images removed from form // Store images to be uploaded
+  const [showRFQReference, setShowRFQReference] = useState(false);
+  const [rfqReferenceData, setRfqReferenceData] = useState(null);
 
   // Get asset URL for notes images
   const getNotesImageAssetUrl = (imageId, fileId) => {
     const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
     const token = localStorage.getItem('asb-token');
     return `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
+  };
+
+  // Fetch RFQ reference data
+  const fetchRFQReference = useCallback(async () => {
+    if (!rfqId) return;
+    
+    try {
+      const response = await ApiHelper.get(`/api/rfq/${rfqId}`);
+      if (response.data.success) {
+        setRfqReferenceData(response.data.data.rfq);
+      }
+    } catch (error) {
+      console.error('Error fetching RFQ reference:', error);
+      toast.error('Failed to load RFQ reference');
+    }
+  }, [rfqId]);
+
+  // Show RFQ reference modal
+  const handleShowRFQReference = () => {
+    if (!rfqReferenceData) {
+      fetchRFQReference();
+    }
+    setShowRFQReference(true);
   };
 
   // Load notes images data
@@ -171,10 +197,69 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   }, [processedQuotation]);
 
   useEffect(() => {
-    console.log('[DEBUG] useEffect triggered with:', { processedQuotation, activeOffer, mode });
+    console.log('[DEBUG] useEffect triggered with:', { processedQuotation, activeOffer, mode, rfqId });
     
     if (processedQuotation) {
-      if (mode === 'new-offer') {
+      if ((mode === 'create-quotation' || mode === 'create-from-rfq') && rfqId) {
+        // For creating quotation from RFQ, use RFQ data
+        const header = processedQuotation.header || processedQuotation;
+        const firstOffer = processedQuotation.offers?.[0];
+        
+        // Handle different data structures - try multiple locations for offer items
+        let offerItems = [];
+        console.log('QuotationForm: processedQuotation structure:', processedQuotation);
+        console.log('QuotationForm: firstOffer:', firstOffer);
+        console.log('QuotationForm: processedQuotation.offers:', processedQuotation.offers);
+        
+        if (firstOffer?.offerItems) {
+          console.log('QuotationForm: Found offerItems in firstOffer:', firstOffer.offerItems);
+          offerItems = firstOffer.offerItems;
+        } else if (processedQuotation.offerItems) {
+          console.log('QuotationForm: Found offerItems in processedQuotation:', processedQuotation.offerItems);
+          offerItems = processedQuotation.offerItems;
+        } else if (processedQuotation.offers?.[0]?.offerItems) {
+          console.log('QuotationForm: Found offerItems in processedQuotation.offers[0]:', processedQuotation.offers[0].offerItems);
+          offerItems = processedQuotation.offers[0].offerItems;
+        } else if (processedQuotation.items) {
+          console.log('QuotationForm: Found items in processedQuotation, transforming:', processedQuotation.items);
+          // If it's direct RFQ items, transform them
+          offerItems = processedQuotation.items.map((item, index) => ({
+            itemNumber: index + 1,
+            karoseri: item.karoseri,
+            chassis: item.chassis,
+            drawingSpecification: item.drawingSpecification,
+            specifications: item.specifications,
+            price: item.price,           // RFQ price -> quotation price
+            netto: item.priceNet,        // RFQ priceNet -> quotation netto
+            discountType: 'percentage',  // Default discount type
+            discountValue: 0,            // Default discount value
+            notes: item.notes
+          }));
+        } else {
+          console.log('QuotationForm: No offerItems found in any location');
+        }
+        
+        const rfqFormData = {
+          customerName: header.customerName || processedQuotation.customerName || '',
+          contactPerson: header.contactPerson || processedQuotation.contactPerson || { name: '', gender: 'Male' },
+          offerItems: offerItems,
+          excludePPN: false,
+          notes: '',
+          notesImages: []
+        };
+        console.log('QuotationForm: Setting formData for create-quotation from RFQ:', rfqFormData);
+        console.log('QuotationForm: RFQ offerItems:', firstOffer?.offerItems);
+        console.log('QuotationForm: processedQuotation structure:', processedQuotation);
+        console.log('QuotationForm: header data:', header);
+        console.log('QuotationForm: firstOffer data:', firstOffer);
+        console.log('QuotationForm: extracted offerItems:', offerItems);
+        console.log('QuotationForm: offerItems length:', offerItems.length);
+        setFormData(rfqFormData);
+        setQuotationNumber('');
+        setNotesImagesData([]);
+        setPendingImages([]);
+        setRemovedImages([]);
+      } else if (mode === 'new-offer') {
         // For creating new offer, keep customer info but clear product details
         const header = processedQuotation.header || processedQuotation;
         const newFormData = {
@@ -234,7 +319,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       setPendingImages([]);
       setRemovedImages([]); // Clear removed images when switching modes
     }
-  }, [processedQuotation, activeOffer, mode, loadNotesImagesData]);
+  }, [processedQuotation, activeOffer, mode, loadNotesImagesData, rfqId]);
 
   // Handle quotation changes (like when switching to edit a new revision)
   useEffect(() => {
@@ -504,7 +589,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       console.log('[DEBUG] Form submission - uploadedImageIds:', uploadedImageIds);
       console.log('[DEBUG] Form submission - allNotesImages:', allNotesImages);
 
-      if (mode === 'create-quotation') {
+      if (mode === 'create-quotation' || mode === 'create-from-rfq') {
         // Create new quotation (header + first offer)
         const headerData = {
           customerName: formData.customerName,
@@ -518,12 +603,12 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           notesImages: allNotesImages
         };
 
-        console.log('Creating quotation with data:', { headerData, offerData });
+        console.log('Creating quotation with data:', { headerData, offerData, rfqId });
         console.log('Offer items being sent:', formData.offerItems);
         console.log('Notes images being sent:', allNotesImages);
         console.log('Uploaded image IDs:', uploadedImageIds);
 
-        await ApiHelper.post('/api/quotations', { headerData, offerData });
+        await ApiHelper.post('/api/quotations', { headerData, offerData, rfqId });
         toast.success('Quotation created successfully');
         
         // Clear pending images since they've been uploaded
@@ -719,12 +804,24 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       <form onSubmit={handleSubmit} className="space-y-6" key={`${mode}-${quotation?._id || 'new'}`}>
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {mode === 'create-quotation' && 'Create New Quotation'}
-          {mode === 'edit-offer' && 'Edit Quotation'}
-          {mode === 'revision' && 'Create Quotation Revision'}
-          {mode === 'new-offer' && 'Create New Offer'}
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {(mode === 'create-quotation' || mode === 'create-from-rfq') && 'Create New Quotation'}
+            {mode === 'edit-offer' && 'Edit Quotation'}
+            {mode === 'revision' && 'Create Quotation Revision'}
+            {mode === 'new-offer' && 'Create New Offer'}
+          </h2>
+          {rfqId && (
+            <button
+              type="button"
+              onClick={handleShowRFQReference}
+              className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Eye size={16} />
+              View Original RFQ
+            </button>
+          )}
+        </div>
         {quotationNumber && (
           <div className="text-sm text-gray-600">
             Quotation Number: <span className="font-mono font-medium">{quotationNumber}</span>
@@ -1144,7 +1241,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           >
             <Save className="h-4 w-4 mr-2" />
             {loading ? 'Saving...' : 
-              mode === 'create-quotation' ? 'Create Quotation' : 
+              mode === 'create-quotation' || mode === 'create-from-rfq' ? 'Create Quotation' : 
               mode === 'new-offer' ? 'Create Offer' :
               mode === 'revision' ? 'Create Revision' : 'Update Quotation'}
           </button>
@@ -1158,6 +1255,155 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       <Tooltip id="cancel-tooltip" />
       <Tooltip id="save-tooltip" />
     </form>
+
+    {/* RFQ Reference Modal */}
+    {showRFQReference && (
+      <BaseModal
+        isOpen={showRFQReference}
+        onClose={() => setShowRFQReference(false)}
+        title="Original RFQ Reference"
+        size="xl"
+      >
+        {rfqReferenceData ? (
+          <div className="space-y-6">
+            {/* RFQ Header Info */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">RFQ Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <span className="font-medium text-gray-700">RFQ Number:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.rfqNumber}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Status:</span>
+                  <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                    rfqReferenceData.status === 'approved' ? 'bg-green-100 text-green-800' :
+                    rfqReferenceData.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    rfqReferenceData.status === 'quotation_created' ? 'bg-blue-100 text-blue-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {rfqReferenceData.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Customer:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.customerName}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Contact:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.contactPerson?.name} ({rfqReferenceData.contactPerson?.gender})</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Requester:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.requesterId?.fullName || rfqReferenceData.requesterId?.email}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Approver:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.approverId?.fullName || rfqReferenceData.approverId?.email}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Creator:</span>
+                  <span className="ml-2 text-gray-900">{rfqReferenceData.quotationCreatorId?.fullName || rfqReferenceData.quotationCreatorId?.email}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Priority:</span>
+                  <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                    rfqReferenceData.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                    rfqReferenceData.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                    rfqReferenceData.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                    {rfqReferenceData.priority}
+                  </span>
+                </div>
+              </div>
+              {rfqReferenceData.description && (
+                <div className="mt-4">
+                  <span className="font-medium text-gray-700">Description:</span>
+                  <p className="mt-1 text-gray-900">{rfqReferenceData.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* RFQ Items */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">RFQ Items ({rfqReferenceData.items?.length || 0})</h3>
+              {rfqReferenceData.items && rfqReferenceData.items.length > 0 ? (
+                <div className="space-y-4">
+                  {rfqReferenceData.items.map((item, index) => (
+                    <div key={item._id || index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-md font-medium text-gray-900">Item {item.itemNumber}</h4>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <span>Price: {item.price?.toLocaleString('id-ID')}</span>
+                          <span>Net: {item.priceNet?.toLocaleString('id-ID')}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <span className="font-medium text-gray-700">Karoseri:</span>
+                          <span className="ml-2 text-gray-900">{item.karoseri}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Chassis:</span>
+                          <span className="ml-2 text-gray-900">{item.chassis}</span>
+                        </div>
+                      </div>
+
+                      {item.notes && (
+                        <div className="mb-3">
+                          <span className="font-medium text-gray-700">Notes:</span>
+                          <span className="ml-2 text-gray-900">{item.notes}</span>
+                        </div>
+                      )}
+
+                      {/* Specifications */}
+                      {item.specifications && item.specifications.length > 0 && (
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Specifications:</h5>
+                          <div className="space-y-3">
+                            {item.specifications.map((spec, specIndex) => (
+                              <div key={specIndex} className="bg-gray-50 rounded-lg p-3">
+                                <h6 className="font-semibold text-gray-800 text-sm mb-2">
+                                  {spec.category}
+                                </h6>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {spec.items && spec.items.map((specItem, itemIndex) => (
+                                    <div key={itemIndex} className="flex items-start space-x-2">
+                                      <span className="font-medium text-gray-600 text-xs min-w-0 flex-shrink-0">
+                                        {specItem.name}:
+                                      </span>
+                                      <span className="text-gray-800 text-xs break-words">
+                                        {specItem.specification}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText size={32} className="mx-auto mb-2 text-gray-300" />
+                  <p>No items found for this RFQ</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading RFQ reference...</p>
+          </div>
+        )}
+      </BaseModal>
+    )}
     </div>
   );
 };
