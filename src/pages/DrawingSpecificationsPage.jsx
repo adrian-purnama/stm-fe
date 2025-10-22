@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -9,14 +10,18 @@ import {
   FileImage,
   Download,
   Upload,
-  FileText
+  FileText,
+  ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../utils/ApiHelper';
 import BaseModal from '../components/BaseModal';
 import CustomDropdown from '../components/CustomDropdown';
+import Navigation from '../components/Navigation';
 
 const DrawingSpecificationsPage = () => {
+  const navigate = useNavigate();
+  
   // State for drawing specifications
   const [drawings, setDrawings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -168,12 +173,9 @@ const DrawingSpecificationsPage = () => {
   // Download file
   const downloadFile = async (drawingId, fileId, originalName) => {
     try {
-      //const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-      const baseURL = "https://stm-be.onrender.com";
+      const baseURL = "http://localhost:5000";
       const token = localStorage.getItem('asb-token');
       const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;
-      
-      console.log('Downloading file from:', downloadUrl);
       
       // Create a temporary link to trigger download
       const link = document.createElement('a');
@@ -237,9 +239,7 @@ const DrawingSpecificationsPage = () => {
 
   // Get asset URL for viewing uploaded files
   const getAssetUrl = (drawingId, fileId) => {
-    // Use the same base URL as ApiHelper
-    //const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-    const baseURL = "https://stm-be.onrender.com";
+    const baseURL = "http://localhost:5000";
     const token = localStorage.getItem('asb-token');
     
     if (!token) {
@@ -253,8 +253,6 @@ const DrawingSpecificationsPage = () => {
     }
     
     const url = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}`;
-    console.log('Generated asset URL:', url);
-    console.log('Token length:', token.length);
     return url;
   };
 
@@ -285,10 +283,21 @@ const DrawingSpecificationsPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navigation title="Drawing Specifications Management" subtitle="Manage drawing specifications and their associated files" />
       <div className="max-w-7xl mx-auto p-6">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Drawing Specifications Management</h1>
-          <p className="text-gray-600">Manage drawing specifications and their associated files</p>
+          <div className="flex items-center mb-4">
+            <button
+              onClick={() => navigate('/')}
+              className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Drawing Specifications Management</h1>
+              <p className="text-gray-600">Manage drawing specifications and their associated files</p>
+            </div>
+          </div>
         </div>
 
         {/* Filters and Actions */}
@@ -661,14 +670,6 @@ const DrawingSpecificationsPage = () => {
                             const isImage = isImageByType || isImageByName;
                             const assetUrl = getAssetUrl(selectedDrawing._id, file.fileId);
                             
-                            console.log('File details:', {
-                              fileType: file.fileType,
-                              isImageByType: isImageByType,
-                              isImageByName: isImageByName,
-                              isImage: isImage,
-                              originalName: file.originalName,
-                              assetUrl: assetUrl
-                            });
                             
                             return (
                               <>
@@ -679,20 +680,13 @@ const DrawingSpecificationsPage = () => {
                                       alt={file.originalName}
                                       className="w-full h-64 object-contain rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
                                       onClick={() => {
-                                        console.log('Opening image:', assetUrl);
                                         window.open(assetUrl, '_blank');
                                       }}
                                       onLoad={() => {
-                                        console.log('Image loaded successfully:', assetUrl);
+                                        // Image loaded successfully
                                       }}
                                       onError={(e) => {
-                                        console.error('Image failed to load:', assetUrl, e);
-                                        console.error('Error details:', {
-                                          drawingId: selectedDrawing._id,
-                                          fileId: file.fileId,
-                                          fileType: file.fileType,
-                                          originalName: file.originalName
-                                        });
+                                        console.error('Image failed to load');
                                         e.target.style.display = 'none';
                                         e.target.nextSibling.style.display = 'flex';
                                       }}
@@ -737,15 +731,6 @@ const DrawingSpecificationsPage = () => {
                                       View Full Size
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => {
-                                      console.log('Testing URL directly:', assetUrl);
-                                      window.open(assetUrl, '_blank');
-                                    }}
-                                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2"
-                                  >
-                                    Test URL
-                                  </button>
                                   <button
                                     onClick={() => downloadFile(selectedDrawing._id, file.fileId, file.originalName)}
                                     className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"

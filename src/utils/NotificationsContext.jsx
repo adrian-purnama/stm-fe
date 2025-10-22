@@ -34,10 +34,10 @@ export const NotificationsProvider = ({ children }) => {
     // Only connect when logged in
     if (!user.isLoggedIn) return;
 
-
+    // TODO : FIX THIS SHIT
     //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
-    const wsUrl = `ws://localhost:5000/notification`;
-    // const wsUrl = `wss://stm-be.onrender.com/notification`;
+    //const wsUrl = `ws://localhost:5000/notification`;
+    const wsUrl = `wss://stm-be.onrender.com/notification`;
     // const wsUrl = `${import.meta.env.VITE_NODE_ENV === 'production' ? 'wss://' : 'ws://'}${import.meta.env.VITE_BACKEND_URL}/notification`;
 
     const ws = new WebSocket(wsUrl);

@@ -242,7 +242,7 @@ const QuotationFormPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/quotations')}
+                onClick={() => navigate('/')}
                 className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft className="h-5 w-5" />

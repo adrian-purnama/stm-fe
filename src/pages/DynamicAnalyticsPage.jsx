@@ -1188,11 +1188,10 @@ const DynamicAnalyticsPage = () => {
         {/* Back Button */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+            onClick={() => navigate('/')}
+            className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
           >
-            <ArrowLeft size={20} />
-            <span>Kembali ke Dashboard</span>
+            <ArrowLeft className="h-5 w-5" />
           </button>
         </div>
         {/* File Upload Section */}

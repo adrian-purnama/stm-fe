@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Shield, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Edit, Trash2, Shield, Eye, ArrowLeft } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import ApiHelper from '../utils/ApiHelper';
 import toast from 'react-hot-toast';
@@ -9,6 +10,8 @@ import RoleFormModal from '../components/RoleFormModal';
 import RoleDetailsModal from '../components/RoleDetailsModal';
 
 const PermissionManagementPage = () => {
+  const navigate = useNavigate();
+  
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,9 +147,17 @@ const PermissionManagementPage = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Permission Management</h1>
-              <p className="mt-2 text-gray-600">Manage permissions and categories</p>
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate('/')}
+                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Permission Management</h1>
+                <p className="mt-2 text-gray-600">Manage permissions and categories</p>
+              </div>
             </div>
             <button
               onClick={handleCreatePermission}

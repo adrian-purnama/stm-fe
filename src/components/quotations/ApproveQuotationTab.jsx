@@ -127,12 +127,12 @@ const ApproveQuotationTab = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Approve Quotation</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Approve RFQ</h2>
           <p className="text-sm text-gray-600 mt-1">Review and approve RFQ requests</p>
         </div>
         {pendingCount > 0 && (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium leading-none text-white bg-red-600 rounded-full">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium leading-none text-white bg-red-600 rounded-full animate-pulse">
               {pendingCount}
             </span>
             <span className="text-sm text-gray-600">pending approval</span>
@@ -156,9 +156,12 @@ const ApproveQuotationTab = () => {
         </div>
       ) : rfqs.length === 0 ? (
         <div className="text-center py-12">
-          <CheckCircle size={48} className="text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No RFQs to approve</h3>
-          <p className="text-gray-600">All caught up! No pending RFQs at the moment.</p>
+          <div className="bg-green-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle size={32} className="text-green-500" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">All caught up!</h3>
+          <p className="text-gray-600">No pending RFQs require your approval at the moment.</p>
+          <p className="text-sm text-gray-500 mt-2">You'll be notified when new RFQs are assigned to you.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -218,76 +221,114 @@ const ApproveQuotationTab = () => {
                   </div>
                 </div>
 
-                {/* Key Information - Mobile optimized */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3">
-                  <h4 className="text-xs sm:text-sm font-semibold text-yellow-800 mb-2">Key Info</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-medium text-yellow-700 text-xs">Competitor:</span>
-                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium truncate ${
-                        rfq.competitor && rfq.competitor.trim() !== '' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                {/* Key Information - Enhanced Design */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center mb-3">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
+                    <h4 className="text-sm font-bold text-amber-800">Key Information</h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Competitor */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Competitor</span>
+                        <div className={`w-2 h-2 rounded-full ${
+                          rfq.competitor && rfq.competitor.trim() !== '' ? 'bg-green-400' : 'bg-red-400'
+                        }`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${
+                        rfq.competitor && rfq.competitor.trim() !== '' ? 'text-green-700' : 'text-red-600'
                       }`}>
                         {rfq.competitor && rfq.competitor.trim() !== '' ? rfq.competitor : 'None'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-medium text-yellow-700 text-xs">Can Make:</span>
-                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
-                        rfq.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
+
+                    {/* Can Make */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Can Make</span>
+                        <div className={`w-2 h-2 rounded-full ${rfq.canMake ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${rfq.canMake ? 'text-green-700' : 'text-red-600'}`}>
                         {rfq.canMake ? 'Yes' : 'No'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-medium text-yellow-700 text-xs">Ongoing:</span>
-                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
-                        rfq.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+
+                    {/* Project Ongoing */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Ongoing</span>
+                        <div className={`w-2 h-2 rounded-full ${rfq.projectOngoing ? 'bg-blue-400' : 'bg-gray-400'}`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${rfq.projectOngoing ? 'text-blue-700' : 'text-gray-600'}`}>
                         {rfq.projectOngoing ? 'Yes' : 'No'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-medium text-yellow-700 text-xs">Confidence:</span>
-                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
-                        rfq.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
-                        rfq.confidenceRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+
+                    {/* Confidence Rate */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Confidence</span>
+                        <div className={`w-2 h-2 rounded-full ${
+                          rfq.confidenceRate >= 70 ? 'bg-green-400' :
+                          rfq.confidenceRate >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${
+                        rfq.confidenceRate >= 70 ? 'text-green-700' :
+                        rfq.confidenceRate >= 50 ? 'text-yellow-700' : 'text-red-600'
                       }`}>
                         {rfq.confidenceRate || 0}%
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>
                       
-                {/* Budget Information - Mobile optimized */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-3">
-                  <h4 className="text-xs sm:text-sm font-semibold text-blue-800 mb-2">Budget</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    {rfq.items && rfq.items.length > 0 ? (
-                      <>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                          <span className="font-medium text-blue-700 text-xs">Total Price:</span>
-                          <span className="px-1 sm:px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 truncate">
-                            {rfq.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                          </span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                          <span className="font-medium text-blue-700 text-xs">Total Net:</span>
-                          <span className="px-1 sm:px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 truncate">
-                            {rfq.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-2 text-center">
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
-                          No Items / Budget: 0
-                        </span>
-                      </div>
-                    )}
+                {/* Budget Information - Enhanced Design */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center mb-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                    <h4 className="text-sm font-bold text-blue-800">Budget Information</h4>
                   </div>
+                  {rfq.items && rfq.items.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Total Price */}
+                      <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-600">Total Price</span>
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        </div>
+                        <div className="text-lg font-bold text-green-700">
+                          {rfq.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {rfq.items.length} item{rfq.items.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+
+                      {/* Total Net */}
+                      <div className="bg-white rounded-lg p-4 border border-blue-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-600">Total Net</span>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        </div>
+                        <div className="text-lg font-bold text-blue-700">
+                          {rfq.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Net amount
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg p-6 border border-red-100 text-center">
+                      <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <div className="w-6 h-6 bg-red-400 rounded-full"></div>
+                      </div>
+                      <div className="text-sm font-semibold text-red-600 mb-1">No Budget Information</div>
+                      <div className="text-xs text-gray-500">No items found in this RFQ</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -446,45 +487,65 @@ const ApproveQuotationTab = () => {
                 <p><span className="font-medium">Competitor:</span> {selectedRFQ.competitor}</p>
                 <p><span className="font-medium">Confidence Rate:</span> {selectedRFQ.confidenceRate}%</p>
                 
-                {/* Key Information - Highlighted */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
-                  <h4 className="text-sm font-semibold text-yellow-800 mb-2">Key Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-yellow-700">Competitor:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                {/* Key Information - Enhanced Modal Design */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center mb-3">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
+                    <h4 className="text-sm font-bold text-amber-800">Key Information</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Competitor */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Competitor</span>
+                        <div className={`w-2 h-2 rounded-full ${
+                          selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' ? 'bg-green-400' : 'bg-red-400'
+                        }`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${
+                        selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' ? 'text-green-700' : 'text-red-600'
                       }`}>
                         {selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' ? selectedRFQ.competitor : 'None'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-yellow-700">Can Make:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        selectedRFQ.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
+
+                    {/* Can Make */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Can Make</span>
+                        <div className={`w-2 h-2 rounded-full ${selectedRFQ.canMake ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${selectedRFQ.canMake ? 'text-green-700' : 'text-red-600'}`}>
                         {selectedRFQ.canMake ? 'Yes' : 'No'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-yellow-700">Project Ongoing:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        selectedRFQ.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+
+                    {/* Project Ongoing */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Ongoing</span>
+                        <div className={`w-2 h-2 rounded-full ${selectedRFQ.projectOngoing ? 'bg-blue-400' : 'bg-gray-400'}`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${selectedRFQ.projectOngoing ? 'text-blue-700' : 'text-gray-600'}`}>
                         {selectedRFQ.projectOngoing ? 'Yes' : 'No'}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-yellow-700">Confidence:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        selectedRFQ.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
-                        selectedRFQ.confidenceRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+
+                    {/* Confidence Rate */}
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">Confidence</span>
+                        <div className={`w-2 h-2 rounded-full ${
+                          selectedRFQ.confidenceRate >= 70 ? 'bg-green-400' :
+                          selectedRFQ.confidenceRate >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}></div>
+                      </div>
+                      <div className={`text-sm font-semibold ${
+                        selectedRFQ.confidenceRate >= 70 ? 'text-green-700' :
+                        selectedRFQ.confidenceRate >= 50 ? 'text-yellow-700' : 'text-red-600'
                       }`}>
                         {selectedRFQ.confidenceRate || 0}%
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>

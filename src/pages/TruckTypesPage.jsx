@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -6,14 +7,18 @@ import {
   Trash2, 
   Eye,
   Loader2,
-  Truck
+  Truck,
+  ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../utils/ApiHelper';
 import BaseModal from '../components/BaseModal';
 import CustomDropdown from '../components/CustomDropdown';
+import Navigation from '../components/Navigation';
 
 const TruckTypesPage = () => {
+  const navigate = useNavigate();
+  
   // State for truck types
   const [truckTypes, setTruckTypes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -196,10 +201,21 @@ const TruckTypesPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navigation title="Truck Types Management" subtitle="Manage truck types and their categories" />
       <div className="max-w-7xl mx-auto p-6">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Truck Types Management</h1>
-          <p className="text-gray-600">Manage truck types and their categories</p>
+          <div className="flex items-center mb-4">
+            <button
+              onClick={() => navigate('/')}
+              className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Truck Types Management</h1>
+              <p className="text-gray-600">Manage truck types and their categories</p>
+            </div>
+          </div>
         </div>
 
         {/* Filters and Actions */}

@@ -3,8 +3,9 @@ import toast from "react-hot-toast";
 import { isTokenExpired } from "./tokenUtils";
 
 const axiosInstance = axios.create({
-  //baseURL: "https://" + import.meta.env.VITE_BACKEND_URL,
-  baseURL: "http://" + import.meta.env.VITE_BACKEND_URL,
+  // TODO : FIX THIS SHIT
+  baseURL: "https://" + import.meta.env.VITE_BACKEND_URL,
+  //baseURL: "http://" + import.meta.env.VITE_BACKEND_URL,
   // baseURL: import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL,
   paramsSerializer: (params) => {
     const searchParams = new URLSearchParams();

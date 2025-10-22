@@ -60,7 +60,7 @@ const statusClassMap = {
   close: 'bg-gray-100 text-gray-800'
 };
 
-const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false }) => {
+const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({
@@ -116,6 +116,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       const params = {
         page: pagination?.current || 1,
         limit: 10,
+        filterMode,
         ...filters
       };
 
@@ -126,7 +127,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         }
       });
 
-      const response = await ApiHelper.get('/api/quotations', { params });
+      const response = await ApiHelper.get(apiEndpoint, { params });
       setQuotations(Array.isArray(response.data.data) ? response.data.data : []);
       setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -851,38 +852,43 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 >
                     <Eye className="h-5 w-5" />
                 </button>
-                <button
-                  onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.NEW_OFFER, header })}
-                  data-tooltip-id={`new-offer-${header._id}`}
-                  data-tooltip-content="Create additional offer"
-                    className="text-green-600 hover:text-green-900 p-2 transition-colors"
-                >
-                    <Plus className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => openStatusModal(header, offers)}
-                  data-tooltip-id={`status-${header._id}`}
-                  data-tooltip-content="Update quotation status"
-                    className="text-indigo-600 hover:text-indigo-900 p-2 transition-colors"
-                >
-                    <CheckCircle className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => handleFollowUpQuotation(header)}
-                  data-tooltip-id={`followup-${header._id}`}
-                  data-tooltip-content="Record follow-up for this quotation"
-                    className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
-                  >
-                    <Clock className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteQuotation(header)}
-                    data-tooltip-id={`delete-quotation-${header._id}`}
-                    data-tooltip-content="Delete entire quotation"
-                    className="text-red-600 hover:text-red-900 p-2 transition-colors"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                </button>
+                {/* Action buttons - conditional based on actionMode */}
+                {actionMode === 'full' && (
+                  <>
+                    <button
+                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.NEW_OFFER, header })}
+                      data-tooltip-id={`new-offer-${header._id}`}
+                      data-tooltip-content="Create additional offer"
+                        className="text-green-600 hover:text-green-900 p-2 transition-colors"
+                    >
+                        <Plus className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => openStatusModal(header, offers)}
+                      data-tooltip-id={`status-${header._id}`}
+                      data-tooltip-content="Update quotation status"
+                        className="text-indigo-600 hover:text-indigo-900 p-2 transition-colors"
+                    >
+                        <CheckCircle className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => handleFollowUpQuotation(header)}
+                      data-tooltip-id={`followup-${header._id}`}
+                      data-tooltip-content="Record follow-up for this quotation"
+                        className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
+                      >
+                        <Clock className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuotation(header)}
+                        data-tooltip-id={`delete-quotation-${header._id}`}
+                        data-tooltip-content="Delete entire quotation"
+                        className="text-red-600 hover:text-red-900 p-2 transition-colors"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
                 </div>
               </div>
             </div>
@@ -1052,30 +1058,35 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                     >
                                       <FileDown className="h-4 w-4" />
                                     </button>
-                                    <button
-                                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
-                                      data-tooltip-id={`offer-edit-${offerGroup._id}`}
-                                data-tooltip-content="Edit offer"
-                                className="text-indigo-600 hover:text-indigo-900 p-1"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
-                                      data-tooltip-id={`offer-revision-${offerGroup._id}`}
-                                data-tooltip-content="Create revision from this offer"
-                                className="text-purple-600 hover:text-purple-900 p-1"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                              <button
-                                      onClick={() => handleDeleteOffer(offerGroup, header.quotationNumber)}
-                                      data-tooltip-id={`offer-delete-${offerGroup._id}`}
-                                data-tooltip-content="Delete offer"
-                                className="text-red-600 hover:text-red-900 p-1"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                                    {/* Offer action buttons - conditional based on actionMode */}
+                                    {actionMode === 'full' && (
+                                      <>
+                                        <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
+                                          data-tooltip-id={`offer-edit-${offerGroup._id}`}
+                                    data-tooltip-content="Edit offer"
+                                    className="text-indigo-600 hover:text-indigo-900 p-1"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
+                                          data-tooltip-id={`offer-revision-${offerGroup._id}`}
+                                    data-tooltip-content="Create revision from this offer"
+                                    className="text-purple-600 hover:text-purple-900 p-1"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                          onClick={() => handleDeleteOffer(offerGroup, header.quotationNumber)}
+                                          data-tooltip-id={`offer-delete-${offerGroup._id}`}
+                                    data-tooltip-content="Delete offer"
+                                    className="text-red-600 hover:text-red-900 p-1"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                 </div>
                               </div>
@@ -1132,32 +1143,37 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                 >
                                   <FileDown className="h-4 w-4" />
                                 </button>
-                                <button
-                                  onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
-                                  data-tooltip-id={`offer-edit-${offerGroup.original?._id}`}
-                                  data-tooltip-content="Edit offer"
-                                  className="text-indigo-600 hover:text-indigo-900 p-1"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                {(!offerGroup.revisions || offerGroup.revisions.length === 0) && (
-                                  <button
-                                    onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
-                                    data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
-                                    data-tooltip-content="Create revision from this offer"
-                                    className="text-purple-600 hover:text-purple-900 p-1"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </button>
+                                {/* Offer action buttons - conditional based on actionMode */}
+                                {actionMode === 'full' && (
+                                  <>
+                                    <button
+                                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
+                                      data-tooltip-id={`offer-edit-${offerGroup.original?._id}`}
+                                      data-tooltip-content="Edit offer"
+                                      className="text-indigo-600 hover:text-indigo-900 p-1"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </button>
+                                    {(!offerGroup.revisions || offerGroup.revisions.length === 0) && (
+                                      <button
+                                        onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
+                                        data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
+                                        data-tooltip-content="Create revision from this offer"
+                                        className="text-purple-600 hover:text-purple-900 p-1"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleDeleteOffer(offerGroup.original, header.quotationNumber)}
+                                      data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
+                                      data-tooltip-content="Delete offer"
+                                      className="text-red-600 hover:text-red-900 p-1"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </>
                                 )}
-                                <button
-                                  onClick={() => handleDeleteOffer(offerGroup.original, header.quotationNumber)}
-                                  data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
-                                  data-tooltip-content="Delete offer"
-                                  className="text-red-600 hover:text-red-900 p-1"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
                               </div>
                             </div>
                           </div>
@@ -1199,32 +1215,37 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                     >
                                       <Eye className="h-4 w-4" />
                                     </button>
-                                    <button
-                                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
-                                      data-tooltip-id={`offer-edit-${revision._id}`}
-                                      data-tooltip-content="Edit revision"
-                                      className="text-indigo-600 hover:text-indigo-900 p-1"
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </button>
-                                    {isLatestRevision && (
-                                      <button
-                                        onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
-                                        data-tooltip-id={`offer-revision-${revision._id}`}
-                                        data-tooltip-content="Create revision from this revision"
-                                        className="text-purple-600 hover:text-purple-900 p-1"
-                                      >
-                                        <Plus className="h-4 w-4" />
-                                      </button>
+                                    {/* Revision action buttons - conditional based on actionMode */}
+                                    {actionMode === 'full' && (
+                                      <>
+                                        <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
+                                          data-tooltip-id={`offer-edit-${revision._id}`}
+                                          data-tooltip-content="Edit revision"
+                                          className="text-indigo-600 hover:text-indigo-900 p-1"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </button>
+                                        {isLatestRevision && (
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
+                                            data-tooltip-id={`offer-revision-${revision._id}`}
+                                            data-tooltip-content="Create revision from this revision"
+                                            className="text-purple-600 hover:text-purple-900 p-1"
+                                          >
+                                            <Plus className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => handleDeleteOffer(revision, header.quotationNumber)}
+                                          data-tooltip-id={`offer-delete-${revision._id}`}
+                                          data-tooltip-content="Delete revision"
+                                          className="text-red-600 hover:text-red-900 p-1"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </>
                                     )}
-                                    <button
-                                      onClick={() => handleDeleteOffer(revision, header.quotationNumber)}
-                                      data-tooltip-id={`offer-delete-${revision._id}`}
-                                      data-tooltip-content="Delete revision"
-                                      className="text-red-600 hover:text-red-900 p-1"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
                                   </div>
                                 </div>
                               </div>

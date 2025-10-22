@@ -19,6 +19,8 @@ const QuotationPage = () => {
   const [hasApproveRfqPermission, setHasApproveRfqPermission] = useState(false);
   const [hasQuotationCreatePermission, setHasQuotationCreatePermission] = useState(false);
   const [hasQuotationRequesterPermission, setHasQuotationRequesterPermission] = useState(false);
+  const [hasAdminPermission, setHasAdminPermission] = useState(false);
+  const [hasAllQuotationViewerPermission, setHasAllQuotationViewerPermission] = useState(false);
   const [permissionLoading, setPermissionLoading] = useState(true);
   const [rfqDetails, setRfqDetails] = useState(null);
   const [rfqLoading, setRfqLoading] = useState(false);
@@ -64,13 +66,35 @@ const QuotationPage = () => {
         const hasRequesterPermission = requesterResponse.data.message?.hasPermission || requesterResponse.data.data?.hasPermission || requesterResponse.data.hasPermission;
         setHasQuotationRequesterPermission(hasRequesterPermission);
         
+        // Check admin permissions (quotation_admin, admin, or manager)
+        const adminResponse = await ApiHelper.get('/api/auth/ispermission/quotation_admin');
+        const managerResponse = await ApiHelper.get('/api/auth/ispermission/admin');
+        const hasAdminPermission = adminResponse.data.message?.hasPermission || adminResponse.data.data?.hasPermission || adminResponse.data.hasPermission ||
+                                 managerResponse.data.message?.hasPermission || managerResponse.data.data?.hasPermission || managerResponse.data.hasPermission;
+        setHasAdminPermission(hasAdminPermission);
+        
+        // Check all_quotation_viewer permission
+        const allQuotationViewerResponse = await ApiHelper.get('/api/auth/ispermission/all_quotation_viewer');
+        const hasAllQuotationViewerPermission = allQuotationViewerResponse.data.message?.hasPermission || allQuotationViewerResponse.data.data?.hasPermission || allQuotationViewerResponse.data.hasPermission;
+        setHasAllQuotationViewerPermission(hasAllQuotationViewerPermission);
+        
         // Set default tab based on permissions
-        if (hasApproveRfqPermission) {
+        // Priority: Approve RFQ > All Quotations Viewer > Quotation Create > Quotation Requester
+        if (hasApprovePermission) {
+          console.log('Setting active tab to approve - user has approve_rfq permission');
           setActiveTab('approve');
-        } else if (hasQuotationCreatePermission) {
+        } else if (hasAllQuotationViewerPermission) {
+          console.log('Setting active tab to all-quotations - user has all_quotation_viewer permission');
+          setActiveTab('all-quotations');
+        } else if (hasCreatePermission) {
+          console.log('Setting active tab to rfq-list - user has quotation_create permission');
           setActiveTab('rfq-list');
         } else if (hasRequesterPermission) {
+          console.log('Setting active tab to request - user has quotation_requester permission');
           setActiveTab('request');
+        } else {
+          console.log('Setting active tab to list - no specific permissions found');
+          setActiveTab('list');
         }
         
       } catch (error) {
@@ -86,7 +110,35 @@ const QuotationPage = () => {
     if (user?.isLoggedIn) {
       checkPermissions();
     }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Additional effect to ensure tab is set correctly when permissions change
+  useEffect(() => {
+    if (!permissionLoading) {
+      console.log('Permission loading complete. Current permissions:', {
+        hasApproveRfqPermission,
+        hasQuotationCreatePermission,
+        hasQuotationRequesterPermission,
+        hasAllQuotationViewerPermission,
+        activeTab
+      });
+      
+      // If user only has approve_rfq permission, ensure approve tab is active
+      if (hasApproveRfqPermission && !hasQuotationCreatePermission && !hasQuotationRequesterPermission && !hasAllQuotationViewerPermission) {
+        if (activeTab !== 'approve') {
+          console.log('Forcing active tab to approve for user with only approve_rfq permission');
+          setActiveTab('approve');
+        }
+      }
+      // If user only has all_quotation_viewer permission, ensure all-quotations tab is active
+      else if (hasAllQuotationViewerPermission && !hasApproveRfqPermission && !hasQuotationCreatePermission && !hasQuotationRequesterPermission) {
+        if (activeTab !== 'all-quotations') {
+          console.log('Forcing active tab to all-quotations for user with only all_quotation_viewer permission');
+          setActiveTab('all-quotations');
+        }
+      }
+    }
+  }, [permissionLoading, hasApproveRfqPermission, hasQuotationCreatePermission, hasQuotationRequesterPermission, hasAllQuotationViewerPermission, activeTab]);
 
   const handleView = (quotationData) => {
     // Navigate to details page with quotation ID
@@ -181,15 +233,17 @@ const QuotationPage = () => {
   const getTabDescription = () => {
     switch (activeTab) {
       case 'list':
-        return 'View your completed quotations from RFQ requests';
+        return 'View quotations created from your RFQ requests (view and download only)';
       case 'request':
         return 'Create new RFQ requests for quotation approval';
       case 'approve':
         return 'Review and approve/reject RFQ requests';
       case 'rfq-list':
         return 'View approved RFQ requests and create quotations';
-      case 'quotation-list':
-        return 'View all created quotations';
+      case 'my-created-quotations':
+        return 'Manage quotations you have created (edit, add revisions, add offers)';
+      case 'all-quotations':
+        return 'View all quotations in the system';
       default:
         return 'Manage your quotation workflow';
     }
@@ -209,13 +263,13 @@ const QuotationPage = () => {
 
           {/* Role-based Tabs */}
           <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
+            <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-hide px-1 sm:px-0">
               {/* Requester Role: "Request Quotation" and "Quotation List" tabs */}
               {hasQuotationRequesterPermission && (
                 <>
                   <button
                     onClick={() => setActiveTab('request')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
                       activeTab === 'request'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -228,7 +282,7 @@ const QuotationPage = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('list')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
                       activeTab === 'list'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -236,7 +290,7 @@ const QuotationPage = () => {
                   >
                     <div className="flex items-center">
                       <List className="h-4 w-4 mr-2" />
-                      Quotation List
+                      My Quotations
                     </div>
                   </button>
                 </>
@@ -246,7 +300,7 @@ const QuotationPage = () => {
               {hasApproveRfqPermission && (
                 <button
                   onClick={() => setActiveTab('approve')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
                     activeTab === 'approve'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -264,7 +318,7 @@ const QuotationPage = () => {
                 <>
                   <button
                     onClick={() => setActiveTab('rfq-list')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
                       activeTab === 'rfq-list'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -276,18 +330,33 @@ const QuotationPage = () => {
                     </div>
                   </button>
                   <button
-                    onClick={() => setActiveTab('quotation-list')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'quotation-list'
+                    onClick={() => setActiveTab('my-created-quotations')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
+                      activeTab === 'my-created-quotations'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center">
                       <FileText className="h-4 w-4 mr-2" />
-                      Quotation List
+                      Manage My Quotations
                     </div>
                   </button>
+                  {(hasAdminPermission || hasAllQuotationViewerPermission) && (
+                    <button
+                      onClick={() => setActiveTab('all-quotations')}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm flex-shrink-0 whitespace-nowrap ${
+                        activeTab === 'all-quotations'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <FileText className="h-4 w-4 mr-2" />
+                        All Quotations
+                      </div>
+                    </button>
+                  )}
                 </>
               )}
             </nav>
@@ -337,6 +406,8 @@ const QuotationPage = () => {
                     onCreate={handleCreate}
                     onDelete={handleDelete}
                     showCreateButton={false}
+                    filterMode="my_quotations"
+                    actionMode="view_only"
                   />
                 )}
 
@@ -349,7 +420,7 @@ const QuotationPage = () => {
                 {activeTab === 'rfq-list' && hasQuotationCreatePermission && (
                   <RequestQuotationListTab />
                 )}
-                {activeTab === 'quotation-list' && hasQuotationCreatePermission && (
+                {activeTab === 'my-created-quotations' && hasQuotationCreatePermission && (
                   <QuotationList
                     onView={handleView}
                     onPreview={handlePreview}
@@ -357,6 +428,22 @@ const QuotationPage = () => {
                     onCreate={handleCreate}
                     onDelete={handleDelete}
                     showCreateButton={false}
+                    filterMode="created_by_me"
+                    actionMode="full"
+                  />
+                )}
+                {/* All Quotations Content - for both admin and viewer permissions */}
+                {activeTab === 'all-quotations' && (hasAdminPermission || hasAllQuotationViewerPermission) && (
+                  <QuotationList
+                    onView={handleView}
+                    onPreview={handlePreview}
+                    onEdit={handleEdit}
+                    onCreate={handleCreate}
+                    onDelete={handleDelete}
+                    showCreateButton={false}
+                    filterMode={hasAdminPermission ? "all" : "all_viewer"}
+                    apiEndpoint={hasAdminPermission ? "/api/quotations" : "/api/quotations/all"}
+                    actionMode="full"
                   />
                 )}
               </>

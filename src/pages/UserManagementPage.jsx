@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Trash2, Copy, Key } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Filter, Trash2, Copy, Key, ArrowLeft } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import ApiHelper from '../utils/ApiHelper';
 import toast from 'react-hot-toast';
@@ -10,6 +11,8 @@ import AddUserModal from '../components/AddUserModal';
 
 
 const UserManagementPage = () => {
+  const navigate = useNavigate();
+  
   const [users, setUsers] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -209,9 +212,17 @@ const UserManagementPage = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-              <p className="mt-2 text-gray-600">Manage users and permissions</p>
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate('/')}
+                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+                <p className="mt-2 text-gray-600">Manage users and permissions</p>
+              </div>
             </div>
             <button
               onClick={handleCreateUser}
