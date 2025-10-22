@@ -302,28 +302,27 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                           )}
                           <p className="font-medium">          Chassis     : {item.chassis || ''}</p>
                           <p className="font-medium">          Spesifikasi :</p>
-                          {item.specificationMode === 'complex' ? (
+                          {item.specifications && item.specifications.length > 0 ? (
                             <div className="ml-4">
-                              {item.specifications?.map((spec, specIndex) => (
-                                <p key={specIndex} className="text-sm">
-                                  {`          ${spec.label || ''} : ${spec.value || ''}`}
-                                </p>
+                              {item.specifications.map((spec, specIndex) => (
+                                <div key={specIndex} className="mb-2">
+                                  <p className="font-semibold text-sm">
+                                    {`          ${spec.category}:`}
+                                  </p>
+                                  {spec.items && spec.items.map((specItem, itemIndex) => (
+                                    <p key={itemIndex} className="text-sm ml-4">
+                                      {`          ${specItem.name}: ${specItem.specification}`}
+                                    </p>
+                                  ))}
+                                </div>
                               ))}
                             </div>
                           ) : (
-                            item.specifications?.map((spec, specIndex) => (
-                              <p key={specIndex} className="ml-4">
-                                {specIndex === 0 ? `${spec}` : `                            ${spec}`}
-                              </p>
-                            ))
+                            <p className="ml-4 text-sm text-gray-500">No specifications provided</p>
                           )}
                           {item.drawingSpecification && (
                             <p className="ml-4">
-                              {item.specificationMode === 'simple' ? (
-                                `                            Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`
-                              ) : (
-                                `          Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`
-                              )}
+                              {`          Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`}
                             </p>
                           )}
                         </div>

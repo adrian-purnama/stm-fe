@@ -18,6 +18,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     priority: 'medium',
     expectedDeliveryDate: '',
     confidenceRate: '',
+    deliveryLocation: '',
+    competitor: '',
+    canMake: false,
+    projectOngoing: false,
     items: []
   });
   const [loading, setLoading] = useState(false);
@@ -280,6 +284,22 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       newErrors.confidenceRate = 'Confidence rate must be an integer';
     }
     
+    if (!formData.deliveryLocation.trim()) {
+      newErrors.deliveryLocation = 'Delivery location is required';
+    }
+    
+    if (!formData.competitor.trim()) {
+      newErrors.competitor = 'Competitor is required';
+    }
+    
+    if (formData.canMake === undefined || formData.canMake === null) {
+      newErrors.canMake = 'Can Make flag is required';
+    }
+    
+    if (formData.projectOngoing === undefined || formData.projectOngoing === null) {
+      newErrors.projectOngoing = 'Project Ongoing flag is required';
+    }
+    
     if (formData.items.length === 0) {
       newErrors.items = 'At least one item is required';
     }
@@ -343,6 +363,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium',
         expectedDeliveryDate: '',
         confidenceRate: '',
+        deliveryLocation: '',
+        competitor: '',
+        canMake: false,
+        projectOngoing: false,
         items: []
       });
       setErrors({});
@@ -507,6 +531,99 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
            )}
            <p className="mt-1 text-xs text-gray-500">
              Enter your confidence level for this RFQ request (0-100%)
+           </p>
+         </div>
+
+         {/* Delivery Location Field */}
+         <div>
+           <label htmlFor="deliveryLocation" className="block text-sm font-medium text-gray-700 mb-2">
+             Delivery Location <span className="text-red-500">*</span>
+           </label>
+           <input
+             type="text"
+             id="deliveryLocation"
+             value={formData.deliveryLocation}
+             onChange={(e) => handleInputChange('deliveryLocation', e.target.value)}
+             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+               errors.deliveryLocation ? 'border-red-500' : 'border-gray-300'
+             }`}
+             placeholder="Enter delivery location"
+             disabled={loading}
+           />
+           {errors.deliveryLocation && (
+             <p className="mt-1 text-sm text-red-600">{errors.deliveryLocation}</p>
+           )}
+         </div>
+
+         {/* Competitor Field */}
+         <div>
+           <label htmlFor="competitor" className="block text-sm font-medium text-gray-700 mb-2">
+             Competitor <span className="text-red-500">*</span>
+           </label>
+           <input
+             type="text"
+             id="competitor"
+             value={formData.competitor}
+             onChange={(e) => handleInputChange('competitor', e.target.value)}
+             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+               errors.competitor ? 'border-red-500' : 'border-gray-300'
+             }`}
+             placeholder="Enter competitor name"
+             disabled={loading}
+           />
+           {errors.competitor && (
+             <p className="mt-1 text-sm text-red-600">{errors.competitor}</p>
+           )}
+         </div>
+
+         {/* Project Flags Section */}
+         <div className="space-y-4">
+           <h3 className="text-lg font-medium text-gray-900">Project Information</h3>
+           
+           {/* Can Make Checkbox */}
+           <div className="flex items-center">
+             <input
+               type="checkbox"
+               id="canMake"
+               checked={formData.canMake}
+               onChange={(e) => handleInputChange('canMake', e.target.checked)}
+               className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${
+                 errors.canMake ? 'border-red-500' : ''
+               }`}
+               disabled={loading}
+             />
+             <label htmlFor="canMake" className="ml-2 block text-sm font-medium text-gray-700">
+               Can Make <span className="text-red-500">*</span>
+             </label>
+           </div>
+           {errors.canMake && (
+             <p className="mt-1 text-sm text-red-600">{errors.canMake}</p>
+           )}
+           <p className="text-xs text-gray-500 ml-6">
+             Check if we have the capability to manufacture this product
+           </p>
+           
+           {/* Project Ongoing Checkbox */}
+           <div className="flex items-center">
+             <input
+               type="checkbox"
+               id="projectOngoing"
+               checked={formData.projectOngoing}
+               onChange={(e) => handleInputChange('projectOngoing', e.target.checked)}
+               className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${
+                 errors.projectOngoing ? 'border-red-500' : ''
+               }`}
+               disabled={loading}
+             />
+             <label htmlFor="projectOngoing" className="ml-2 block text-sm font-medium text-gray-700">
+               Project Ongoing <span className="text-red-500">*</span>
+             </label>
+           </div>
+           {errors.projectOngoing && (
+             <p className="mt-1 text-sm text-red-600">{errors.projectOngoing}</p>
+           )}
+           <p className="text-xs text-gray-500 ml-6">
+             Check if this is an ongoing project
            </p>
          </div>
 

@@ -9,7 +9,6 @@ import { CheckCircle, XCircle, Clock, Users, FileText, Eye, ChevronDown, Chevron
 
 const ApproveQuotationTab = () => {
   const navigate = useNavigate();
-  const { user } = useContext(UserContext);
   const { connected } = useContext(NotificationsContext);
   const [rfqs, setRfqs] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -164,171 +163,256 @@ const ApproveQuotationTab = () => {
       ) : (
         <div className="space-y-4">
           {rfqs.map((rfq) => (
-            <div key={rfq._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      RFQ #{rfq.rfqNumber} - {rfq.customerName}
+            <div key={rfq._id} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
+              {/* Mobile Header */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3">
+                <div className="flex-1 mb-2 sm:mb-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-medium text-gray-900 break-words">
+                      RFQ #{rfq.rfqNumber}
                     </h3>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(rfq.status)}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full w-fit ${getStatusColor(rfq.status)}`}>
                       {getStatusIcon(rfq.status)}
                       {rfq.status}
                     </span>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Customer:</span> {rfq.customerName}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Contact:</span> {rfq.contactPerson?.name} ({rfq.contactPerson?.gender})
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Requester:</span> {rfq.requesterId?.fullName}
-                      </p>
+                  <p className="text-sm text-gray-600 mt-1 break-words">
+                    <span className="font-medium">Customer:</span> {rfq.customerName}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Mobile-friendly content layout */}
+              <div className="space-y-3">
+                {/* Basic Info - Stack on mobile */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm">
+                  <div className="space-y-1">
+                    <p className="text-gray-600">
+                      <span className="font-medium">Contact:</span> {rfq.contactPerson?.name} ({rfq.contactPerson?.gender})
+                    </p>
+                    <p className="text-gray-600">
+                      <span className="font-medium">Requester:</span> {rfq.requesterId?.fullName}
+                    </p>
+                    <p className="text-gray-600">
+                      <span className="font-medium">Creator:</span> {rfq.quotationCreatorId?.fullName}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-600">
+                      <span className="font-medium">Priority:</span> 
+                      <span className={`ml-1 capitalize px-2 py-1 rounded-full text-xs ${
+                        rfq.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                        rfq.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                        rfq.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {rfq.priority}
+                      </span>
+                    </p>
+                    <p className="text-gray-600">
+                      <span className="font-medium">Location:</span> {rfq.deliveryLocation}
+                    </p>
+                    <p className="text-gray-600">
+                      <span className="font-medium">Created:</span> {new Date(rfq.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Key Information - Mobile optimized */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3">
+                  <h4 className="text-xs sm:text-sm font-semibold text-yellow-800 mb-2">Key Info</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-yellow-700 text-xs">Competitor:</span>
+                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium truncate ${
+                        rfq.competitor && rfq.competitor.trim() !== '' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {rfq.competitor && rfq.competitor.trim() !== '' ? rfq.competitor : 'None'}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Creator:</span> {rfq.quotationCreatorId?.fullName}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Priority:</span> 
-                        <span className={`ml-1 capitalize px-2 py-1 rounded-full text-xs ${
-                          rfq.priority === 'urgent' ? 'bg-red-100 text-red-800' :
-                          rfq.priority === 'high' ? 'bg-orange-100 text-orange-800' :
-                          rfq.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {rfq.priority}
-                        </span>
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Created:</span> {new Date(rfq.createdAt).toLocaleDateString()}
-                      </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-yellow-700 text-xs">Can Make:</span>
+                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
+                        rfq.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {rfq.canMake ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-yellow-700 text-xs">Ongoing:</span>
+                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
+                        rfq.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {rfq.projectOngoing ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-yellow-700 text-xs">Confidence:</span>
+                      <span className={`px-1 sm:px-2 py-1 rounded text-xs font-medium ${
+                        rfq.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
+                        rfq.confidenceRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {rfq.confidenceRate || 0}%
+                      </span>
                     </div>
                   </div>
+                </div>
+                      
+                {/* Budget Information - Mobile optimized */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-3">
+                  <h4 className="text-xs sm:text-sm font-semibold text-blue-800 mb-2">Budget</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {rfq.items && rfq.items.length > 0 ? (
+                      <>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                          <span className="font-medium text-blue-700 text-xs">Total Price:</span>
+                          <span className="px-1 sm:px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 truncate">
+                            {rfq.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                          <span className="font-medium text-blue-700 text-xs">Total Net:</span>
+                          <span className="px-1 sm:px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 truncate">
+                            {rfq.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2 text-center">
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                          No Items / Budget: 0
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                  {rfq.description && (
-                    <p className="text-gray-600 mb-3">
+                {/* Description */}
+                {rfq.description && (
+                  <div className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                    <p className="text-xs sm:text-sm text-gray-600">
                       <span className="font-medium">Description:</span> {rfq.description}
                     </p>
-                  )}
+                  </div>
+                )}
 
-                  {/* Items Summary */}
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">
-                        Items ({rfq.items?.length || 0})
-                      </span>
-                      <button
-                        onClick={() => toggleExpanded(rfq._id)}
-                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {expandedRFQ === rfq._id ? (
-                          <>
-                            <ChevronUp size={14} />
-                            Hide Details
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown size={14} />
-                            Show Details
-                          </>
-                        )}
-                      </button>
+                {/* Items Summary - Mobile optimized */}
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span className="text-xs sm:text-sm font-medium text-gray-700">
+                      Items ({rfq.items?.length || 0})
+                    </span>
+                    <button
+                      onClick={() => toggleExpanded(rfq._id)}
+                      className="flex items-center justify-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-800 px-2 py-1 rounded"
+                    >
+                      {expandedRFQ === rfq._id ? (
+                        <>
+                          <ChevronUp size={12} />
+                          Hide Details
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={12} />
+                          Show Details
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded Items Details - Mobile optimized */}
+                {expandedRFQ === rfq._id && rfq.items && (
+                  <div className="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 mt-2">
+                    <div className="space-y-2">
+                      {rfq.items.map((item, index) => (
+                        <div key={index} className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-1">
+                            <h4 className="text-xs sm:text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
+                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 text-xs text-gray-600">
+                              <span>Price: {item.price?.toLocaleString('id-ID')}</span>
+                              <span>Net: {item.priceNet?.toLocaleString('id-ID')}</span>
+                            </div>
+                          </div>
+                            
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Karoseri:</span> {item.karoseri}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              <span className="font-medium">Chassis:</span> {item.chassis}
+                            </p>
+                          </div>
+
+                          {item.notes && (
+                            <p className="text-sm text-gray-600 mb-2">
+                              <span className="font-medium">Notes:</span> {item.notes}
+                            </p>
+                          )}
+
+                          {/* Specifications */}
+                          {item.specifications && item.specifications.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-sm font-medium text-gray-700 mb-2">Specifications:</p>
+                              <div className="space-y-2">
+                                {item.specifications.map((spec, specIndex) => (
+                                  <div key={specIndex} className="bg-gray-50 rounded p-2">
+                                    <h6 className="font-semibold text-gray-700 text-xs mb-1">
+                                      {spec.category}
+                                    </h6>
+                                    <div className="grid grid-cols-1 gap-1">
+                                      {spec.items && spec.items.map((specItem, itemIndex) => (
+                                        <div key={itemIndex} className="flex items-start space-x-2">
+                                          <span className="font-medium text-gray-600 text-xs min-w-0 flex-shrink-0">
+                                            {specItem.name}:
+                                          </span>
+                                          <span className="text-gray-700 text-xs break-words">
+                                            {specItem.specification}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
-
-                  {/* Expanded Items Details */}
-                  {expandedRFQ === rfq._id && rfq.items && (
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <div className="space-y-3">
-                        {rfq.items.map((item, index) => (
-                          <div key={index} className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
-                              <span className="text-sm text-gray-600">
-                                Price: {item.price?.toLocaleString('id-ID')} | Net: {item.priceNet?.toLocaleString('id-ID')}
-                              </span>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                              <p className="text-sm text-gray-600">
-                                <span className="font-medium">Karoseri:</span> {item.karoseri}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                <span className="font-medium">Chassis:</span> {item.chassis}
-                              </p>
-                            </div>
-
-                            {item.notes && (
-                              <p className="text-sm text-gray-600 mb-2">
-                                <span className="font-medium">Notes:</span> {item.notes}
-                              </p>
-                            )}
-
-                            {/* Specifications */}
-                            {item.specifications && item.specifications.length > 0 && (
-                              <div className="mt-3">
-                                <p className="text-sm font-medium text-gray-700 mb-2">Specifications:</p>
-                                <div className="space-y-2">
-                                  {item.specifications.map((spec, specIndex) => (
-                                    <div key={specIndex} className="bg-gray-50 rounded p-2">
-                                      <h6 className="font-semibold text-gray-700 text-xs mb-1">
-                                        {spec.category}
-                                      </h6>
-                                      <div className="grid grid-cols-1 gap-1">
-                                        {spec.items && spec.items.map((specItem, itemIndex) => (
-                                          <div key={itemIndex} className="flex items-start space-x-2">
-                                            <span className="font-medium text-gray-600 text-xs min-w-0 flex-shrink-0">
-                                              {specItem.name}:
-                                            </span>
-                                            <span className="text-gray-700 text-xs break-words">
-                                              {specItem.specification}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
                 
-                <div className="flex items-center gap-2 ml-4">
+                {/* Action Buttons - Mobile optimized */}
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between mt-3">
                   <button
                     onClick={() => navigate(`/quotations/rfq/${rfq._id}`)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <Eye size={14} />
                     View Details
                   </button>
                   
                   {rfq.status === 'pending' && (
-                    <>
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={() => showApproval(rfq, 'approve')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 transition-colors"
                       >
                         <CheckCircle size={14} />
                         Approve
                       </button>
                       <button
                         onClick={() => showApproval(rfq, 'reject')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 bg-red-600 text-white text-xs sm:text-sm rounded-lg hover:bg-red-700 transition-colors"
                       >
                         <XCircle size={14} />
                         Reject
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -358,6 +442,81 @@ const ApproveQuotationTab = () => {
                 <p><span className="font-medium">Requester:</span> {selectedRFQ.requesterId?.fullName}</p>
                 <p><span className="font-medium">Creator:</span> {selectedRFQ.quotationCreatorId?.fullName}</p>
                 <p><span className="font-medium">Priority:</span> {selectedRFQ.priority}</p>
+                <p><span className="font-medium">Delivery Location:</span> {selectedRFQ.deliveryLocation}</p>
+                <p><span className="font-medium">Competitor:</span> {selectedRFQ.competitor}</p>
+                <p><span className="font-medium">Confidence Rate:</span> {selectedRFQ.confidenceRate}%</p>
+                
+                {/* Key Information - Highlighted */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                  <h4 className="text-sm font-semibold text-yellow-800 mb-2">Key Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-yellow-700">Competitor:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedRFQ.competitor && selectedRFQ.competitor.trim() !== '' ? selectedRFQ.competitor : 'None'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-yellow-700">Can Make:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        selectedRFQ.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedRFQ.canMake ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-yellow-700">Project Ongoing:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        selectedRFQ.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {selectedRFQ.projectOngoing ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-yellow-700">Confidence:</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        selectedRFQ.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
+                        selectedRFQ.confidenceRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedRFQ.confidenceRate || 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Budget Information */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-2">Budget Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {selectedRFQ.items && selectedRFQ.items.length > 0 ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-700">Total Price:</span>
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                            {selectedRFQ.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-blue-700">Total Net:</span>
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                            {selectedRFQ.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2 text-center">
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                          No Items / Budget: 0
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 {selectedRFQ.description && (
                   <p><span className="font-medium">Description:</span> {selectedRFQ.description}</p>
                 )}

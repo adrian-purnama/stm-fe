@@ -149,66 +149,27 @@ const buildItemText = (offerItems) => {
     let specificationsText = "";
     
     if (item.specifications && item.specifications.length > 0) {
-       if (item.specificationMode === "simple") {
-         // Simple mode: Join specs with newline, first line has 0 spaces, others have 28 spaces
-         const specs = item.specifications;
-         specificationsText = `${specs[0] || ""}`;
-         for (let i = 1; i < specs.length; i++) {
-           specificationsText += `\n${" ".repeat(28)}${specs[i]}`;
-         }
-      } else {
-        // Complex mode: Table-like format with invisible borders for perfect Word alignment
-        const specs = item.specifications;
-
-        if (specs.length === 0) {
-          specificationsText = "";
-        } else {
-          const midPoint = Math.ceil(specs.length / 2);
-          const leftColumn = specs.slice(0, midPoint);
-          const rightColumn = specs.slice(midPoint);
-          
-          const leftMaxLabelLength = Math.max(...leftColumn.map(s => (s.label || '').length));
-          const rightMaxLabelLength = Math.max(...rightColumn.map(s => (s.label || '').length), 0);
-          
-          // Longest full left content (label + value)
-          const leftColumnWidth = Math.max(...leftColumn.map(s => {
-            const label = s.label || '';
-            const value = s.value || '';
-            const pad = leftMaxLabelLength - label.length;
-            return `${label}${' '.repeat(pad)} : ${value}`.length;
-          }), 0);
-          
-          const tableRows = [];
-          const maxLines = Math.max(leftColumn.length, rightColumn.length);
-          const columnGap = 2; // reduced from 2 → tighter columns
-          
-          for (let i = 0; i < maxLines; i++) {
-            const leftSpec = leftColumn[i] || {};
-            const rightSpec = rightColumn[i] || {};
-          
-            // left cell
-            const labelL = leftSpec.label || '';
-            const valueL = leftSpec.value || '';
-            const padL = leftMaxLabelLength - labelL.length;
-            let leftCell = `${labelL}${' '.repeat(padL)} : ${valueL}`;
-            leftCell = leftCell.padEnd(leftColumnWidth, ' ');
-          
-            // right cell (slightly tighter alignment)
-            const labelR = rightSpec.label || '';
-            const valueR = rightSpec.value || '';
-            const padR = rightMaxLabelLength - labelR.length;
-            const rightCell = rightSpec.label
-              ? `${labelR}${' '.repeat(Math.max(0, padR - 1))} : ${valueR}`
-              : '';
-          
-           tableRows.push(`${leftCell}${' '.repeat(columnGap)}${rightCell}`);
-           }
-           
-           // Add 10 spaces to all lines for consistent alignment
-           specificationsText = tableRows.map(row => `${" ".repeat(10)}${row}`).join('\n').replace(/ /g, '\u00A0');
-          
+      const specLines = [];
+      
+      item.specifications.forEach((spec, specIndex) => {
+        // Add category header
+        specLines.push(`${spec.category}:`);
+        
+        // Add items within the category
+        if (spec.items && spec.items.length > 0) {
+          spec.items.forEach((specItem, itemIndex) => {
+            specLines.push(`  ${specItem.name}: ${specItem.specification}`);
+          });
         }
-      }
+        
+        // Add spacing between categories (except for the last one)
+        if (specIndex < item.specifications.length - 1) {
+          specLines.push('');
+        }
+      });
+      
+      // Add proper indentation (10 spaces) to all lines
+      specificationsText = specLines.map(line => `${" ".repeat(10)}${line}`).join('\n');
     }
     
 
@@ -220,7 +181,7 @@ const buildItemText = (offerItems) => {
      // Build this item's text with exact spacing
      // First item (1.) has NO spaces, subsequent items (2., 3., etc.) have 10 spaces
      if (itemNumber === 1) {
-       itemText += `${itemNumber}. Karoseri     : ${karoseri}\n`;
+       itemText += `${itemNumber}.Karoseri        : ${karoseri}\n`;
      } else {
        itemText += `${" ".repeat(10)}${itemNumber}. Karoseri     : ${karoseri}\n`;
      }
@@ -228,25 +189,16 @@ const buildItemText = (offerItems) => {
      // Chassis with 10 spaces before and 8 spaces after the colon
      itemText += `${" ".repeat(10)}Chassis         : ${chassis}\n`;
 
-     // Spesifikasi formatting based on mode
-     if (item.specificationMode === "complex" && specificationsText) {
-       // Complex mode: Put "Spesifikasi:" on its own line with 10 spaces before
+     // Spesifikasi formatting - always use the new category-based format
+     if (specificationsText) {
+       // Put "Spesifikasi:" on its own line with 10 spaces before
        itemText += `${" ".repeat(10)}Spesifikasi     :\n`;
        itemText += specificationsText;
-     } else {
-       // Simple mode: Put specifications on the same line with 10 spaces before
-       itemText += `${" ".repeat(10)}Spesifikasi     : ${specificationsText}`;
      }
 
-     // Add drawing number sentence with mode-specific indentation
+     // Add drawing number sentence with consistent indentation
      if (drawingNumberSentence) {
-       if (item.specificationMode === "simple") {
-         // Simple mode: 28 spaces (20 + 8 more)
-         itemText += `\n${" ".repeat(28)}${drawingNumberSentence}`;
-        } else {
-         // Complex mode: 10 spaces
-         itemText += `\n${" ".repeat(10)}${drawingNumberSentence}`;
-       }
+       itemText += `\n${" ".repeat(10)}${drawingNumberSentence}`;
      }
 
     // Add spacing between items (except for the last one)

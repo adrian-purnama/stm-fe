@@ -52,7 +52,7 @@ const HomePage = () => {
   const allDataCards = [
     {
       id: 1,
-      title: 'Manajemen Truck Type',
+      title: 'Product Catalogue',
       subtitle: 'Data',
       description: 'Kelola jenis-jenis truck dan kategorinya',
       icon: Truck,
@@ -153,13 +153,14 @@ const HomePage = () => {
               </div>
 
               {/* Tools Section */}
-              <div className="mb-12">
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Alat</h3>
-                  <p className="text-gray-600">Mempermudah Pekerjaan Anda</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {toolCards.map((tool) => (
+              {toolCards.length > 0 && (
+                <div className="mb-12">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Alat</h3>
+                    <p className="text-gray-600">Mempermudah Pekerjaan Anda</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {toolCards.map((tool) => (
                     <Link
                       key={tool.id}
                       to={tool.href}
@@ -191,17 +192,19 @@ const HomePage = () => {
                       </div>
                     </Link>
                   ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Analytics Section */}
-              <div className="mb-12">
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Analisis</h3>
-                  <p className="text-gray-600">Lihat wawasan dan metrik kinerja</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {analyticsCards.map((analytics) => (
+              {analyticsCards.length > 0 && (
+                <div className="mb-12">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Analisis</h3>
+                    <p className="text-gray-600">Lihat wawasan dan metrik kinerja</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {analyticsCards.map((analytics) => (
                     <Link
                       key={analytics.id}
                       to={analytics.href}
@@ -233,17 +236,19 @@ const HomePage = () => {
                       </div>
                     </Link>
                   ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Data Section */}
-              <div className="mb-12">
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Data</h3>
-                  <p className="text-gray-600">Kelola data master dan referensi sistem</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {dataCards.map((data) => (
+              {dataCards.length > 0 && (
+                <div className="mb-12">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Data</h3>
+                    <p className="text-gray-600">Kelola data master dan referensi sistem</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {dataCards.map((data) => (
                     <Link
                       key={data.id}
                       to={data.href}
@@ -275,17 +280,19 @@ const HomePage = () => {
                       </div>
                     </Link>
                   ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Admin Section - Visible to everyone, access controlled by roles */}
-              <div className="mb-12">
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Admin</h3>
-                  <p className="text-gray-600">Kelola pengguna, role, dan sistem</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {adminCards.map((admin) => (
+              {adminCards.length > 0 && (
+                <div className="mb-12">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Admin</h3>
+                    <p className="text-gray-600">Kelola pengguna, role, dan sistem</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {adminCards.map((admin) => (
                     <Link
                       key={admin.id}
                       to={admin.href}
@@ -317,8 +324,9 @@ const HomePage = () => {
                       </div>
                     </Link>
                   ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </main>
 

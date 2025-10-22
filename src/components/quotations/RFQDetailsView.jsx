@@ -130,6 +130,78 @@ const RFQDetailsView = ({ rfq, loading }) => {
           </div>
         </div>
 
+        {/* Key Information - Highlighted */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-3">Key Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-yellow-700">Competitor:</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.competitor && rfq.competitor.trim() !== '' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {rfq.competitor && rfq.competitor.trim() !== '' ? rfq.competitor : 'None'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-yellow-700">Can Make:</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {rfq.canMake ? 'Yes' : 'No'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-yellow-700">Project Ongoing:</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {rfq.projectOngoing ? 'Yes' : 'No'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-yellow-700">Confidence Rate:</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
+                rfq.confidenceRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {rfq.confidenceRate || 0}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Budget Information */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-blue-800 mb-3">Budget Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            {rfq.items && rfq.items.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-blue-700">Total Price:</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {rfq.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-blue-700">Total Net:</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {rfq.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 text-center">
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  No Items / Budget: 0
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {rfq.description && (
           <div className="mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-2">Description</h3>

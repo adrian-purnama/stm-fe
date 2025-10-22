@@ -1160,18 +1160,24 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                     {item.specifications && item.specifications.length > 0 && (
                       <div className="mt-3">
                         <span className="text-gray-600 text-sm">Specifications:</span>
-                        <div className="mt-1 space-y-1">
+                        <div className="mt-2 space-y-3">
                           {item.specifications.map((spec, specIndex) => (
-                            <div key={specIndex} className="flex items-center text-sm">
-                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2" />
-                              {item.specificationMode === 'simple' ? (
-                                <span className="text-gray-700">{spec}</span>
-                              ) : (
-                                <span className="text-gray-700">
-                                  <span className="font-medium">{spec.label}</span>
-                                  <span className="text-gray-600 ml-1">: {spec.value}</span>
-                                </span>
-                              )}
+                            <div key={specIndex} className="bg-gray-50 rounded-lg p-3">
+                              <h6 className="font-semibold text-gray-800 text-sm mb-2">
+                                {spec.category}
+                              </h6>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {spec.items && spec.items.map((specItem, itemIndex) => (
+                                  <div key={itemIndex} className="flex items-start space-x-2">
+                                    <span className="font-medium text-gray-600 text-sm min-w-0 flex-shrink-0">
+                                      {specItem.name}:
+                                    </span>
+                                    <span className="text-gray-700 text-sm break-words">
+                                      {specItem.specification}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ))}
                         </div>
