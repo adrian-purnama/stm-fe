@@ -4,7 +4,7 @@ import { isTokenExpired } from "./tokenUtils";
 
 const axiosInstance = axios.create({
   // baseURL: "http://localhost:5000",
-  baseURL: import.meta.env.VITE_NODE_ENV === 'production' ? "https://" : "http://" + import.meta.env.VITE_BACKEND_URL,
+  baseURL: import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL,
   paramsSerializer: (params) => {
     const searchParams = new URLSearchParams();
     
