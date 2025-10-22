@@ -4,7 +4,8 @@ import { isTokenExpired } from "./tokenUtils";
 
 const axiosInstance = axios.create({
   // baseURL: "http://localhost:5000",
-  baseURL: import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL,
+  baseURL: "https://" + import.meta.env.VITE_BACKEND_URL,
+  // baseURL: import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL,
   paramsSerializer: (params) => {
     const searchParams = new URLSearchParams();
     
@@ -19,7 +20,6 @@ const axiosInstance = axios.create({
         searchParams.append(key, value);
       }
     });
-    console.log(import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL)
     return searchParams.toString();
   },
 });
