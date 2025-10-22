@@ -19,7 +19,7 @@ const axiosInstance = axios.create({
         searchParams.append(key, value);
       }
     });
-    
+    console.log(import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL)
     return searchParams.toString();
   },
 });
