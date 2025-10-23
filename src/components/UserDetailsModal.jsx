@@ -16,7 +16,7 @@ const UserDetailsModal = ({ user, onClose }) => {
   const fetchUserDetails = async () => {
     try {
       setLoading(true);
-      const response = await ApiHelper.get(`/api/auth/users/${user.id}/roles`);
+      const response = await ApiHelper.get(`/api/auth/users/${user._id}/roles`);
       setUserDetails(response.data.data);
     } catch (error) {
       console.error('Error fetching user details:', error);

@@ -108,7 +108,7 @@ const UserManagementPage = () => {
       switch (actionType) {
         case 'delete': {
           const deleteToast = toast.loading('Deleting user...');
-          await ApiHelper.delete(`/api/auth/users/${selectedUser.id}`);
+          await ApiHelper.delete(`/api/auth/users/${selectedUser._id}`);
           toast.success('User deleted successfully', { id: deleteToast });
           break;
         }
@@ -117,7 +117,7 @@ const UserManagementPage = () => {
           const newFullName = prompt('Enter new full name for copied user:');
           if (newEmail && newFullName) {
             const copyToast = toast.loading('Copying user...');
-            await ApiHelper.post(`/api/auth/users/${selectedUser.id}/copy`, {
+            await ApiHelper.post(`/api/auth/users/${selectedUser._id}/copy`, {
               email: newEmail,
               fullName: newFullName
             });
@@ -129,7 +129,7 @@ const UserManagementPage = () => {
           const newPassword = prompt('Enter new password:');
           if (newPassword) {
             const resetToast = toast.loading('Resetting password...');
-            await ApiHelper.post(`/api/auth/users/${selectedUser.id}/reset-password`, {
+            await ApiHelper.post(`/api/auth/users/${selectedUser._id}/reset-password`, {
               newPassword
             });
             toast.success('Password reset successfully', { id: resetToast });
@@ -290,7 +290,7 @@ const UserManagementPage = () => {
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                    <tr key={user._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
