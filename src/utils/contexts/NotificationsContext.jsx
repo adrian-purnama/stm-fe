@@ -38,7 +38,7 @@ export const NotificationsProvider = ({ children }) => {
     // TODO : HTTPS
     const wsProtocol = isDev ? "ws://" : "ws://";
     const wsHost = import.meta.env.VITE_BACKEND_URL;
-    const wsUrl = `${wsProtocol}${wsHost}/notification`;
+    const wsUrl = `${wsProtocol}${wsHost}notification`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
