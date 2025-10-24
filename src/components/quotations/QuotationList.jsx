@@ -20,16 +20,16 @@ import {
 } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
-import ApiHelper from '../../utils/ApiHelper';
-import { formatPriceWithCurrency } from '../../utils/priceFormatter';
-import CustomDropdown from '../CustomDropdown';
-import BaseModal from '../BaseModal';
+import ApiHelper from '../../utils/api/ApiHelper';
+import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
+import CustomDropdown from '../common/CustomDropdown';
+import BaseModal from '../modals/BaseModal';
 import { QUOTATION_FORM_MODES } from './quotationModes';
 import { 
   updatePreferences, 
   getSectionPreferences,
   PREFERENCE_SECTIONS 
-} from '../../utils/UserPreferences';
+} from '../../utils/helpers/UserPreferences';
 
 const statusOptions = [
   { value: '', label: 'All Status' },
@@ -800,10 +800,24 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                       <User className="h-4 w-4 text-gray-500" />
                     <span>{header.contactPerson?.name} ({header.contactPerson?.gender})</span>
                   </div>
-                    <div className="flex items-center space-x-2 text-gray-600">
-                      <User className="h-4 w-4 text-gray-500" />
-                    <span>Marketing: {header.marketingName}</span>
-                  </div>
+                    {header.requesterId && (
+                      <div className="flex items-center space-x-2 text-gray-600">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span>Requester: {header.requesterId?.fullName || header.requesterId?.email}</span>
+                      </div>
+                    )}
+                    {header.creatorId && (
+                      <div className="flex items-center space-x-2 text-gray-600">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span>Creator: {header.creatorId?.fullName || header.creatorId?.email}</span>
+                      </div>
+                    )}
+                    {header.approverId && (
+                      <div className="flex items-center space-x-2 text-gray-600">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span>Approver: {header.approverId?.fullName || header.approverId?.email}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dates and Follow-up Status */}

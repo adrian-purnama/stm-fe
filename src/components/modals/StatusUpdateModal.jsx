@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import BaseModal from './BaseModal';
-import CustomDropdown from './CustomDropdown';
-import axiosInstance from '../utils/ApiHelper';
+import CustomDropdown from '../common/CustomDropdown';
+import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const StatusUpdateModal = ({ isOpen, onClose, quotation, onUpdate }) => {

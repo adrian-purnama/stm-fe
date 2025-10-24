@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
-import { generateQuotationDocument, formatPrice } from '../../utils/documentGenerator';
+import { generateQuotationDocument, formatPrice } from '../../utils/templates/documentGenerator';
 import toast from 'react-hot-toast';
 
 // Format file size in human readable format

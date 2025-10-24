@@ -1,9 +1,9 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserContext } from '../../utils/UserContext';
-import { NotificationsContext } from '../../utils/NotificationsContext';
-import ApiHelper from '../../utils/ApiHelper';
-import BaseModal from '../BaseModal';
+import { UserContext } from '../../utils/contexts/UserContext';
+import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
+import axiosInstance from '../../utils/api/ApiHelper';
+import BaseModal from '../modals/BaseModal';
 import toast from 'react-hot-toast';
 import { CheckCircle, XCircle, Clock, Users, FileText, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -22,7 +22,7 @@ const ApproveQuotationTab = () => {
   const fetchRFQs = async () => {
     try {
       setLoading(true);
-      const response = await ApiHelper.get('/api/rfq');
+      const response = await axiosInstance.get('/api/rfq');
       // The backend already filters by user role, so this will only return RFQs assigned to the current user for approval
       setRfqs(response.data.data.rfqs);
     } catch (error) {
@@ -36,7 +36,7 @@ const ApproveQuotationTab = () => {
   // Fetch pending count for approvers
   const fetchPendingCount = async () => {
     try {
-      const response = await ApiHelper.get('/api/rfq/pending-count');
+      const response = await axiosInstance.get('/api/rfq/pending-count');
       setPendingCount(response.data.data.count);
     } catch (error) {
       console.error('Error fetching pending count:', error);
@@ -46,7 +46,7 @@ const ApproveQuotationTab = () => {
   // Handle RFQ approval
   const handleApprove = async (rfqId, notes = '') => {
     try {
-      await ApiHelper.patch(`/api/rfq/${rfqId}/approve`, { approvalNotes: notes });
+      await axiosInstance.patch(`/api/rfq/${rfqId}/approve`, { approvalNotes: notes });
       toast.success('RFQ approved successfully');
       fetchRFQs();
       fetchPendingCount();
@@ -62,7 +62,7 @@ const ApproveQuotationTab = () => {
   // Handle RFQ rejection
   const handleReject = async (rfqId, notes = '') => {
     try {
-      await ApiHelper.patch(`/api/rfq/${rfqId}/reject`, { rejectionNotes: notes });
+      await axiosInstance.patch(`/api/rfq/${rfqId}/reject`, { rejectionNotes: notes });
       toast.success('RFQ rejected successfully');
       fetchRFQs();
       fetchPendingCount();

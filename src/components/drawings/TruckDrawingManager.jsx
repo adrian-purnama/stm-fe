@@ -13,9 +13,9 @@ import {
   Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import BaseModal from './BaseModal';
-import CustomDropdown from './CustomDropdown';
+import axiosInstance from '../../utils/api/ApiHelper';
+import BaseModal from '../modals/BaseModal';
+import CustomDropdown from '../common/CustomDropdown';
 
 const TruckDrawingManager = () => {
   // State for truck types
@@ -60,7 +60,7 @@ const TruckDrawingManager = () => {
   // Load truck types
   const loadTruckTypes = useCallback(async () => {
     try {
-      const response = await ApiHelper.get('/api/truck-types/list');
+      const response = await axiosInstance.get('/api/truck-types/list');
       setTruckTypes(response.data.data);
     } catch (error) {
       console.error('Error loading truck types:', error);
@@ -76,7 +76,7 @@ const TruckDrawingManager = () => {
       if (selectedTruckType) params.truckType = selectedTruckType;
       if (searchTerm) params.search = searchTerm;
       
-      const response = await ApiHelper.get('/api/drawing-specifications', { params });
+      const response = await axiosInstance.get('/api/drawing-specifications', { params });
       setDrawings(response.data.data);
     } catch (error) {
       console.error('Error loading drawings:', error);
@@ -95,7 +95,7 @@ const TruckDrawingManager = () => {
       }
       
       console.log('Creating truck type with data:', newTruckType);
-      const response = await ApiHelper.post('/api/truck-types', newTruckType);
+      const response = await axiosInstance.post('/api/truck-types', newTruckType);
       console.log('Truck type creation response:', response.data);
       
       toast.success('Truck type created successfully');
@@ -142,7 +142,7 @@ const TruckDrawingManager = () => {
         formData.append('files', file);
       });
       
-      const response = await ApiHelper.post('/api/drawing-specifications', formData, {
+      const response = await axiosInstance.post('/api/drawing-specifications', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
@@ -173,7 +173,7 @@ const TruckDrawingManager = () => {
         formData.append('files', file);
       });
       
-      await ApiHelper.post(`/api/drawing-specifications/${drawingId}/files`, formData, {
+      await axiosInstance.post(`/api/drawing-specifications/${drawingId}/files`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
@@ -219,7 +219,7 @@ const TruckDrawingManager = () => {
     }
     
     try {
-      await ApiHelper.delete(`/api/drawing-specifications/${drawingId}`);
+      await axiosInstance.delete(`/api/drawing-specifications/${drawingId}`);
       toast.success('Drawing specification deleted successfully');
       loadDrawings();
     } catch (error) {

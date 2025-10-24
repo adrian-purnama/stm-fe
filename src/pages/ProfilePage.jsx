@@ -1,9 +1,9 @@
 import { useState, useContext, useEffect } from 'react';
 import { User, Mail, Lock, Save, X, Eye, EyeOff, ArrowLeft, Phone, UserCheck, Plus, Trash2 } from 'lucide-react';
-import Navigation from '../components/Navigation';
-import BaseModal from '../components/BaseModal';
-import { UserContext } from '../utils/UserContext';
-import axiosInstance from '../utils/ApiHelper';
+import Navigation from '../components/common/Navigation';
+import BaseModal from '../components/modals/BaseModal';
+import { UserContext } from '../utils/contexts/UserContext';
+import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 

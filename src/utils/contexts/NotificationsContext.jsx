@@ -1,5 +1,5 @@
 import { createContext, useEffect, useRef, useState, useContext } from 'react';
-import ApiHelper from './ApiHelper';
+import axiosInstance from '../api/ApiHelper';
 import toast from 'react-hot-toast';
 import { UserContext } from './UserContext';
 
@@ -17,13 +17,13 @@ export const NotificationsProvider = ({ children }) => {
 
   const refresh = async () => {
     try {
-      const res = await ApiHelper.get('/api/notifications', { params: { page: 1, limit: 10 } });
+      const res = await axiosInstance.get('/api/notifications', { params: { page: 1, limit: 10 } });
       const items = res.data?.data?.items || [];
       const pagination = res.data?.data?.pagination || {};
       setNotifications(items);
       setPage(1);
       setHasMore((pagination.page || 1) < (pagination.pages || 1));
-      const cnt = await ApiHelper.get('/api/notifications/unread-count');
+      const cnt = await axiosInstance.get('/api/notifications/unread-count');
       setUnreadCount(cnt.data?.data?.count || 0);
     } catch (e) {
       console.error('❌ Error fetching notifications:', e);
@@ -34,11 +34,10 @@ export const NotificationsProvider = ({ children }) => {
     // Only connect when logged in
     if (!user.isLoggedIn) return;
 
-    // TODO : FIX THIS SHIT
-    //LINK - const wsUrl = `${protocol}://${host.replace(/:\d+$/, '')}:${apiPort}/notification`;
-    const wsUrl = `ws://localhost:5000/notification`;
-    // const wsUrl = `wss://stm-be.onrender.com/notification`;
-    // const wsUrl = `${import.meta.env.VITE_NODE_ENV === 'production' ? 'wss://' : 'ws://'}${import.meta.env.VITE_BACKEND_URL}/notification`;
+    const isDev = import.meta.env.VITE_NODE_ENV === "development";
+    const wsProtocol = isDev ? "ws://" : "wss://";
+    const wsHost = import.meta.env.VITE_BACKEND_URL;
+    const wsUrl = `${wsProtocol}${wsHost}/notification`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -88,7 +87,7 @@ export const NotificationsProvider = ({ children }) => {
   const loadMore = async () => {
     if (!hasMore) return;
     const nextPage = page + 1;
-    const res = await ApiHelper.get('/api/notifications', { params: { page: nextPage, limit: 10 } });
+    const res = await axiosInstance.get('/api/notifications', { params: { page: nextPage, limit: 10 } });
     const items = res.data?.data?.items || [];
     const pagination = res.data?.data?.pagination || {};
     setNotifications(prev => [...prev, ...items]);
@@ -98,7 +97,7 @@ export const NotificationsProvider = ({ children }) => {
 
   const markAsRead = async (id) => {
     try {
-      await ApiHelper.patch(`/api/notifications/${id}/read`);
+      await axiosInstance.patch(`/api/notifications/${id}/read`);
       setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (e) {

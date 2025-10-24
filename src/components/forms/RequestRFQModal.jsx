@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
-import BaseModal from './BaseModal';
-import CustomDropdown from './CustomDropdown';
+import BaseModal from '../modals/BaseModal';
+import CustomDropdown from '../common/CustomDropdown';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
+import axiosInstance from '../../utils/api/ApiHelper';
 
 const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreators }) => {
   const [formData, setFormData] = useState({
@@ -41,7 +41,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
   const fetchTruckTypes = async () => {
     setLoadingTruckTypes(true);
     try {
-      const response = await ApiHelper.get('/api/truck-types');
+      const response = await axiosInstance.get('/api/truck-types');
       if (response.data.success) {
         setTruckTypes(response.data.data);
       }

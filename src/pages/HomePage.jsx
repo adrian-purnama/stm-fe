@@ -1,9 +1,9 @@
 import React, { useContext, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FileText, Users, BarChart3, ChevronRight, TrendingUp, CheckCircle, ArrowRight, Shield, Zap, Edit3, Save, Star, RotateCcw, Database, Truck, FileImage } from 'lucide-react'
-import Navigation from '../components/Navigation'
-import BaseModal from '../components/BaseModal'
-import { UserContext } from '../utils/UserContext'
+import Navigation from '../components/common/Navigation'
+import BaseModal from '../components/modals/BaseModal'
+import { UserContext } from '../utils/contexts/UserContext'
 
 const HomePage = () => {
   const { user } = useContext(UserContext);

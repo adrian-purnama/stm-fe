@@ -1,5 +1,5 @@
 import React from 'react';
-import TruckDrawingManager from './TruckDrawingManager';
+import TruckDrawingManager from '../drawings/TruckDrawingManager';
 
 const DebugResponse = () => {
   return <TruckDrawingManager />;

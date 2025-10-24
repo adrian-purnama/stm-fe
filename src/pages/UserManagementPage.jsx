@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, Trash2, Copy, Key, ArrowLeft } from 'lucide-react';
-import Navigation from '../components/Navigation';
-import ApiHelper from '../utils/ApiHelper';
+import Navigation from '../components/common/Navigation';
+import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
-import ConfirmModal from '../components/ConfirmModal';
-import RoleManagementModal from '../components/RoleManagementModal';
-import CustomDropdown from '../components/CustomDropdown';
-import AddUserModal from '../components/AddUserModal';
+import ConfirmModal from '../components/modals/ConfirmModal';
+import RoleManagementModal from '../components/modals/RoleManagementModal';
+import CustomDropdown from '../components/common/CustomDropdown';
+import AddUserModal from '../components/modals/AddUserModal';
 
 
 const UserManagementPage = () => {
@@ -33,7 +33,7 @@ const UserManagementPage = () => {
         search: search
       };
 
-      const response = await ApiHelper.get('/api/auth/users', { params });
+      const response = await axiosInstance.get('/api/auth/users', { params });
       
       // Ensure we always have an array
       const usersData = response.data?.data || response.data || [];
@@ -50,7 +50,7 @@ const UserManagementPage = () => {
 
   const fetchPermissions = async () => {
     try {
-      const response = await ApiHelper.get('/api/permissions');
+      const response = await axiosInstance.get('/api/permissions');
       const permissionsData = response.data?.data || response.data || [];
       setPermissions(Array.isArray(permissionsData) ? permissionsData : []);
     } catch (error) {
@@ -78,7 +78,7 @@ const UserManagementPage = () => {
   const submitCreateUser = async ({ fullName, email, password }) => {
     const createToast = toast.loading('Creating user...');
     try {
-      await ApiHelper.post('/api/auth/users', { fullName, email, password });
+      await axiosInstance.post('/api/auth/users', { fullName, email, password });
       toast.success('User created successfully', { id: createToast });
       setShowAddUser(false);
       fetchUsers(pagination.current, searchTerm);
@@ -108,7 +108,7 @@ const UserManagementPage = () => {
       switch (actionType) {
         case 'delete': {
           const deleteToast = toast.loading('Deleting user...');
-          await ApiHelper.delete(`/api/auth/users/${selectedUser._id}`);
+          await axiosInstance.delete(`/api/auth/users/${selectedUser._id}`);
           toast.success('User deleted successfully', { id: deleteToast });
           break;
         }
@@ -117,7 +117,7 @@ const UserManagementPage = () => {
           const newFullName = prompt('Enter new full name for copied user:');
           if (newEmail && newFullName) {
             const copyToast = toast.loading('Copying user...');
-            await ApiHelper.post(`/api/auth/users/${selectedUser._id}/copy`, {
+            await axiosInstance.post(`/api/auth/users/${selectedUser._id}/copy`, {
               email: newEmail,
               fullName: newFullName
             });
@@ -129,7 +129,7 @@ const UserManagementPage = () => {
           const newPassword = prompt('Enter new password:');
           if (newPassword) {
             const resetToast = toast.loading('Resetting password...');
-            await ApiHelper.post(`/api/auth/users/${selectedUser._id}/reset-password`, {
+            await axiosInstance.post(`/api/auth/users/${selectedUser._id}/reset-password`, {
               newPassword
             });
             toast.success('Password reset successfully', { id: resetToast });
@@ -158,7 +158,7 @@ const UserManagementPage = () => {
 
     try {
       const resetToast = toast.loading('Resetting password...');
-      await ApiHelper.post(`/api/auth/users/${userId}/reset-password`, {
+      await axiosInstance.post(`/api/auth/users/${userId}/reset-password`, {
         newPassword: newPassword
       });
       toast.success('Password reset successfully', { id: resetToast });
@@ -172,7 +172,7 @@ const UserManagementPage = () => {
     try {
       const updateToast = toast.loading('Updating user permissions...');
       // Update user permissions
-      await ApiHelper.put(`/api/auth/users/${userId}`, {
+      await axiosInstance.put(`/api/auth/users/${userId}`, {
         permissions: permissionIds
       });
       toast.success('User permissions updated successfully', { id: updateToast });

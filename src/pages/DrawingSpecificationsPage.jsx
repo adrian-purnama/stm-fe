@@ -14,10 +14,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import BaseModal from '../components/BaseModal';
-import CustomDropdown from '../components/CustomDropdown';
-import Navigation from '../components/Navigation';
+import ApiHelper from '../utils/api/ApiHelper';
+import BaseModal from '../components/modals/BaseModal';
+import CustomDropdown from '../components/common/CustomDropdown';
+import Navigation from '../components/common/Navigation';
 
 const DrawingSpecificationsPage = () => {
   const navigate = useNavigate();
@@ -173,8 +173,10 @@ const DrawingSpecificationsPage = () => {
   // Download file
   const downloadFile = async (drawingId, fileId, originalName) => {
     try {
-      const baseURL = "http://localhost:5000";
-      const token = localStorage.getItem('asb-token');
+      const isDev = import.meta.env.VITE_NODE_ENV === "development";
+      const protocol = isDev ? "http://" : "https://";
+      const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
+      const token = localStorage.getItem("asb-token");
       const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;
       
       // Create a temporary link to trigger download

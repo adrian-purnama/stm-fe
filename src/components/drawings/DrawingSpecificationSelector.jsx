@@ -10,9 +10,9 @@ import {
   Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import BaseModal from './BaseModal';
-import CustomDropdown from './CustomDropdown';
+import axiosInstance from '../../utils/api/ApiHelper';
+import BaseModal from '../modals/BaseModal';
+import CustomDropdown from '../common/CustomDropdown';
 
 const DrawingSpecificationSelector = ({ 
   value, 
@@ -55,7 +55,7 @@ const DrawingSpecificationSelector = ({
   // Load truck types
   const loadTruckTypes = useCallback(async () => {
     try {
-      const response = await ApiHelper.get('/api/truck-types/list');
+      const response = await axiosInstance.get('/api/truck-types/list');
       setTruckTypes(response.data.data);
     } catch (error) {
       console.error('Error loading truck types:', error);
@@ -71,7 +71,7 @@ const DrawingSpecificationSelector = ({
       if (selectedTruckType) params.truckType = selectedTruckType;
       if (searchTerm) params.search = searchTerm;
 
-      const response = await ApiHelper.get('/api/drawing-specifications', { params });
+      const response = await axiosInstance.get('/api/drawing-specifications', { params });
       setDrawings(response.data.data);
     } catch (error) {
       console.error('Error loading drawing specifications:', error);
@@ -115,7 +115,7 @@ const DrawingSpecificationSelector = ({
         return;
       }
       
-      await ApiHelper.post('/api/truck-types', truckTypeForm);
+      await axiosInstance.post('/api/truck-types', truckTypeForm);
       toast.success('Truck type created successfully');
       setShowTruckTypeModal(false);
       setTruckTypeForm({ name: '', description: '', category: 'Commercial' });
@@ -149,7 +149,7 @@ const DrawingSpecificationSelector = ({
       data.append('truckType', formData.truckType);
       data.append('file', uploadFiles[0]);
 
-      const response = await ApiHelper.post('/api/drawing-specifications', data, {
+      const response = await axiosInstance.post('/api/drawing-specifications', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 

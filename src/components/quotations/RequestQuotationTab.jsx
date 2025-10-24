@@ -1,10 +1,10 @@
 import { useState, useEffect, useContext } from 'react';
-import { UserContext } from '../../utils/UserContext';
-import { NotificationsContext } from '../../utils/NotificationsContext';
-import ApiHelper from '../../utils/ApiHelper';
+import { UserContext } from '../../utils/contexts/UserContext';
+import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
+import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 import { Plus, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
-import RequestRFQModal from '../RequestRFQModal';
+import RequestRFQModal from '../forms/RequestRFQModal';
 
 const RequestQuotationTab = () => {
   const { user } = useContext(UserContext);
@@ -19,7 +19,7 @@ const RequestQuotationTab = () => {
   const fetchRFQs = async () => {
     try {
       setLoading(true);
-      const response = await ApiHelper.get('/api/rfq');
+      const response = await axiosInstance.get('/api/rfq');
       // The backend already filters by user role, so this will only return RFQs created by the current user
       setRfqs(response.data.data.rfqs);
     } catch (error) {
@@ -33,7 +33,7 @@ const RequestQuotationTab = () => {
   // Fetch approvers for the dropdown
   const fetchApprovers = async () => {
     try {
-      const response = await ApiHelper.get('/api/rfq/approvers');
+      const response = await axiosInstance.get('/api/rfq/approvers');
       setApprovers(response.data.data.approvers);
     } catch (error) {
       console.error('Error fetching approvers:', error);
@@ -44,7 +44,7 @@ const RequestQuotationTab = () => {
   // Fetch quotation creators for the dropdown
   const fetchQuotationCreators = async () => {
     try {
-      const response = await ApiHelper.get('/api/rfq/quotation-creators');
+      const response = await axiosInstance.get('/api/rfq/quotation-creators');
       setQuotationCreators(response.data.data.quotationCreators);
     } catch (error) {
       console.error('Error fetching quotation creators:', error);
@@ -55,7 +55,7 @@ const RequestQuotationTab = () => {
   // Handle new RFQ creation
   const handleCreateRFQ = async (rfqData) => {
     try {
-      await ApiHelper.post('/api/rfq', rfqData);
+      await axiosInstance.post('/api/rfq', rfqData);
       toast.success('RFQ submitted successfully');
       setShowModal(false);
       fetchRFQs();

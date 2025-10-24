@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Save, X, Upload, Image, X as XIcon, FileText, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
-import ApiHelper from '../../utils/ApiHelper';
-import CustomDropdown from '../CustomDropdown';
-import PriceInput from '../PriceInput';
-import OfferItemForm from '../OfferItemForm';
-import BaseModal from '../BaseModal';
-import { formatPriceWithCurrency } from '../../utils/priceFormatter';
+import ApiHelper from '../../utils/api/ApiHelper';
+import CustomDropdown from '../common/CustomDropdown';
+import PriceInput from '../common/PriceInput';
+import OfferItemForm from '../forms/OfferItemForm';
+import BaseModal from '../modals/BaseModal';
+import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
 
 const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
   const [formData, setFormData] = useState({

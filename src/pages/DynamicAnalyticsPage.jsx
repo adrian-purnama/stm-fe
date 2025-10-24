@@ -16,9 +16,9 @@ import {
   Settings,
   ArrowLeft
 } from 'lucide-react';
-import Navigation from '../components/Navigation';
-import CustomDropdown from '../components/CustomDropdown';
-import BaseModal from '../components/BaseModal';
+import Navigation from '../components/common/Navigation';
+import CustomDropdown from '../components/common/CustomDropdown';
+import BaseModal from '../components/modals/BaseModal';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 

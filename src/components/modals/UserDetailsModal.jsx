@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, Shield, Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
-import ApiHelper from '../utils/ApiHelper';
+import axiosInstance from '../../utils/api/ApiHelper';
 import BaseModal from './BaseModal';
 
 const UserDetailsModal = ({ user, onClose }) => {

@@ -1,14 +1,14 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { ArrowLeft, BarChart3, CheckCircle, FileText, Users, List, Plus } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import Navigation from '../../components/Navigation';
+import Navigation from '../../components/common/Navigation';
 import QuotationList from '../../components/quotations/QuotationList';
 import RequestQuotationTab from '../../components/quotations/RequestQuotationTab';
 import ApproveQuotationTab from '../../components/quotations/ApproveQuotationTab';
 import RequestQuotationListTab from '../../components/quotations/RequestQuotationListTab';
 import RFQDetailsView from '../../components/quotations/RFQDetailsView';
-import { UserContext } from '../../utils/UserContext';
-import ApiHelper from '../../utils/ApiHelper';
+import { UserContext } from '../../utils/contexts/UserContext';
+import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const QuotationPage = () => {
@@ -28,7 +28,7 @@ const QuotationPage = () => {
   const fetchRFQDetails = useCallback(async () => {
     try {
       setRfqLoading(true);
-      const response = await ApiHelper.get(`/api/rfq/${rfqId}`);
+      const response = await axiosInstance.get(`/api/rfq/${rfqId}`);
       setRfqDetails(response.data.data.rfq);
     } catch (error) {
       console.error('Error fetching RFQ details:', error);
@@ -51,31 +51,56 @@ const QuotationPage = () => {
       try {
         setPermissionLoading(true);
         
+        // Force clear any cached state
+        setHasApproveRfqPermission(false);
+        setHasQuotationCreatePermission(false);
+        setHasQuotationRequesterPermission(false);
+        setHasAdminPermission(false);
+        setHasAllQuotationViewerPermission(false);
+        
         // Check approve_rfq permission
-        const approveResponse = await ApiHelper.get('/api/auth/ispermission/approve_rfq');
-        const hasApprovePermission = approveResponse.data.message?.hasPermission || approveResponse.data.data?.hasPermission || approveResponse.data.hasPermission;
+        const approveResponse = await axiosInstance.get('/api/auth/ispermission/approve_rfq', {
+          params: { _t: Date.now() } // Cache busting
+        });
+        const hasApprovePermission = approveResponse.data.message?.hasPermission;
         setHasApproveRfqPermission(hasApprovePermission);
         
         // Check quotation_create permission
-        const createResponse = await ApiHelper.get('/api/auth/ispermission/quotation_create');
-        const hasCreatePermission = createResponse.data.message?.hasPermission || createResponse.data.data?.hasPermission || createResponse.data.hasPermission;
+        const createResponse = await axiosInstance.get('/api/auth/ispermission/quotation_create', {
+          params: { _t: Date.now() } // Cache busting
+        });
+        const hasCreatePermission = createResponse.data.message?.hasPermission;
         setHasQuotationCreatePermission(hasCreatePermission);
         
         // Check quotation_requester permission
-        const requesterResponse = await ApiHelper.get('/api/auth/ispermission/quotation_requester');
-        const hasRequesterPermission = requesterResponse.data.message?.hasPermission || requesterResponse.data.data?.hasPermission || requesterResponse.data.hasPermission;
+        const requesterResponse = await axiosInstance.get('/api/auth/ispermission/quotation_requester', {
+          params: { 
+            _t: Date.now(),
+            _r: Math.random() // Additional cache busting
+          }
+        });
+        const hasRequesterPermission = requesterResponse.data.message?.hasPermission;
+        console.log('🔍 Frontend quotation_requester permission check:', {
+          response: requesterResponse.data,
+          hasPermission: hasRequesterPermission
+        });
         setHasQuotationRequesterPermission(hasRequesterPermission);
         
         // Check admin permissions (quotation_admin, admin, or manager)
-        const adminResponse = await ApiHelper.get('/api/auth/ispermission/quotation_admin');
-        const managerResponse = await ApiHelper.get('/api/auth/ispermission/admin');
-        const hasAdminPermission = adminResponse.data.message?.hasPermission || adminResponse.data.data?.hasPermission || adminResponse.data.hasPermission ||
-                                 managerResponse.data.message?.hasPermission || managerResponse.data.data?.hasPermission || managerResponse.data.hasPermission;
+        const adminResponse = await axiosInstance.get('/api/auth/ispermission/quotation_admin', {
+          params: { _t: Date.now() } // Cache busting
+        });
+        const managerResponse = await axiosInstance.get('/api/auth/ispermission/admin', {
+          params: { _t: Date.now() } // Cache busting
+        });
+        const hasAdminPermission = adminResponse.data.message?.hasPermission || managerResponse.data.message?.hasPermission;
         setHasAdminPermission(hasAdminPermission);
         
         // Check all_quotation_viewer permission
-        const allQuotationViewerResponse = await ApiHelper.get('/api/auth/ispermission/all_quotation_viewer');
-        const hasAllQuotationViewerPermission = allQuotationViewerResponse.data.message?.hasPermission || allQuotationViewerResponse.data.data?.hasPermission || allQuotationViewerResponse.data.hasPermission;
+        const allQuotationViewerResponse = await axiosInstance.get('/api/auth/ispermission/all_quotation_viewer', {
+          params: { _t: Date.now() } // Cache busting
+        });
+        const hasAllQuotationViewerPermission = allQuotationViewerResponse.data.message?.hasPermission;
         setHasAllQuotationViewerPermission(hasAllQuotationViewerPermission);
         
         // Set default tab based on permissions
@@ -96,6 +121,15 @@ const QuotationPage = () => {
           console.log('Setting active tab to list - no specific permissions found');
           setActiveTab('list');
         }
+        
+        // Debug final state
+        console.log('🔍 Final permission state after API calls:', {
+          hasApproveRfqPermission,
+          hasQuotationCreatePermission,
+          hasQuotationRequesterPermission,
+          hasAdminPermission,
+          hasAllQuotationViewerPermission
+        });
         
       } catch (error) {
         console.error('Error checking permissions:', error);

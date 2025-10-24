@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect } from "react";
-import { isTokenExpired } from "./tokenUtils";
+import { isTokenExpired } from "../helpers/tokenUtils";
 
 const UserContext = createContext();
 

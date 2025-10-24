@@ -11,10 +11,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import BaseModal from '../components/BaseModal';
-import CustomDropdown from '../components/CustomDropdown';
-import Navigation from '../components/Navigation';
+import ApiHelper from '../utils/api/ApiHelper';
+import BaseModal from '../components/modals/BaseModal';
+import CustomDropdown from '../components/common/CustomDropdown';
+import Navigation from '../components/common/Navigation';
 
 const TruckTypesPage = () => {
   const navigate = useNavigate();

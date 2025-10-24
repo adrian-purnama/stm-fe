@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Clock, CheckCircle, XCircle, Eye, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import ApiHelper from '../../utils/ApiHelper';
+import ApiHelper from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const RequestQuotationListTab = () => {

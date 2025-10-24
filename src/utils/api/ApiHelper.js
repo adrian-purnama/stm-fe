@@ -1,22 +1,19 @@
 import axios from "axios";
 import toast from "react-hot-toast";
-import { isTokenExpired } from "./tokenUtils";
+import { isTokenExpired } from "../helpers/tokenUtils";
+
+const isDev = import.meta.env.VITE_NODE_ENV === "development";
+const protocol = isDev ? "http://" : "https://";
+const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
 
 const axiosInstance = axios.create({
-  // TODO : FIX THIS SHIT
-  //baseURL: "https://" + import.meta.env.VITE_BACKEND_URL,
-  baseURL: "http://" + import.meta.env.VITE_BACKEND_URL,
-  // baseURL: import.meta.env.VITE_NODE_ENV === 'development' ? "http://" : "https://" + import.meta.env.VITE_BACKEND_URL,
+  baseURL,
   paramsSerializer: (params) => {
     const searchParams = new URLSearchParams();
-    
     Object.keys(params).forEach(key => {
       const value = params[key];
       if (Array.isArray(value)) {
-        // Handle arrays with brackets format (similar to qs arrayFormat: "brackets")
-        value.forEach(item => {
-          searchParams.append(`${key}[]`, item);
-        });
+        value.forEach(item => searchParams.append(`${key}[]`, item));
       } else if (value !== null && value !== undefined) {
         searchParams.append(key, value);
       }

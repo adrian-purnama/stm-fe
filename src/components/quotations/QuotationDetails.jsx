@@ -14,11 +14,11 @@ import {
   Save
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../../utils/ApiHelper';
-import { formatPriceWithCurrency } from '../../utils/priceFormatter';
-import CustomDropdown from '../CustomDropdown';
-import { generateQuotationDocument } from '../../utils/documentGenerator';
-import BaseModal from '../BaseModal';
+import ApiHelper from '../../utils/api/ApiHelper';
+import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
+import CustomDropdown from '../common/CustomDropdown';
+// import { generateQuotationDocument } from '../../utils/templates/documentGenerator';
+import BaseModal from '../modals/BaseModal';
 // Removed OfferItemAcceptance import - no longer needed
 import { QUOTATION_FORM_MODES } from './quotationModes';
 
@@ -1474,18 +1474,21 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
             </select>
           </div>
 
-          {/* Marketing Name */}
+          {/* Marketing Name - Read Only */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Marketing Name
+              Marketing Name (Requester)
             </label>
             <input
               type="text"
               value={headerEditForm.marketingName}
-              onChange={(e) => setHeaderEditForm(prev => ({ ...prev, marketingName: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              required
+              readOnly
+              disabled
+              className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed rounded-md"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Marketing name is automatically set based on the requester and cannot be edited.
+            </p>
           </div>
 
 

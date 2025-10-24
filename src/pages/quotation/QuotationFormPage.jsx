@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import Navigation from '../../components/Navigation';
+import Navigation from '../../components/common/Navigation';
 import QuotationForm from '../../components/quotations/QuotationForm';
 import { QUOTATION_FORM_MODES } from '../../components/quotations/quotationModes';
-import ApiHelper from '../../utils/ApiHelper';
+import ApiHelper from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const QuotationFormPage = () => {
