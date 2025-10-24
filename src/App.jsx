@@ -23,7 +23,7 @@ function App() {
     <UserContextProvider>
       <Toaster position="top-right" />
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route 

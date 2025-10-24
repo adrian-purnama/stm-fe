@@ -174,7 +174,8 @@ const DrawingSpecificationsPage = () => {
   const downloadFile = async (drawingId, fileId, originalName) => {
     try {
       const isDev = import.meta.env.VITE_NODE_ENV === "development";
-      const protocol = isDev ? "http://" : "https://";
+      // TODO : HTTPS
+      const protocol = isDev ? "http://" : "http://";
       const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
       const token = localStorage.getItem("asb-token");
       const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;

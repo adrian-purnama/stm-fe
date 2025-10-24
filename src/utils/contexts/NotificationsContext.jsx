@@ -35,7 +35,8 @@ export const NotificationsProvider = ({ children }) => {
     if (!user.isLoggedIn) return;
 
     const isDev = import.meta.env.VITE_NODE_ENV === "development";
-    const wsProtocol = isDev ? "ws://" : "wss://";
+    // TODO : HTTPS
+    const wsProtocol = isDev ? "ws://" : "ws://";
     const wsHost = import.meta.env.VITE_BACKEND_URL;
     const wsUrl = `${wsProtocol}${wsHost}/notification`;
 

@@ -2,8 +2,9 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { isTokenExpired } from "../helpers/tokenUtils";
 
+// TODO : HTTPS
 const isDev = import.meta.env.VITE_NODE_ENV === "development";
-const protocol = isDev ? "http://" : "https://";
+const protocol = isDev ? "http://" : "http://";
 const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
 
 const axiosInstance = axios.create({
