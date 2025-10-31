@@ -14,6 +14,7 @@ import ProfilePage from './pages/ProfilePage'
 import DebugResponse from './components/common/DebugResponse'
 import TruckTypesPage from './pages/TruckTypesPage'
 import DrawingSpecificationsPage from './pages/DrawingSpecificationsPage'
+import DataEntryPage from './pages/DataEntryPage'
 import UserManagementPage from './pages/UserManagementPage'
 import PermissionManagementPage from './pages/RoleManagementPage'
 import { UserContextProvider } from './utils/contexts/UserContext'
@@ -95,6 +96,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DebugResponse />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/data-entry" 
+          element={
+            <ProtectedRoute>
+              <DataEntryPage />
             </ProtectedRoute>
           } 
         />

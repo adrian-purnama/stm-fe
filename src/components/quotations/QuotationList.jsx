@@ -63,6 +63,7 @@ const statusClassMap = {
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingDetails, setLoadingDetails] = useState(new Set()); // Track which quotations are loading details
   const [pagination, setPagination] = useState({
     current: 1,
     pages: 1,
@@ -110,6 +111,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination?.current, JSON.stringify(filters)]);
 
+  // Fetch quotation headers only (fast initial load)
   const fetchQuotations = async () => {
     try {
       setLoading(true);
@@ -117,6 +119,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         page: pagination?.current || 1,
         limit: 10,
         filterMode,
+        lightweight: 'true', // Request lightweight mode for fast header load
         ...filters
       };
 
@@ -128,13 +131,164 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       });
 
       const response = await ApiHelper.get(apiEndpoint, { params });
-      setQuotations(Array.isArray(response.data.data) ? response.data.data : []);
+      const headers = Array.isArray(response.data.data) ? response.data.data : [];
+      
+      // Set quotations with empty offers (details will load asynchronously)
+      setQuotations(headers);
       setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
+      
+      // Trigger async loading of full details for each quotation
+      // Fetch header details and offers separately for faster perceived performance
+      // TODO: Remove 10 second delay after testing - this is to demonstrate progressive loading
+      headers.forEach(quotation => {
+        const quotationNumber = quotation.header.quotationNumber || quotation.header._id?.toString();
+        if (quotationNumber) {
+          // Add 10 second delay before fetching details to demonstrate progressive loading
+          setTimeout(() => {
+            // Fetch full header details (populated user fields, customer info, etc.)
+            fetchQuotationHeader(quotationNumber);
+            // Fetch offers
+            fetchQuotationDetails(quotationNumber);
+          }, 0); // 10 second delay for testing
+        }
+      });
     } catch (error) {
       toast.error('Failed to fetch quotations');
       console.error('Error fetching quotations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch full header details for a quotation (async background fetch)
+  const fetchQuotationHeader = async (quotationIdentifier) => {
+    try {
+      const quotationNumber = typeof quotationIdentifier === 'object' 
+        ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
+        : quotationIdentifier;
+      
+      // Fetch full header details with populated fields
+      const response = await ApiHelper.get(`${apiEndpoint}/${encodeURIComponent(quotationNumber)}/header`);
+      const fullHeader = response.data.data || {};
+      
+      // Update the quotation header in state with full details
+      setQuotations(prev => {
+        const updated = prev.map(q => {
+          const quoteNumber = q.header.quotationNumber || q.header._id?.toString();
+          const compareNumber = quotationNumber.toString();
+          
+          const matches = quoteNumber === compareNumber || 
+                          q.header.quotationNumber === compareNumber ||
+                          (q.header._id && q.header._id.toString() === compareNumber);
+          
+          if (matches) {
+            return {
+              ...q,
+              header: {
+                ...q.header,
+                ...fullHeader, // Merge full header data (customerName, populated user fields, etc.)
+                _id: q.header._id // Preserve existing _id
+              }
+            };
+          }
+          return q;
+        });
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error(`[QuotationList] Error fetching header for quotation ${quotationIdentifier}:`, error);
+      // Silent failure - don't show error toast for background fetches
+    }
+  };
+
+  // Fetch detailed data for a specific quotation (async background fetch)
+  const fetchQuotationDetails = async (quotationIdentifier) => {
+    try {
+      // Mark this quotation as loading details (use string for Set key)
+      const loadingKey = typeof quotationIdentifier === 'object' 
+        ? (quotationIdentifier.toString() || quotationIdentifier.quotationNumber)
+        : quotationIdentifier;
+      setLoadingDetails(prev => new Set(prev).add(loadingKey));
+      
+      // Ensure we have quotationNumber (not _id) for the endpoint
+      const quotationNumber = typeof quotationIdentifier === 'object' 
+        ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
+        : quotationIdentifier;
+      
+      // Fetch full details for this quotation using the offers endpoint
+      // This endpoint returns the grouped offer structure we need
+      const response = await ApiHelper.get(`${apiEndpoint}/${encodeURIComponent(quotationNumber)}/offers`);
+      const fetchedOffers = response.data.data || [];
+      
+      // Debug logging
+      console.log(`[QuotationList] Fetched offers for ${quotationNumber}:`, {
+        offersCount: fetchedOffers.length,
+        offers: fetchedOffers,
+        response: response.data
+      });
+      
+      // Ensure fetchedOffers is an array
+      if (!Array.isArray(fetchedOffers)) {
+        console.warn(`[QuotationList] Offers for ${quotationNumber} is not an array:`, fetchedOffers);
+        return;
+      }
+      
+      // Update the quotation in state with full details
+      // Match by quotationNumber since that's what we're using as identifier
+      setQuotations(prev => {
+        const updated = prev.map(q => {
+          const quoteNumber = q.header.quotationNumber || q.header._id?.toString();
+          const compareNumber = quotationNumber.toString();
+          
+          // Try multiple matching strategies
+          const matches = quoteNumber === compareNumber || 
+                          q.header.quotationNumber === compareNumber ||
+                          (q.header._id && q.header._id.toString() === compareNumber);
+          
+          if (matches) {
+            console.log(`[QuotationList] Updating quotation ${quoteNumber} with ${fetchedOffers.length} offer groups`);
+            return {
+              ...q,
+              offers: fetchedOffers
+            };
+          }
+          return q;
+        });
+        
+        // Debug: Log if no match was found
+        const foundMatch = updated.some(q => {
+          const quoteNumber = q.header.quotationNumber || q.header._id?.toString();
+          return (quoteNumber === quotationNumber.toString() || q.header.quotationNumber === quotationNumber.toString());
+        });
+        
+        if (!foundMatch && prev.length > 0) {
+          console.warn(`[QuotationList] No matching quotation found for ${quotationNumber}. Available:`, 
+            prev.map(q => q.header.quotationNumber || q.header._id?.toString()));
+        }
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error(`[QuotationList] Error fetching details for quotation ${quotationIdentifier}:`, error);
+      console.error(`[QuotationList] Error details:`, {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      // Don't show error toast for background fetches - silent failure
+    } finally {
+      // Remove loading indicator - use the same quotationNumber key
+      const quotationNumber = typeof quotationIdentifier === 'object' 
+        ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
+        : quotationIdentifier;
+      const removeKey = String(quotationNumber);
+      
+      setLoadingDetails(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(removeKey);
+        return newSet;
+      });
     }
   };
 
@@ -597,6 +751,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     );
   };
 
+  // Check if a quotation is loading details
+  const isQuotationLoadingDetails = (quotationId) => {
+    // Check both quotationNumber and _id as string
+    if (!quotationId) return false;
+    
+    const idStr = quotationId?.toString();
+    const quoteNumber = typeof quotationId === 'object' ? quotationId.quotationNumber : quotationId;
+    
+    // Check if either the ID string or quotationNumber is in the loading set
+    return loadingDetails.has(idStr) || loadingDetails.has(quoteNumber) || loadingDetails.has(quoteNumber?.toString());
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -792,32 +958,67 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   
                   {/* Customer Info */}
                   <div className="flex items-center space-x-4 text-sm">
-                    <div className="flex items-center space-x-2 text-gray-700">
-                      <Building className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium">{header.customerName}</span>
-                  </div>
-                    <div className="flex items-center space-x-2 text-gray-600">
-                      <User className="h-4 w-4 text-gray-500" />
-                    <span>{header.contactPerson?.name} ({header.contactPerson?.gender})</span>
-                  </div>
-                    {header.requesterId && (
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <User className="h-4 w-4 text-gray-500" />
-                        <span>Requester: {header.requesterId?.fullName || header.requesterId?.email}</span>
+                    {header.customerName ? (
+                      <div className="flex items-center space-x-2 text-gray-700">
+                        <Building className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium">{header.customerName}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2 text-gray-400">
+                        <Building className="h-4 w-4 text-gray-300" />
+                        <span className="font-medium animate-pulse bg-gray-200 rounded h-4 w-24"></span>
                       </div>
                     )}
-                    {header.creatorId && (
+                    {header.contactPerson?.name ? (
                       <div className="flex items-center space-x-2 text-gray-600">
                         <User className="h-4 w-4 text-gray-500" />
-                        <span>Creator: {header.creatorId?.fullName || header.creatorId?.email}</span>
+                        <span>{header.contactPerson.name} ({header.contactPerson.gender})</span>
                       </div>
-                    )}
-                    {header.approverId && (
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <User className="h-4 w-4 text-gray-500" />
-                        <span>Approver: {header.approverId?.fullName || header.approverId?.email}</span>
+                    ) : header.contactPerson === undefined ? (
+                      <div className="flex items-center space-x-2 text-gray-400">
+                        <User className="h-4 w-4 text-gray-300" />
+                        <span className="animate-pulse bg-gray-200 rounded h-4 w-32"></span>
                       </div>
-                    )}
+                    ) : null}
+                    {header.requesterId ? (
+                      typeof header.requesterId === 'object' && header.requesterId.fullName ? (
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <User className="h-4 w-4 text-gray-500" />
+                          <span>Requester: {header.requesterId.fullName || header.requesterId.email}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2 text-gray-400">
+                          <User className="h-4 w-4 text-gray-300" />
+                          <span className="animate-pulse bg-gray-200 rounded h-4 w-32">Loading requester...</span>
+                        </div>
+                      )
+                    ) : null}
+                    {header.creatorId ? (
+                      typeof header.creatorId === 'object' && header.creatorId.fullName ? (
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <User className="h-4 w-4 text-gray-500" />
+                          <span>Creator: {header.creatorId.fullName || header.creatorId.email}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2 text-gray-400">
+                          <User className="h-4 w-4 text-gray-300" />
+                          <span className="animate-pulse bg-gray-200 rounded h-4 w-28">Loading creator...</span>
+                        </div>
+                      )
+                    ) : null}
+                    {header.approverId ? (
+                      typeof header.approverId === 'object' && header.approverId.fullName ? (
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <User className="h-4 w-4 text-gray-500" />
+                          <span>Approver: {header.approverId.fullName || header.approverId.email}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2 text-gray-400">
+                          <User className="h-4 w-4 text-gray-300" />
+                          <span className="animate-pulse bg-gray-200 rounded h-4 w-32">Loading approver...</span>
+                        </div>
+                      )
+                    ) : null}
                   </div>
 
                   {/* Dates and Follow-up Status */}
@@ -829,7 +1030,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   <div className="flex items-center space-x-2">
                       <Clock className="h-4 w-4 text-gray-500" />
                     <span>Last Follow-up: {formatDate(header.lastFollowUpDate)}</span>
-                      {header.followUpStatus && (
+                      {header.followUpStatus ? (
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                           header.followUpStatus.color === 'green' ? 'bg-green-100 text-green-800' :
                           header.followUpStatus.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
@@ -837,7 +1038,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                         }`}>
                           {header.followUpStatus.label}
                         </span>
-                      )}
+                      ) : header.lastFollowUpDate === undefined ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 animate-pulse">
+                          <span className="bg-gray-200 rounded h-3 w-16"></span>
+                        </span>
+                      ) : null}
                   </div>
                   <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-gray-500" />
@@ -908,7 +1113,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             </div>
 
             <div className="px-6 py-4">
-              {offers.length === 0 ? (
+              {isQuotationLoadingDetails(header.quotationNumber || header._id) && offers.length === 0 ? (
+                <div className="space-y-4">
+                  <div className="animate-pulse">
+                    <div className="h-20 bg-gray-200 rounded-lg mb-2"></div>
+                    <div className="h-20 bg-gray-200 rounded-lg"></div>
+                  </div>
+                  <p className="text-xs text-gray-500 flex items-center">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                    Loading details...
+                  </p>
+                </div>
+              ) : offers.length === 0 ? (
                 <p className="text-sm text-gray-500">No offers found for this quotation.</p>
               ) : (
                 <div className="space-y-4">

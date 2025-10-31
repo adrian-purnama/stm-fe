@@ -169,7 +169,7 @@ const PermissionManagementPage = () => {
                   placeholder="Search permissions..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -202,7 +202,7 @@ const PermissionManagementPage = () => {
             </div>
           ) : (
             filteredPermissions.map((permission) => (
-              <div key={permission._id || permission.id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div key={permission._id || permission.id} className="bg-white rounded-lg shadow border border-gray-100 hover:shadow-md transition-shadow">
                 <div className="p-6">
                   {/* Permission Header */}
                   <div className="flex items-start justify-between mb-4">

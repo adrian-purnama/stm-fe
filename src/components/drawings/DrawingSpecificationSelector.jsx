@@ -55,7 +55,7 @@ const DrawingSpecificationSelector = ({
   // Load truck types
   const loadTruckTypes = useCallback(async () => {
     try {
-      const response = await axiosInstance.get('/api/truck-types/list');
+      const response = await axiosInstance.get('/api/body-types/list');
       setTruckTypes(response.data.data);
     } catch (error) {
       console.error('Error loading truck types:', error);
@@ -115,7 +115,7 @@ const DrawingSpecificationSelector = ({
         return;
       }
       
-      await axiosInstance.post('/api/truck-types', truckTypeForm);
+      await axiosInstance.post('/api/body-types', truckTypeForm);
       toast.success('Truck type created successfully');
       setShowTruckTypeModal(false);
       setTruckTypeForm({ name: '', description: '', category: 'Commercial' });

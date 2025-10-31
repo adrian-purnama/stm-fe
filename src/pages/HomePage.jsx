@@ -54,12 +54,12 @@ const HomePage = () => {
   const allDataCards = [
     {
       id: 1,
-      title: 'Product Catalogue',
+      title: 'Data Entry',
       subtitle: 'Data',
-      description: 'Kelola jenis-jenis truck dan kategorinya',
+      description: 'Kelola data entry untuk truck type, chassis, dan lainnya',
       icon: Truck,
       color: 'bg-orange-500',
-      href: '/data/truck-types'
+      href: '/data-entry'
     },
     {
       id: 2,

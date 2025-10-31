@@ -60,7 +60,7 @@ const TruckDrawingManager = () => {
   // Load truck types
   const loadTruckTypes = useCallback(async () => {
     try {
-      const response = await axiosInstance.get('/api/truck-types/list');
+      const response = await axiosInstance.get('/api/body-types/list');
       setTruckTypes(response.data.data);
     } catch (error) {
       console.error('Error loading truck types:', error);
@@ -95,7 +95,7 @@ const TruckDrawingManager = () => {
       }
       
       console.log('Creating truck type with data:', newTruckType);
-      const response = await axiosInstance.post('/api/truck-types', newTruckType);
+      const response = await axiosInstance.post('/api/body-types', newTruckType);
       console.log('Truck type creation response:', response.data);
       
       toast.success('Truck type created successfully');
