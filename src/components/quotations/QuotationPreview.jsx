@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import { generateQuotationDocument, formatPrice } from '../../utils/templates/documentGenerator';
 import toast from 'react-hot-toast';
+import { getDrawingAssetUrl, getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 // Format file size in human readable format
 const formatFileSize = (bytes) => {
@@ -455,9 +456,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                               drawing.drawingFile.fileType === 'JPEG';
                                 
                                 // Create asset URL for the drawing
-                                const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-                                const token = localStorage.getItem('asb-token');
-                                const assetUrl = `${baseURL}/api/assets/drawings/${drawing._id}/files/${drawing.drawingFile.fileId}?token=${token}`;
+                                const assetUrl = getDrawingAssetUrl(drawing._id, drawing.drawingFile.fileId);
                                 
                                 return (
                                   <div key={index} className="border border-gray-200 rounded-lg p-4">
@@ -582,9 +581,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                 const fileId = imageFile?.fileId;
                                 
                                 // Create asset URL for the notes image
-                                const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-                                const token = localStorage.getItem('asb-token');
-                                const assetUrl = `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
+                                const assetUrl = getNotesImageAssetUrl(imageId, fileId);
                                 
                                 return (
                                   <div key={imageId} className="border border-gray-200 rounded-lg p-4">

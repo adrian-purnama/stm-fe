@@ -21,6 +21,7 @@ import CustomDropdown from '../common/CustomDropdown';
 import BaseModal from '../modals/BaseModal';
 // Removed OfferItemAcceptance import - no longer needed
 import { QUOTATION_FORM_MODES } from './quotationModes';
+import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -135,13 +136,6 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
   const [newProgressText, setNewProgressText] = useState('');
   const [editingProgressIndex, setEditingProgressIndex] = useState(null);
   const [editingProgressText, setEditingProgressText] = useState('');
-
-  // Get asset URL for notes images
-  const getNotesImageAssetUrl = (imageId, fileId) => {
-    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-    const token = localStorage.getItem('asb-token');
-    return `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
-  };
 
   useEffect(() => {
     setHeaderState(header);

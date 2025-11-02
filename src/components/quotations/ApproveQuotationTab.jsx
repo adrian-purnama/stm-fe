@@ -24,10 +24,17 @@ const ApproveQuotationTab = () => {
       setLoading(true);
       const response = await axiosInstance.get('/api/rfq');
       // The backend already filters by user role, so this will only return RFQs assigned to the current user for approval
-      setRfqs(response.data.data.rfqs);
+      let rfqsArray = response.data.data?.rfqs || response.data.data?.rfq || [];
+      // Ensure it's always an array
+      if (!Array.isArray(rfqsArray)) {
+        console.error('API returned non-array data:', rfqsArray);
+        rfqsArray = [];
+      }
+      setRfqs(rfqsArray);
     } catch (error) {
       console.error('Error fetching RFQs:', error);
       toast.error('Failed to fetch RFQs');
+      setRfqs([]); // Reset to empty array on error
     } finally {
       setLoading(false);
     }
@@ -290,45 +297,20 @@ const ApproveQuotationTab = () => {
                     <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
                     <h4 className="text-sm font-bold text-blue-800">Budget Information</h4>
                   </div>
-                  {rfq.items && rfq.items.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Total Price */}
-                      <div className="bg-white rounded-lg p-4 border border-blue-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-600">Total Price</span>
-                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        </div>
-                        <div className="text-lg font-bold text-green-700">
-                          {rfq.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {rfq.items.length} item{rfq.items.length !== 1 ? 's' : ''}
-                        </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+                    {/* Estimated Revenue */}
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-gray-600">Estimated Revenue</span>
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                       </div>
-
-                      {/* Total Net */}
-                      <div className="bg-white rounded-lg p-4 border border-blue-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-600">Total Net</span>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        </div>
-                        <div className="text-lg font-bold text-blue-700">
-                          {rfq.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Net amount
-                        </div>
+                      <div className="text-lg font-bold text-green-700">
+                        {rfq.estimatedRevenue ? rfq.estimatedRevenue.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' }) : 'Not Set'}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-lg p-6 border border-red-100 text-center">
-                      <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <div className="w-6 h-6 bg-red-400 rounded-full"></div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {rfq.items?.length || 0} item{(rfq.items?.length || 0) !== 1 ? 's' : ''}
                       </div>
-                      <div className="text-sm font-semibold text-red-600 mb-1">No Budget Information</div>
-                      <div className="text-xs text-gray-500">No items found in this RFQ</div>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Description */}
@@ -374,8 +356,7 @@ const ApproveQuotationTab = () => {
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-1">
                             <h4 className="text-xs sm:text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
                             <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 text-xs text-gray-600">
-                              <span>Price: {item.price?.toLocaleString('id-ID')}</span>
-                              <span>Net: {item.priceNet?.toLocaleString('id-ID')}</span>
+                              <span>Quantity: {item.quantity || 1}</span>
                             </div>
                           </div>
                             
@@ -554,28 +535,12 @@ const ApproveQuotationTab = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                   <h4 className="text-sm font-semibold text-blue-800 mb-2">Budget Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    {selectedRFQ.items && selectedRFQ.items.length > 0 ? (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-blue-700">Total Price:</span>
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-                            {selectedRFQ.items.reduce((sum, item) => sum + (item.price || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-blue-700">Total Net:</span>
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-                            {selectedRFQ.items.reduce((sum, item) => sum + (item.priceNet || 0), 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-2 text-center">
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
-                          No Items / Budget: 0
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-blue-700">Estimated Revenue:</span>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                        {selectedRFQ.estimatedRevenue ? selectedRFQ.estimatedRevenue.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' }) : 'Not Set'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {selectedRFQ.description && (

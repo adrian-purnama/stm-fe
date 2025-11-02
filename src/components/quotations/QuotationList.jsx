@@ -139,17 +139,13 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       
       // Trigger async loading of full details for each quotation
       // Fetch header details and offers separately for faster perceived performance
-      // TODO: Remove 10 second delay after testing - this is to demonstrate progressive loading
       headers.forEach(quotation => {
         const quotationNumber = quotation.header.quotationNumber || quotation.header._id?.toString();
         if (quotationNumber) {
-          // Add 10 second delay before fetching details to demonstrate progressive loading
-          setTimeout(() => {
-            // Fetch full header details (populated user fields, customer info, etc.)
-            fetchQuotationHeader(quotationNumber);
-            // Fetch offers
-            fetchQuotationDetails(quotationNumber);
-          }, 0); // 10 second delay for testing
+          // Fetch full header details (populated user fields, customer info, etc.)
+          fetchQuotationHeader(quotationNumber);
+          // Fetch offers
+          fetchQuotationDetails(quotationNumber);
         }
       });
     } catch (error) {

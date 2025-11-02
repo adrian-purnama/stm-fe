@@ -27,11 +27,18 @@ const EngineeringReviewTab = () => {
       const response = await axiosInstance.get('/api/rfq', {
         params: { stage: 'engineering', limit: 100 }
       });
-      // Backend returns data in response.data.data array, not response.data.data.rfqs
-      setRfqs(response.data.data || []);
+      // Backend returns data in response.data.data.rfqs array
+      let rfqsArray = response.data.data?.rfqs || response.data.data?.rfq || [];
+      // Ensure it's always an array
+      if (!Array.isArray(rfqsArray)) {
+        console.error('API returned non-array data:', rfqsArray);
+        rfqsArray = [];
+      }
+      setRfqs(rfqsArray);
     } catch (error) {
       console.error('Error fetching RFQs:', error);
       toast.error('Failed to fetch RFQs for review');
+      setRfqs([]); // Reset to empty array on error
     } finally {
       setLoading(false);
     }

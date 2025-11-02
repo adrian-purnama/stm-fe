@@ -40,6 +40,10 @@ const QuotationFormPage = () => {
             console.log('QuotationFormPage: RFQ items length:', rfqData.items?.length);
             
             // Transform RFQ data to quotation format
+            // Calculate estimated price per item from RFQ estimatedRevenue
+            const totalQuantity = rfqData.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
+            const estimatedPricePerItem = rfqData.estimatedRevenue / totalQuantity;
+            
             const quotationData = {
               header: {
                 customerName: rfqData.customerName,
@@ -52,10 +56,11 @@ const QuotationFormPage = () => {
                   chassis: item.chassis,
                   drawingSpecification: item.drawingSpecification,
                   specifications: item.specifications,
-                  price: item.price,           // RFQ price -> quotation price
-                  netto: item.priceNet,        // RFQ priceNet -> quotation netto
+                  price: estimatedPricePerItem,
+                  netto: estimatedPricePerItem * 0.91,  // Apply 9% discount for netto
                   discountType: 'percentage',  // Default discount type
                   discountValue: 0,            // Default discount value
+                  quantity: item.quantity || 1,  // Include quantity from RFQ
                   notes: item.notes
                 })) || []
               }]

@@ -106,12 +106,18 @@ const RequestQuotationTab = () => {
     
     try {
       const resp = await axiosInstance.get('/api/rfq', { params });
-      let newResults = resp.data.data || [];
-      setPagination(resp.data.pagination || { page: 1, pages: 1, total: 0 });
+      let newResults = resp.data.data?.rfqs || resp.data.data?.rfq || [];
+      // Ensure newResults is always an array
+      if (!Array.isArray(newResults)) {
+        console.error('API returned non-array data:', newResults);
+        newResults = [];
+      }
+      setPagination(resp.data.pagination || resp.data.data?.pagination || { page: 1, pages: 1, total: 0 });
       setRfqResults(prev => reset ? newResults : [...prev, ...newResults]);
     } catch (error) {
       console.error('Error fetching RFQs:', error);
       toast.error('Failed to fetch RFQs');
+      setRfqResults([]); // Reset to empty array on error
     } finally {
       setLoading(false);
     }
@@ -519,8 +525,8 @@ const RequestQuotationTab = () => {
 
       {/* List container, infinite scrollable area */}
       <div ref={listRef} style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-        {rfqResults.length === 0 && !loading && <div className="text-center text-gray-400 py-8">No RFQs found.</div>}
-        {rfqResults.map(rfq => (
+        {(!Array.isArray(rfqResults) || rfqResults.length === 0) && !loading && <div className="text-center text-gray-400 py-8">No RFQs found.</div>}
+        {Array.isArray(rfqResults) && rfqResults.map(rfq => (
           <div key={rfq._id} className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${rfq.status === 'rejected' ? 'bg-red-50 border-red-300' : ''}`}>
             <div className="flex items-start justify-between">
               {isSelectMode && (

@@ -34,9 +34,8 @@ export const NotificationsProvider = ({ children }) => {
     // Only connect when logged in
     if (!user.isLoggedIn) return;
 
-    const isDev = import.meta.env.VITE_NODE_ENV === "development";
-    // TODO : HTTPS
-    const wsProtocol = isDev ? "ws://" : "ws://";
+    const env = import.meta.env.VITE_NODE_ENV || import.meta.env.VITE_NODE_ENV_BUILD || "development";
+    const wsProtocol = (env === "preprod" || env === "production") ? "wss://" : "ws://";
     const wsHost = import.meta.env.VITE_BACKEND_URL;
     const wsUrl = `${wsProtocol}${wsHost}/notification`;
 

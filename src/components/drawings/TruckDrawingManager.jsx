@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
+import { getDrawingAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 const TruckDrawingManager = () => {
   // State for truck types
@@ -192,9 +193,7 @@ const TruckDrawingManager = () => {
   // Download file
   const downloadFile = async (drawingId, fileId, filename) => {
     try {
-      const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-      const token = localStorage.getItem('asb-token');
-      const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;
+      const downloadUrl = getDrawingAssetUrl(drawingId, fileId, true);
       
       // Create a temporary link to trigger download
       const link = document.createElement('a');

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import PriceInput from '../common/PriceInput';
 import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
 import DrawingSpecificationSelector from '../drawings/DrawingSpecificationSelector';
+import CustomDropdown from '../common/CustomDropdown';
 import axiosInstance from '../../utils/api/ApiHelper';
 
 const OfferItemForm = ({ 
@@ -19,6 +20,12 @@ const OfferItemForm = ({
     karoseri: item?.karoseri || '',
     chassis: item?.chassis || '',
     drawingSpecification: item?.drawingSpecification || null,
+    bodyTypeId: item?.bodyTypeId || '',
+    chassisTypeId: item?.chassisTypeId || '',
+    sizeTypeId: item?.sizeTypeId || '',
+    templateMode: item?.templateMode || 'manual',
+    templateSourceModel: item?.templateSourceModel || null,
+    templateSourceId: item?.templateSourceId || null,
     specifications: item?.specifications || [],
     price: item?.price || 0,
     discountType: item?.discountType || 'percentage',
@@ -35,6 +42,78 @@ const OfferItemForm = ({
   const [addingToCategory, setAddingToCategory] = useState(-1);
   const [showDrawingSelector, setShowDrawingSelector] = useState(false);
   const [selectedDrawingSpec, setSelectedDrawingSpec] = useState(null);
+  
+  // Master data for dropdowns
+  const [bodyTypes, setBodyTypes] = useState([]);
+  const [chassisTypes, setChassisTypes] = useState([]);
+  const [sizeTypes, setSizeTypes] = useState([]);
+  const [drawings, setDrawings] = useState([]);
+  const [loadingBodyTypes, setLoadingBodyTypes] = useState(false);
+  const [loadingChassisTypes, setLoadingChassisTypes] = useState(false);
+  const [loadingSizeTypes, setLoadingSizeTypes] = useState(false);
+  const [loadingDrawings, setLoadingDrawings] = useState(false);
+
+  // Fetch master data when component mounts or editing starts
+  useEffect(() => {
+    if (isEditing) {
+      fetchBodyTypes();
+      fetchChassisTypes();
+      fetchSizeTypes();
+      fetchDrawings();
+    }
+  }, [isEditing]);
+
+  const fetchBodyTypes = async () => {
+    setLoadingBodyTypes(true);
+    try {
+      const response = await axiosInstance.get('/api/body-types');
+      setBodyTypes(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching body types:', error);
+      toast.error('Failed to load body types');
+    } finally {
+      setLoadingBodyTypes(false);
+    }
+  };
+
+  const fetchChassisTypes = async () => {
+    setLoadingChassisTypes(true);
+    try {
+      const response = await axiosInstance.get('/api/chassis-types');
+      setChassisTypes(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching chassis types:', error);
+      toast.error('Failed to load chassis types');
+    } finally {
+      setLoadingChassisTypes(false);
+    }
+  };
+
+  const fetchSizeTypes = async () => {
+    setLoadingSizeTypes(true);
+    try {
+      const response = await axiosInstance.get('/api/size-types');
+      setSizeTypes(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching size types:', error);
+      toast.error('Failed to load size types');
+    } finally {
+      setLoadingSizeTypes(false);
+    }
+  };
+
+  const fetchDrawings = async () => {
+    setLoadingDrawings(true);
+    try {
+      const response = await axiosInstance.get('/api/drawing-specifications');
+      setDrawings(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching drawings:', error);
+      toast.error('Failed to load drawings');
+    } finally {
+      setLoadingDrawings(false);
+    }
+  };
 
   // Update form data when item prop changes
   useEffect(() => {
@@ -43,6 +122,12 @@ const OfferItemForm = ({
       karoseri: item?.karoseri || '',
       chassis: item?.chassis || '',
       drawingSpecification: item?.drawingSpecification || null,
+      bodyTypeId: item?.bodyTypeId || '',
+      chassisTypeId: item?.chassisTypeId || '',
+      sizeTypeId: item?.sizeTypeId || '',
+      templateMode: item?.templateMode || 'manual',
+      templateSourceModel: item?.templateSourceModel || null,
+      templateSourceId: item?.templateSourceId || null,
       specifications: item?.specifications || [],
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
@@ -244,10 +329,10 @@ const OfferItemForm = ({
     console.log('OfferItemForm specifications length:', formData.specifications.length);
     console.log('OfferItemForm onSave function exists:', !!onSave);
     
-    // Validate required fields
+    // Validate required fields based on template mode
     if (!formData.karoseri.trim()) {
       console.log('Validation failed: karoseri is empty');
-      toast.error('Please enter karoseri');
+      toast.error('Please enter karoseri/body type');
       return;
     }
     if (!formData.chassis.trim()) {
@@ -255,6 +340,21 @@ const OfferItemForm = ({
       toast.error('Please enter chassis');
       return;
     }
+    
+    // For bodyType mode, require templateSourceId
+    if (formData.templateMode === 'bodyType' && !formData.templateSourceId) {
+      console.log('Validation failed: body type template not selected');
+      toast.error('Please select a body type template');
+      return;
+    }
+    
+    // For drawing mode, require templateSourceId
+    if (formData.templateMode === 'drawing' && !formData.templateSourceId) {
+      console.log('Validation failed: drawing not selected');
+      toast.error('Please select a drawing');
+      return;
+    }
+    
     if (formData.price <= 0) {
       console.log('Validation failed: price is invalid:', formData.price);
       toast.error('Please enter a valid price');
@@ -277,6 +377,12 @@ const OfferItemForm = ({
       karoseri: item?.karoseri || '',
       chassis: item?.chassis || '',
       drawingSpecification: item?.drawingSpecification || null,
+      bodyTypeId: item?.bodyTypeId || '',
+      chassisTypeId: item?.chassisTypeId || '',
+      sizeTypeId: item?.sizeTypeId || '',
+      templateMode: item?.templateMode || 'manual',
+      templateSourceModel: item?.templateSourceModel || null,
+      templateSourceId: item?.templateSourceId || null,
       specifications: item?.specifications || [],
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
@@ -371,67 +477,183 @@ const OfferItemForm = ({
           </div>
           
           <div className="space-y-4">
+            {/* Template Mode Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Karoseri (Body Type) *
+                Specification Source *
               </label>
-              <input
-                type="text"
-                value={formData.karoseri}
-                onChange={(e) => handleInputChange('karoseri', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="e.g., Bus, Truck, Van"
-                required
+              <CustomDropdown
+                options={[
+                  { value: 'manual', label: 'Manual - Enter everything manually' },
+                  { value: 'bodyType', label: 'Body Type Template - Use default body type specs' },
+                  { value: 'drawing', label: 'Drawing - Copy from existing drawing' }
+                ]}
+                value={formData.templateMode}
+                onChange={(value) => {
+                  handleInputChange('templateMode', value);
+                  handleInputChange('karoseri', '');
+                  handleInputChange('chassis', '');
+                  handleInputChange('templateSourceId', '');
+                  handleInputChange('bodyTypeId', '');
+                  handleInputChange('chassisTypeId', '');
+                  handleInputChange('drawingSpecification', null);
+                  handleInputChange('specifications', []);
+                  setSelectedDrawingSpec(null);
+                }}
+                placeholder="Select specification source"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.templateMode === 'manual' && 'Select body type, enter chassis, and add specifications manually'}
+                {formData.templateMode === 'bodyType' && 'Select a body type to auto-fill specifications. You still need to provide chassis info.'}
+                {formData.templateMode === 'drawing' && 'Select an existing drawing to copy all specs, body type, and chassis info.'}
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chassis *
-              </label>
-              <input
-                type="text"
-                value={formData.chassis}
-                onChange={(e) => handleInputChange('chassis', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="e.g., Mercedes, Hino, Isuzu"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Drawing Specification
-              </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDrawingSelector(true)}
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-left bg-white hover:bg-gray-50"
-                >
-                  {formData.drawingSpecification && formData.drawingSpecification !== null ? (
-                    <span className="text-gray-900">
-                      {selectedDrawingSpec?.drawingNumber || 'Drawing Selected'}
-                    </span>
-                  ) : (
-                    <span className="text-gray-500">Select or upload drawing specification</span>
-                  )}
-                </button>
-                {formData.drawingSpecification && formData.drawingSpecification !== null && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleInputChange('drawingSpecification', null);
-                      setSelectedDrawingSpec(null);
+            {/* Manual Mode: Show Body Type and Chassis dropdowns */}
+            {formData.templateMode === 'manual' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Body Type *
+                  </label>
+                  <CustomDropdown
+                    options={bodyTypes.map(bt => ({
+                      value: bt._id,
+                      label: `${bt.name} (${bt.shortName})`
+                    }))}
+                    value={formData.bodyTypeId || ''}
+                    onChange={(value) => {
+                      handleInputChange('bodyTypeId', value);
+                      handleInputChange('templateSourceModel', 'BodyType');
+                      handleInputChange('templateSourceId', value);
+                      const selectedBodyType = bodyTypes.find(bt => bt._id === value);
+                      if (selectedBodyType) {
+                        handleInputChange('karoseri', selectedBodyType.name);
+                      }
                     }}
-                    className="px-3 py-3 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="Clear selection"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                    placeholder="Select body type"
+                    disabled={loadingBodyTypes}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chassis Type *
+                  </label>
+                  <CustomDropdown
+                    options={chassisTypes.map(ct => ({
+                      value: ct._id,
+                      label: `${ct.name} (${ct.shortName})`
+                    }))}
+                    value={formData.chassisTypeId || ''}
+                    onChange={(value) => {
+                      handleInputChange('chassisTypeId', value);
+                      const selectedChassisType = chassisTypes.find(ct => ct._id === value);
+                      if (selectedChassisType) {
+                        handleInputChange('chassis', selectedChassisType.name);
+                      }
+                    }}
+                    placeholder="Select chassis type"
+                    disabled={loadingChassisTypes}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Body Type Template Mode: Show Body Type selector */}
+            {formData.templateMode === 'bodyType' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Body Type *
+                  </label>
+                  <CustomDropdown
+                    options={bodyTypes.map(bt => ({
+                      value: bt._id,
+                      label: `${bt.name} (${bt.shortName})`
+                    }))}
+                    value={formData.templateSourceId || ''}
+                    onChange={(value) => {
+                      handleInputChange('templateSourceModel', 'BodyType');
+                      handleInputChange('templateSourceId', value);
+                      const selectedBodyType = bodyTypes.find(bt => bt._id === value);
+                      if (selectedBodyType) {
+                        handleInputChange('karoseri', selectedBodyType.name);
+                        if (selectedBodyType.defaultSpecifications) {
+                          handleInputChange('specifications', selectedBodyType.defaultSpecifications);
+                          toast.success('Body type specifications loaded!');
+                        }
+                      }
+                    }}
+                    placeholder="Select body type"
+                    disabled={loadingBodyTypes}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chassis Type *
+                  </label>
+                  <CustomDropdown
+                    options={chassisTypes.map(ct => ({
+                      value: ct._id,
+                      label: `${ct.name} (${ct.shortName})`
+                    }))}
+                    value={formData.chassisTypeId || ''}
+                    onChange={(value) => {
+                      handleInputChange('chassisTypeId', value);
+                      const selectedChassisType = chassisTypes.find(ct => ct._id === value);
+                      if (selectedChassisType) {
+                        handleInputChange('chassis', selectedChassisType.name);
+                      }
+                    }}
+                    placeholder="Select chassis type"
+                    disabled={loadingChassisTypes}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Drawing Mode: Show Drawing selector */}
+            {formData.templateMode === 'drawing' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Drawing *
+                </label>
+                <CustomDropdown
+                  options={drawings.map(d => ({
+                    value: d._id,
+                    label: `${d.drawingNumber || 'Drawing'} ${d.bodyTypeId?.name || ''}`
+                  }))}
+                  value={formData.templateSourceId || ''}
+                  onChange={(value) => {
+                    handleInputChange('templateSourceModel', 'DrawingSpecification');
+                    handleInputChange('templateSourceId', value);
+                    handleInputChange('drawingSpecification', value);
+                    const selectedDrawing = drawings.find(d => d._id === value);
+                    if (selectedDrawing) {
+                      // Populate body type
+                      if (selectedDrawing.bodyTypeId) {
+                        handleInputChange('karoseri', selectedDrawing.bodyTypeId.name || '');
+                        handleInputChange('bodyTypeId', selectedDrawing.bodyTypeId._id);
+                      }
+                      // Populate chassis type
+                      if (selectedDrawing.chassisTypeId) {
+                        handleInputChange('chassisTypeId', selectedDrawing.chassisTypeId._id);
+                        handleInputChange('chassis', selectedDrawing.chassisTypeId.name || '');
+                      }
+                      // Populate specifications
+                      if (selectedDrawing.customSpecifications) {
+                        handleInputChange('specifications', selectedDrawing.customSpecifications);
+                      }
+                      toast.success('Drawing template loaded with all details!');
+                    }
+                  }}
+                  placeholder="Select drawing"
+                  disabled={loadingDrawings}
+                />
               </div>
-            </div>
+            )}
 
           </div>
         </div>

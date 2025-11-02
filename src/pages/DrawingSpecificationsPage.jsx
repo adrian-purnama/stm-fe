@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import axiosInstance from '../utils/api/ApiHelper';
 import BaseModal from '../components/modals/BaseModal';
+import { getDrawingAssetUrl } from '../utils/helpers/assetUrlHelper';
 import CustomDropdown from '../components/common/CustomDropdown';
 import Navigation from '../components/common/Navigation';
 
@@ -398,11 +399,7 @@ const DrawingSpecificationsPage = () => {
   // Download file
   const downloadFile = async (drawingId, fileId, originalName) => {
     try {
-      const isDev = import.meta.env.VITE_NODE_ENV === "development";
-      const protocol = isDev ? "http://" : "http://";
-      const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
-      const token = localStorage.getItem("asb-token");
-      const downloadUrl = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}?token=${token}&download=true`;
+      const downloadUrl = getDrawingAssetUrl(drawingId, fileId, true);
       
       const link = document.createElement('a');
       link.href = downloadUrl;
