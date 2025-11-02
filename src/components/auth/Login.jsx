@@ -1,7 +1,7 @@
 import { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axiosInstance from '../utils/ApiHelper';
-import { UserContext } from '../utils/UserContext';
+import axiosInstance from '../../utils/api/ApiHelper';
+import { UserContext } from '../../utils/contexts/UserContext';
 import toast from 'react-hot-toast';
 
 const Login = () => {

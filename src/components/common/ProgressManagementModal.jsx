@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2, Edit2 } from 'lucide-react';
 import BaseModal from './BaseModal';
-import axiosInstance from '../utils/ApiHelper';
+import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const ProgressManagementModal = ({ isOpen, onClose, quotation, onUpdate }) => {

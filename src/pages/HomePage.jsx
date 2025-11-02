@@ -1,12 +1,14 @@
 import React, { useContext, useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FileText, Users, BarChart3, ChevronRight, TrendingUp, CheckCircle, ArrowRight, Shield, Zap, Edit3, Save, Star, RotateCcw, Database, Truck, FileImage } from 'lucide-react'
-import Navigation from '../components/Navigation'
-import BaseModal from '../components/BaseModal'
-import { UserContext } from '../utils/UserContext'
+import Navigation from '../components/common/Navigation'
+import BaseModal from '../components/modals/BaseModal'
+import { UserContext } from '../utils/contexts/UserContext'
 
 const HomePage = () => {
   const { user } = useContext(UserContext);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
   const [selectedCards, setSelectedCards] = useState({
     tools: [1],
@@ -52,12 +54,12 @@ const HomePage = () => {
   const allDataCards = [
     {
       id: 1,
-      title: 'Product Catalogue',
+      title: 'Data Entry',
       subtitle: 'Data',
-      description: 'Kelola jenis-jenis truck dan kategorinya',
+      description: 'Kelola data entry untuk truck type, chassis, dan lainnya',
       icon: Truck,
       color: 'bg-orange-500',
-      href: '/data/truck-types'
+      href: '/data-entry'
     },
     {
       id: 2,
@@ -100,6 +102,13 @@ const HomePage = () => {
       setSelectedCards(JSON.parse(savedPreferences));
     }
   }, []);
+
+  // Redirect logged-in users from root path to dashboard
+  useEffect(() => {
+    if (user.isLoggedIn && location.pathname === '/') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user.isLoggedIn, location.pathname, navigate]);
 
   // Get filtered cards based on selection
   const toolCards = allToolCards.filter(card => (selectedCards.tools || []).includes(card.id));

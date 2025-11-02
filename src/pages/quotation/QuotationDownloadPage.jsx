@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import Navigation from '../../components/Navigation';
+import Navigation from '../../components/common/Navigation';
 import QuotationDetails from '../../components/quotations/QuotationDetails';
 import QuotationPreview from '../../components/quotations/QuotationPreview';
-import ApiHelper from '../../utils/ApiHelper';
+import ApiHelper from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 
 const QuotationDownloadPage = () => {

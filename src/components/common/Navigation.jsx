@@ -2,8 +2,8 @@ import { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LogOut, Home, User, Bell, BellOff, Check, ExternalLink, Clock, X } from 'lucide-react';
-import { UserContext } from '../utils/UserContext';
-import { NotificationsContext } from '../utils/NotificationsContext';
+import { UserContext } from '../../utils/contexts/UserContext';
+import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
 
 const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null }) => {
   const { user, logoutUser } = useContext(UserContext);
@@ -26,7 +26,7 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <img src="/asb logo.png" alt="asb-logo" className='w-[100px]' />
+              <img src="/asb logo new.png" alt="asb-logo" className='w-[100px]' />
             </div>
             <div className="flex items-center space-x-4">
               <button
@@ -55,7 +55,7 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
           <div className="flex items-center">
             <div>
               {/* <h1 className="text-3xl font-bold text-gray-900">{title}</h1> */}
-              <img src="/asb logo.png" alt="asb-logo" className='w-[100px]' />
+              <img src="/asb logo new.png" alt="asb-logo" className='w-[100px]' />
               {subtitle && (
                 <p className="text-gray-600 mt-1">{subtitle}</p>
               )}

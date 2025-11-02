@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -7,17 +6,14 @@ import {
   Trash2, 
   Eye,
   Loader2,
-  Truck,
-  ArrowLeft
+  Truck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import BaseModal from '../components/BaseModal';
-import CustomDropdown from '../components/CustomDropdown';
-import Navigation from '../components/Navigation';
+import ApiHelper from '../utils/api/ApiHelper';
+import BaseModal from '../components/modals/BaseModal';
+import CustomDropdown from '../components/common/CustomDropdown';
 
 const TruckTypesPage = () => {
-  const navigate = useNavigate();
   
   // State for truck types
   const [truckTypes, setTruckTypes] = useState([]);
@@ -200,26 +196,10 @@ const TruckTypesPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation title="Truck Types Management" subtitle="Manage truck types and their categories" />
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
-            <button
-              onClick={() => navigate('/')}
-              className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Truck Types Management</h1>
-              <p className="text-gray-600">Manage truck types and their categories</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters and Actions */}
-        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+    <div className="p-6">
+      {/* Filters and Actions */}
+      <div className="bg-white rounded-lg shadow mb-6">
+        <div className="p-6">
           <div className="flex flex-wrap items-center gap-4 mb-4">
             {/* Search */}
             <div className="flex-1 min-w-64">
@@ -230,7 +210,7 @@ const TruckTypesPage = () => {
                   placeholder="Search truck types..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -257,12 +237,13 @@ const TruckTypesPage = () => {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Truck Types List */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Truck Types</h2>
-          </div>
+      {/* Truck Types List */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Truck Types</h2>
+        </div>
           
           {loading ? (
             <div className="p-8 text-center">
@@ -282,7 +263,7 @@ const TruckTypesPage = () => {
               </button>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-100 px-6 pb-6">
               {truckTypes.map((truckType) => (
                 <div key={truckType._id} className="p-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
@@ -354,7 +335,7 @@ const TruckTypesPage = () => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., Dump Truck"
               />
             </div>
@@ -366,7 +347,7 @@ const TruckTypesPage = () => {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows="3"
                 placeholder="Brief description of this truck type"
               />
@@ -413,7 +394,7 @@ const TruckTypesPage = () => {
                       type="text"
                       value={spec.category || ''}
                       onChange={(e) => updateSpecificationCategory(categoryIndex, 'category', e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
                       placeholder="Category name (e.g., Engine, Dimensions)"
                     />
                     <button
@@ -432,14 +413,14 @@ const TruckTypesPage = () => {
                           type="text"
                           value={item.name || ''}
                           onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'name', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Item name (e.g., Engine Type)"
                         />
                         <input
                           type="text"
                           value={item.specification || ''}
                           onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'specification', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Specification (e.g., Diesel V8)"
                         />
                         <button
@@ -504,7 +485,7 @@ const TruckTypesPage = () => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., Dump Truck"
               />
             </div>
@@ -516,7 +497,7 @@ const TruckTypesPage = () => {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows="3"
                 placeholder="Brief description of this truck type"
               />
@@ -563,7 +544,7 @@ const TruckTypesPage = () => {
                       type="text"
                       value={spec.category || ''}
                       onChange={(e) => updateSpecificationCategory(categoryIndex, 'category', e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mr-3"
                       placeholder="Category name (e.g., Engine, Dimensions)"
                     />
                     <button
@@ -582,14 +563,14 @@ const TruckTypesPage = () => {
                           type="text"
                           value={item.name || ''}
                           onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'name', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Item name (e.g., Engine Type)"
                         />
                         <input
                           type="text"
                           value={item.specification || ''}
                           onChange={(e) => updateSpecificationItem(categoryIndex, itemIndex, 'specification', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Specification (e.g., Diesel V8)"
                         />
                         <button
@@ -678,9 +659,9 @@ const TruckTypesPage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Default Specifications
                   </label>
-                  <div className="space-y-4">
-                    {selectedTruckType.defaultSpecifications.map((spec, categoryIndex) => (
-                      <div key={categoryIndex} className="border border-gray-200 rounded-lg p-4">
+                   <div className="space-y-4">
+                     {selectedTruckType.defaultSpecifications.map((spec, categoryIndex) => (
+                       <div key={categoryIndex} className="border border-gray-100 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-3">{spec.category}</h4>
                         <div className="space-y-2">
                           {spec.items && spec.items.length > 0 && spec.items.map((item, itemIndex) => (
@@ -696,7 +677,7 @@ const TruckTypesPage = () => {
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Created By
@@ -725,10 +706,8 @@ const TruckTypesPage = () => {
             </button>
           </div>
         </BaseModal>
-      </div>
     </div>
   );
 };
 
 export default TruckTypesPage;
-

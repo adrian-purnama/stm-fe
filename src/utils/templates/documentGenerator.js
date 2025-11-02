@@ -2,6 +2,7 @@ import Docxtemplater from "docxtemplater";
 import PizZip from "pizzip";
 import { saveAs } from "file-saver";
 import ImageModule from "docxtemplater-image-module-free";
+import { getDrawingBase64Url, getNotesImageBase64Url, getDrawingAssetUrl } from "../helpers/assetUrlHelper";
 
 // Format dates for Indonesian locale
 const formatDate = (date) => {
@@ -413,9 +414,7 @@ const createDrawingsInfo = (itemsWithDrawings, quotationNumber) => {
       drawingsText += `Upload Date: ${formatDate(drawing.drawingFile.uploadDate)}\n`;
       
       // Add file access information
-      const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-      const token = localStorage.getItem('asb-token');
-      const fileUrl = `${baseURL}/api/assets/drawings/${drawing._id}/files/${drawing.drawingFile.fileId}?token=${token}`;
+      const fileUrl = getDrawingAssetUrl(drawing._id, drawing.drawingFile.fileId);
       drawingsText += `File URL: ${fileUrl}\n`;
       
       drawingsText += `\n─────────────────────────────────────────────────────────────\n\n`;
@@ -466,9 +465,7 @@ const rotateImage90Degrees = (base64String) => {
 // Fetch image as base64 from backend
 const fetchImageAsBase64 = async (drawingId, fileId, rotate = false) => {
   try {
-    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-    const token = localStorage.getItem('asb-token');
-    const url = `${baseURL}/api/assets/drawings/${drawingId}/files/${fileId}/base64?token=${token}`;
+    const url = getDrawingBase64Url(drawingId, fileId, rotate);
     
     const response = await fetch(url);
     if (!response.ok) {
@@ -638,9 +635,7 @@ export const generateQuotationDocument = async (
       for (const notesImage of activeOffer.notesImages) {
         try {
           // Fetch notes image as base64
-          const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-          const token = localStorage.getItem('asb-token');
-          const url = `${baseURL}/api/assets/notes-images/${notesImage._id}/files/${notesImage.imageFile.fileId}/base64?token=${token}`;
+          const url = getNotesImageBase64Url(notesImage._id, notesImage.imageFile.fileId);
           
           const response = await fetch(url);
           if (response.ok) {

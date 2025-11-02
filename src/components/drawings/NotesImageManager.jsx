@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ApiHelper } from '../utils/ApiHelper';
+import axiosInstance from '../../utils/api/ApiHelper';
 
 const NotesImageManager = ({ offerId, notesImages = [], onImagesChange }) => {
   const [images, setImages] = useState(notesImages);

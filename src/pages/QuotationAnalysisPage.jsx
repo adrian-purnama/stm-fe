@@ -26,16 +26,16 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import Navigation from '../components/Navigation';
-import CustomDropdown from '../components/CustomDropdown';
-import BaseModal from '../components/BaseModal';
-import ApiHelper from '../utils/ApiHelper';
+import Navigation from '../components/common/Navigation';
+import CustomDropdown from '../components/common/CustomDropdown';
+import BaseModal from '../components/modals/BaseModal';
+import ApiHelper from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 import { 
   updatePreferences, 
   getSectionPreferences,
   PREFERENCE_SECTIONS 
-} from '../utils/UserPreferences';
+} from '../utils/helpers/UserPreferences';
 
 const QuotationAnalysisPage = () => {
   const navigate = useNavigate();

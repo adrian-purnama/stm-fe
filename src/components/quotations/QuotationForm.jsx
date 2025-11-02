@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Save, X, Upload, Image, X as XIcon, FileText, Eye } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
-import ApiHelper from '../../utils/ApiHelper';
-import CustomDropdown from '../CustomDropdown';
-import PriceInput from '../PriceInput';
-import OfferItemForm from '../OfferItemForm';
-import BaseModal from '../BaseModal';
-import { formatPriceWithCurrency } from '../../utils/priceFormatter';
+import ApiHelper from '../../utils/api/ApiHelper';
+import CustomDropdown from '../common/CustomDropdown';
+import PriceInput from '../common/PriceInput';
+import OfferItemForm from '../forms/OfferItemForm';
+import BaseModal from '../modals/BaseModal';
+import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
+import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
   const [formData, setFormData] = useState({
@@ -15,6 +16,9 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     contactPerson: {
       name: '',
       gender: 'Male'
+    },
+    lineOfBusiness: {
+      type: 'karoseri'
     },
     offerItems: [],
     excludePPN: false,
@@ -39,13 +43,6 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   const [removedImages, setRemovedImages] = useState([]); // Track images removed from form // Store images to be uploaded
   const [showRFQReference, setShowRFQReference] = useState(false);
   const [rfqReferenceData, setRfqReferenceData] = useState(null);
-
-  // Get asset URL for notes images
-  const getNotesImageAssetUrl = (imageId, fileId) => {
-    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-    const token = localStorage.getItem('asb-token');
-    return `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
-  };
 
   // Fetch RFQ reference data
   const fetchRFQReference = useCallback(async () => {
@@ -222,17 +219,23 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           offerItems = processedQuotation.offers[0].offerItems;
         } else if (processedQuotation.items) {
           console.log('QuotationForm: Found items in processedQuotation, transforming:', processedQuotation.items);
-          // If it's direct RFQ items, transform them
+          // If it's direct RFQ items, transform them with estimated revenue calculation
+          const totalQuantity = processedQuotation.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+          const estimatedPricePerItem = processedQuotation.estimatedRevenue && totalQuantity > 0 
+            ? processedQuotation.estimatedRevenue / totalQuantity 
+            : 0;
+          
           offerItems = processedQuotation.items.map((item, index) => ({
             itemNumber: index + 1,
             karoseri: item.karoseri,
             chassis: item.chassis,
             drawingSpecification: item.drawingSpecification,
             specifications: item.specifications,
-            price: item.price,           // RFQ price -> quotation price
-            netto: item.priceNet,        // RFQ priceNet -> quotation netto
+            price: estimatedPricePerItem,
+            netto: estimatedPricePerItem * 0.91,  // Apply 9% discount for netto
             discountType: 'percentage',  // Default discount type
             discountValue: 0,            // Default discount value
+            quantity: item.quantity || 1,  // Include quantity from RFQ
             notes: item.notes
           }));
         } else {
@@ -242,6 +245,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const rfqFormData = {
           customerName: header.customerName || processedQuotation.customerName || '',
           contactPerson: header.contactPerson || processedQuotation.contactPerson || { name: '', gender: 'Male' },
+          lineOfBusiness: header.lineOfBusiness || processedQuotation.lineOfBusiness || { type: 'karoseri' },
           offerItems: offerItems,
           excludePPN: false,
           notes: '',
@@ -265,6 +269,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const newFormData = {
           customerName: header.customerName || '',
           contactPerson: header.contactPerson || { name: '', gender: 'Male' },
+          lineOfBusiness: header.lineOfBusiness || { type: 'karoseri' },
           offerItems: [],
           excludePPN: false,
           notes: '',
@@ -293,6 +298,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const editFormData = {
           customerName: header.customerName || '',
           contactPerson: header.contactPerson || { name: '', gender: 'Male' },
+          lineOfBusiness: header.lineOfBusiness || { type: 'karoseri' },
           offerItems: activeOffer.offerItems || [],
           excludePPN: activeOffer.excludePPN || false,
           notes: activeOffer.notes || '',
@@ -892,10 +898,28 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               className={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' ? 'opacity-50 cursor-not-allowed' : ''}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Business Type *
+            </label>
+            <CustomDropdown
+              options={[
+                { value: 'karoseri', label: 'Karoseri (Body Building)' },
+                { value: 'service', label: 'Services' },
+                { value: 'sparepart', label: 'Spareparts' }
+              ]}
+              value={formData.lineOfBusiness?.type || 'karoseri'}
+              onChange={(value) => setFormData(prev => ({ ...prev, lineOfBusiness: { type: value } }))}
+              disabled={mode === 'edit-offer' || mode === 'revision'}
+              placeholder="Select business type"
+              required={true}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Offer Items */}
+      {/* Offer Items - only show for karoseri business type */}
+      {formData.lineOfBusiness?.type === 'karoseri' && (
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">Offer Items</h3>
@@ -984,6 +1008,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           )}
         </div>
       </div>
+      )}
 
       {/* Offer Summary */}
       <div className="bg-white p-6 rounded-lg shadow">
@@ -1335,8 +1360,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-md font-medium text-gray-900">Item {item.itemNumber}</h4>
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <span>Price: {item.price?.toLocaleString('id-ID')}</span>
-                          <span>Net: {item.priceNet?.toLocaleString('id-ID')}</span>
+                          <span>Quantity: {item.quantity || 1}</span>
                         </div>
                       </div>
                       

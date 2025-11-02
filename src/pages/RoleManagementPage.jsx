@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit, Trash2, Shield, Eye, ArrowLeft } from 'lucide-react';
-import Navigation from '../components/Navigation';
-import ApiHelper from '../utils/ApiHelper';
+import { Plus, Search, Edit, Trash2, Shield, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ConfirmModal from '../components/ConfirmModal';
-import CustomDropdown from '../components/CustomDropdown';
-import RoleFormModal from '../components/RoleFormModal';
-import RoleDetailsModal from '../components/RoleDetailsModal';
+import RoleFormModal from '../components/modals/RoleFormModal';
+import RoleDetailsModal from '../components/modals/RoleDetailsModal';
+import Navigation from '../components/common/Navigation';
+import axiosInstance from '../utils/api/ApiHelper';
+import ConfirmModal from '../components/modals/ConfirmModal';
+import CustomDropdown from '../components/common/CustomDropdown';
 
 const PermissionManagementPage = () => {
-  const navigate = useNavigate();
-  
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,7 +26,7 @@ const PermissionManagementPage = () => {
   const fetchPermissions = async () => {
     try {
       setLoading(true);
-      const response = await ApiHelper.get('/api/permissions');
+      const response = await axiosInstance.get('/api/permissions');
       setPermissions(response.data.data || []);
     } catch (error) {
       console.error('Error fetching permissions:', error);
@@ -59,11 +56,11 @@ const PermissionManagementPage = () => {
       if (selectedPermission) {
         // Update existing permission
         const permissionId = selectedPermission._id || selectedPermission.id;
-        await ApiHelper.put(`/api/permissions/${permissionId}`, permissionData);
+        await axiosInstance.put(`/api/permissions/${permissionId}`, permissionData);
         toast.success('Permission updated successfully');
       } else {
         // Create new permission
-        await ApiHelper.post('/api/permissions', permissionData);
+        await axiosInstance.post('/api/permissions', permissionData);
         toast.success('Permission created successfully');
       }
       
@@ -86,7 +83,7 @@ const PermissionManagementPage = () => {
     try {
       if (actionType === 'delete') {
         const permissionId = selectedPermission._id || selectedPermission.id;
-        await ApiHelper.delete(`/api/permissions/${permissionId}`);
+        await axiosInstance.delete(`/api/permissions/${permissionId}`);
         toast.success('Permission deleted successfully');
         fetchPermissions();
       }
@@ -147,17 +144,9 @@ const PermissionManagementPage = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <button
-                onClick={() => navigate('/')}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Permission Management</h1>
-                <p className="mt-2 text-gray-600">Manage permissions and categories</p>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Permission Management</h1>
+              <p className="mt-2 text-gray-600">Manage permissions and categories</p>
             </div>
             <button
               onClick={handleCreatePermission}
@@ -180,7 +169,7 @@ const PermissionManagementPage = () => {
                   placeholder="Search permissions..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -213,7 +202,7 @@ const PermissionManagementPage = () => {
             </div>
           ) : (
             filteredPermissions.map((permission) => (
-              <div key={permission._id || permission.id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div key={permission._id || permission.id} className="bg-white rounded-lg shadow border border-gray-100 hover:shadow-md transition-shadow">
                 <div className="p-6">
                   {/* Permission Header */}
                   <div className="flex items-start justify-between mb-4">

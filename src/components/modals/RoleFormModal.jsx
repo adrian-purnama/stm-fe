@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Trash2 } from 'lucide-react';
 import BaseModal from './BaseModal';
-import ApiHelper from '../utils/ApiHelper';
+import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
-import CustomDropdown from './CustomDropdown';
+import CustomDropdown from '../common/CustomDropdown';
 
 const RoleFormModal = ({ role, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
@@ -28,8 +28,8 @@ const RoleFormModal = ({ role, onClose, onSubmit }) => {
     const fetchData = async () => {
       try {
         const [permissionsResponse, categoriesResponse] = await Promise.all([
-          ApiHelper.get('/api/permissions'),
-          ApiHelper.get('/api/permission-categories')
+          axiosInstance.get('/api/permissions'),
+          axiosInstance.get('/api/permission-categories')
         ]);
         setPermissions(permissionsResponse.data.data || []);
         setCategories(categoriesResponse.data.data || []);
@@ -127,7 +127,7 @@ const RoleFormModal = ({ role, onClose, onSubmit }) => {
     if (!newCategoryName.trim()) return;
     
     try {
-      const response = await ApiHelper.post('/api/permission-categories', {
+      const response = await axiosInstance.post('/api/permission-categories', {
         name: newCategoryName.trim().toLowerCase().replace(/\s+/g, '_'),
         description: `Category for ${newCategoryName.trim()} permissions`
       });

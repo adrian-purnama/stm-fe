@@ -1,9 +1,9 @@
 import './App.css'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import Login from './components/Login'
-import Register from './components/Register'
-import ProtectedRoute from './components/ProtectedRoute'
+import Login from './components/auth/Login'
+import Register from './components/auth/Register'
+import ProtectedRoute from './components/auth/ProtectedRoute'
 import HomePage from './pages/HomePage'
 import QuotationPage from './pages/quotation/QuotationPage'
 import QuotationFormPage from './pages/quotation/QuotationFormPage'
@@ -11,19 +11,20 @@ import QuotationDownloadPage from './pages/quotation/QuotationDownloadPage'
 import QuotationAnalysisPage from './pages/QuotationAnalysisPage'
 import DynamicAnalyticsPage from './pages/DynamicAnalyticsPage'
 import ProfilePage from './pages/ProfilePage'
-import DebugResponse from './components/DebugResponse'
+import DebugResponse from './components/common/DebugResponse'
 import TruckTypesPage from './pages/TruckTypesPage'
 import DrawingSpecificationsPage from './pages/DrawingSpecificationsPage'
+import DataEntryPage from './pages/DataEntryPage'
 import UserManagementPage from './pages/UserManagementPage'
 import PermissionManagementPage from './pages/RoleManagementPage'
-import { UserContextProvider } from './utils/UserContext'
+import { UserContextProvider } from './utils/contexts/UserContext'
 
 function App() {
   return (
     <UserContextProvider>
       <Toaster position="top-right" />
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route 
@@ -95,6 +96,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DebugResponse />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/data-entry" 
+          element={
+            <ProtectedRoute>
+              <DataEntryPage />
             </ProtectedRoute>
           } 
         />

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Save, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ApiHelper from '../utils/ApiHelper';
-import { formatPriceWithCurrency } from '../utils/priceFormatter';
+import axiosInstance from '../../utils/api/ApiHelper';
+import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
 
 const OfferItemAcceptance = ({ 
   offerItems, 
