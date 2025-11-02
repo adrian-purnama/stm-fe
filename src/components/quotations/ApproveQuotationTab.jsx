@@ -310,6 +310,7 @@ const ApproveQuotationTab = () => {
                       <div className="text-xs text-gray-500 mt-1">
                         {rfq.items?.length || 0} item{(rfq.items?.length || 0) !== 1 ? 's' : ''}
                       </div>
+                    </div>
                   </div>
                 </div>
 
