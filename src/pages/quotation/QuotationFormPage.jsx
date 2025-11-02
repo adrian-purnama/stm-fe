@@ -40,29 +40,55 @@ const QuotationFormPage = () => {
             console.log('QuotationFormPage: RFQ items length:', rfqData.items?.length);
             
             // Transform RFQ data to quotation format
-            // Calculate estimated price per item from RFQ estimatedRevenue
-            const totalQuantity = rfqData.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
-            const estimatedPricePerItem = rfqData.estimatedRevenue / totalQuantity;
-            
             const quotationData = {
               header: {
                 customerName: rfqData.customerName,
-                contactPerson: rfqData.contactPerson
+                contactPerson: rfqData.contactPerson,
+                lineOfBusiness: rfqData.lineOfBusiness
               },
               offers: [{
-                offerItems: rfqData.items?.map((item, index) => ({
-                  itemNumber: index + 1,
-                  karoseri: item.karoseri,
-                  chassis: item.chassis,
-                  drawingSpecification: item.drawingSpecification,
-                  specifications: item.specifications,
-                  price: estimatedPricePerItem,
-                  netto: estimatedPricePerItem * 0.91,  // Apply 9% discount for netto
-                  discountType: 'percentage',  // Default discount type
-                  discountValue: 0,            // Default discount value
-                  quantity: item.quantity || 1,  // Include quantity from RFQ
-                  notes: item.notes
-                })) || []
+                offerItems: rfqData.items?.map((item, index) => {
+                  // Each RFQ item already has its own estimatedRevenue
+                  const itemRevenue = item.estimatedRevenue || 0;
+                  
+                  const itemData = {
+                    itemNumber: index + 1,
+                    karoseri: item.karoseri,
+                    chassis: item.chassis,
+                    chassisModel: item.chassisModel || '',
+                    drawingSpecification: item.drawingSpecification,
+                    templateMode: item.templateMode || 'manual',
+                    templateSourceModel: item.templateSourceModel || null,
+                    templateSourceId: item.templateSourceId || null,
+                    specifications: item.specifications || [],
+                    price: itemRevenue,
+                    netto: itemRevenue * 0.91,
+                    discountType: 'percentage',
+                    discountValue: 0,
+                    quantity: item.quantity || 1,
+                    notes: item.notes || ''
+                  };
+                  
+                  // Add RFQ-level bodyTypeId and chassisTypeId if karoseri type
+                  if (rfqData.lineOfBusiness?.type === 'karoseri') {
+                    // Handle populated objects (get _id) or plain IDs
+                    itemData.bodyTypeId = rfqData.bodyTypeId?._id || rfqData.bodyTypeId || null;
+                    itemData.chassisTypeId = rfqData.chassisTypeId?._id || rfqData.chassisTypeId || null;
+                  }
+                  
+                  // Add service/sparepart fields if applicable
+                  if (rfqData.lineOfBusiness?.type === 'service') {
+                    itemData.serviceName = item.serviceName || '';
+                    itemData.serviceDetails = item.serviceDetails || [];
+                  }
+                  
+                  if (rfqData.lineOfBusiness?.type === 'sparepart') {
+                    itemData.sparepartName = item.sparepartName || '';
+                    itemData.pricePerUnit = item.pricePerUnit || 0;
+                  }
+                  
+                  return itemData;
+                }) || []
               }]
             };
             console.log('QuotationFormPage: Transformed RFQ data to quotation format:', quotationData);

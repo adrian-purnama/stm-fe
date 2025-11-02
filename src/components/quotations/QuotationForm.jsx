@@ -33,6 +33,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   }, [formData]);
 
   const [editingItemIndex, setEditingItemIndex] = useState(-1);
+  const [addingServiceItem, setAddingServiceItem] = useState(false);
+  const [addingSparepartItem, setAddingSparepartItem] = useState(false);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newSparepartName, setNewSparepartName] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [quotationNumber, setQuotationNumber] = useState('');
@@ -219,25 +223,48 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           offerItems = processedQuotation.offers[0].offerItems;
         } else if (processedQuotation.items) {
           console.log('QuotationForm: Found items in processedQuotation, transforming:', processedQuotation.items);
-          // If it's direct RFQ items, transform them with estimated revenue calculation
-          const totalQuantity = processedQuotation.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-          const estimatedPricePerItem = processedQuotation.estimatedRevenue && totalQuantity > 0 
-            ? processedQuotation.estimatedRevenue / totalQuantity 
-            : 0;
-          
-          offerItems = processedQuotation.items.map((item, index) => ({
-            itemNumber: index + 1,
-            karoseri: item.karoseri,
-            chassis: item.chassis,
-            drawingSpecification: item.drawingSpecification,
-            specifications: item.specifications,
-            price: estimatedPricePerItem,
-            netto: estimatedPricePerItem * 0.91,  // Apply 9% discount for netto
-            discountType: 'percentage',  // Default discount type
-            discountValue: 0,            // Default discount value
-            quantity: item.quantity || 1,  // Include quantity from RFQ
-            notes: item.notes
-          }));
+          // Transform direct RFQ items - each item has its own estimatedRevenue
+          offerItems = processedQuotation.items.map((item, index) => {
+            const itemRevenue = item.estimatedRevenue || 0;
+            
+            const itemData = {
+              itemNumber: index + 1,
+              karoseri: item.karoseri,
+              chassis: item.chassis,
+              chassisModel: item.chassisModel || '',
+              drawingSpecification: item.drawingSpecification,
+              templateMode: item.templateMode || 'manual',
+              templateSourceModel: item.templateSourceModel || null,
+              templateSourceId: item.templateSourceId || null,
+              specifications: item.specifications || [],
+              price: itemRevenue,
+              netto: itemRevenue * 0.91,
+              discountType: 'percentage',
+              discountValue: 0,
+              quantity: item.quantity || 1,
+              notes: item.notes || ''
+            };
+            
+            // Add RFQ-level bodyTypeId and chassisTypeId if karoseri type
+            if (processedQuotation.lineOfBusiness?.type === 'karoseri') {
+              // Handle populated objects (get _id) or plain IDs
+              itemData.bodyTypeId = processedQuotation.bodyTypeId?._id || processedQuotation.bodyTypeId || null;
+              itemData.chassisTypeId = processedQuotation.chassisTypeId?._id || processedQuotation.chassisTypeId || null;
+            }
+            
+            // Add service/sparepart fields if applicable
+            if (processedQuotation.lineOfBusiness?.type === 'service') {
+              itemData.serviceName = item.serviceName || '';
+              itemData.serviceDetails = item.serviceDetails || [];
+            }
+            
+            if (processedQuotation.lineOfBusiness?.type === 'sparepart') {
+              itemData.sparepartName = item.sparepartName || '';
+              itemData.pricePerUnit = item.pricePerUnit || 0;
+            }
+            
+            return itemData;
+          });
         } else {
           console.log('QuotationForm: No offerItems found in any location');
         }
@@ -599,7 +626,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         // Create new quotation (header + first offer)
         const headerData = {
           customerName: formData.customerName,
-          contactPerson: formData.contactPerson
+          contactPerson: formData.contactPerson,
+          lineOfBusiness: formData.lineOfBusiness
         };
         
         const offerData = {
@@ -949,7 +977,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-medium text-gray-900">Item {index + 1}</h4>
-                      <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis}</p>
+                      <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
                     </div>
                     <div className="flex space-x-2">
                       <button
@@ -971,7 +999,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <span className="text-gray-600">Quantity:</span>
-                      <p className="font-medium">1</p>
+                      <p className="font-medium">{item.quantity || 1}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Base Price:</span>
@@ -983,7 +1011,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                     </div>
                     <div>
                       <span className="text-gray-600">Total:</span>
-                      <p className="font-medium">{formatPriceWithCurrency(item.netto)}</p>
+                      <p className="font-medium">{formatPriceWithCurrency(item.netto * (item.quantity || 1))}</p>
                     </div>
                   </div>
                 </div>
@@ -1004,6 +1032,437 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           {formData.offerItems.length === 0 && editingItemIndex === -1 && (
             <div className="text-center py-8 text-gray-500">
               <p>No items added yet. Click "Add Item" to start adding karoseri and chassis combinations.</p>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* Offer Items - Service Type */}
+      {formData.lineOfBusiness?.type === 'service' && (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Service Items</h3>
+          <button
+            type="button"
+            onClick={() => setAddingServiceItem(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Service
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          {formData.offerItems.map((item, itemIndex) => (
+            editingItemIndex === itemIndex ? (
+              <div key={itemIndex} className="border-2 border-blue-500 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Name *</label>
+                    <input
+                      type="text"
+                      value={item.serviceName || ''}
+                      onChange={(e) => {
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { ...updated[itemIndex], serviceName: e.target.value };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter service name"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Details</label>
+                    <div className="space-y-2">
+                      {(item.serviceDetails || []).map((detail, detailIndex) => (
+                        <div key={detailIndex} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={detail}
+                            onChange={(e) => {
+                              const updated = [...formData.offerItems];
+                              updated[itemIndex].serviceDetails[detailIndex] = e.target.value;
+                              setFormData(prev => ({ ...prev, offerItems: updated }));
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter service detail"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...formData.offerItems];
+                              updated[itemIndex].serviceDetails = updated[itemIndex].serviceDetails.filter((_, i) => i !== detailIndex);
+                              setFormData(prev => ({ ...prev, offerItems: updated }));
+                            }}
+                            className="px-3 py-2 text-red-600 hover:text-red-800"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...formData.offerItems];
+                          updated[itemIndex].serviceDetails = [...(updated[itemIndex].serviceDetails || []), ''];
+                          setFormData(prev => ({ ...prev, offerItems: updated }));
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        + Add Detail
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price *</label>
+                    <PriceInput
+                      value={item.price || 0}
+                      onChange={(price) => {
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { 
+                          ...updated[itemIndex], 
+                          price: price,
+                          netto: price * 0.91
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea
+                      value={item.notes || ''}
+                      onChange={(e) => {
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { ...updated[itemIndex], notes: e.target.value };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Optional notes"
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemIndex(-1)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItemIndex(-1);
+                        toast.success('Service item saved');
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div key={itemIndex} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{item.serviceName || 'Untitled Service'}</h4>
+                    {item.serviceDetails && item.serviceDetails.length > 0 && (
+                      <ul className="list-disc list-inside text-sm text-gray-600 mt-1">
+                        {item.serviceDetails.map((detail, idx) => (
+                          <li key={idx}>{detail}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Price</p>
+                      <p className="font-medium">{formatPriceWithCurrency(item.price || 0)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemIndex(itemIndex)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteOfferItem(itemIndex)}
+                      className="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          ))}
+          
+          {addingServiceItem && (
+            <div className="border-2 border-blue-500 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Name *</label>
+                  <input
+                    type="text"
+                    value={newServiceName}
+                    onChange={(e) => setNewServiceName(e.target.value)}
+                    onBlur={() => {
+                      if (newServiceName.trim()) {
+                        const newItem = {
+                          serviceName: newServiceName.trim(),
+                          serviceDetails: [],
+                          price: 0,
+                          netto: 0,
+                          notes: '',
+                          quantity: 1,
+                          itemNumber: formData.offerItems.length + 1
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: [...prev.offerItems, newItem] }));
+                        setAddingServiceItem(false);
+                        setEditingItemIndex(formData.offerItems.length);
+                        setNewServiceName('');
+                      }
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && newServiceName.trim()) {
+                        const newItem = {
+                          serviceName: newServiceName.trim(),
+                          serviceDetails: [],
+                          price: 0,
+                          netto: 0,
+                          notes: '',
+                          quantity: 1,
+                          itemNumber: formData.offerItems.length + 1
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: [...prev.offerItems, newItem] }));
+                        setAddingServiceItem(false);
+                        setEditingItemIndex(formData.offerItems.length);
+                        setNewServiceName('');
+                        e.preventDefault();
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter service name"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {formData.offerItems.length === 0 && editingItemIndex === -1 && !addingServiceItem && (
+            <div className="text-center py-8 text-gray-500">
+              <p>No service items added yet. Click "Add Service" to start.</p>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* Offer Items - Sparepart Type */}
+      {formData.lineOfBusiness?.type === 'sparepart' && (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Sparepart Items</h3>
+          <button
+            type="button"
+            onClick={() => setAddingSparepartItem(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Sparepart
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          {formData.offerItems.map((item, itemIndex) => (
+            editingItemIndex === itemIndex ? (
+              <div key={itemIndex} className="border-2 border-blue-500 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sparepart Name *</label>
+                    <input
+                      type="text"
+                      value={item.sparepartName || ''}
+                      onChange={(e) => {
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { ...updated[itemIndex], sparepartName: e.target.value };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter sparepart name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity || 1}
+                      onChange={(e) => {
+                        const qty = parseInt(e.target.value) || 1;
+                        const pricePerUnit = item.pricePerUnit || 0;
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { 
+                          ...updated[itemIndex], 
+                          quantity: qty,
+                          price: qty * pricePerUnit,
+                          netto: qty * pricePerUnit * 0.91
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Unit *</label>
+                    <PriceInput
+                      value={item.pricePerUnit || 0}
+                      onChange={(price) => {
+                        const qty = item.quantity || 1;
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { 
+                          ...updated[itemIndex], 
+                          pricePerUnit: price,
+                          price: qty * price,
+                          netto: qty * price * 0.91
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea
+                      value={item.notes || ''}
+                      onChange={(e) => {
+                        const updated = [...formData.offerItems];
+                        updated[itemIndex] = { ...updated[itemIndex], notes: e.target.value };
+                        setFormData(prev => ({ ...prev, offerItems: updated }));
+                      }}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Optional notes"
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemIndex(-1)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItemIndex(-1);
+                        toast.success('Sparepart item saved');
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div key={itemIndex} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{item.sparepartName || 'Untitled Sparepart'}</h4>
+                    <p className="text-sm text-gray-600">
+                      {item.quantity || 1} unit(s) × {formatPriceWithCurrency(item.pricePerUnit || 0)} = {formatPriceWithCurrency((item.quantity || 1) * (item.pricePerUnit || 0))}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Total</p>
+                      <p className="font-medium">{formatPriceWithCurrency(item.price || 0)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemIndex(itemIndex)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteOfferItem(itemIndex)}
+                      className="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          ))}
+          
+          {addingSparepartItem && (
+            <div className="border-2 border-blue-500 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sparepart Name *</label>
+                  <input
+                    type="text"
+                    value={newSparepartName}
+                    onChange={(e) => setNewSparepartName(e.target.value)}
+                    onBlur={() => {
+                      if (newSparepartName.trim()) {
+                        const newItem = {
+                          sparepartName: newSparepartName.trim(),
+                          quantity: 1,
+                          pricePerUnit: 0,
+                          price: 0,
+                          netto: 0,
+                          notes: '',
+                          itemNumber: formData.offerItems.length + 1
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: [...prev.offerItems, newItem] }));
+                        setAddingSparepartItem(false);
+                        setEditingItemIndex(formData.offerItems.length);
+                        setNewSparepartName('');
+                      }
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && newSparepartName.trim()) {
+                        const newItem = {
+                          sparepartName: newSparepartName.trim(),
+                          quantity: 1,
+                          pricePerUnit: 0,
+                          price: 0,
+                          netto: 0,
+                          notes: '',
+                          itemNumber: formData.offerItems.length + 1
+                        };
+                        setFormData(prev => ({ ...prev, offerItems: [...prev.offerItems, newItem] }));
+                        setAddingSparepartItem(false);
+                        setEditingItemIndex(formData.offerItems.length);
+                        setNewSparepartName('');
+                        e.preventDefault();
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter sparepart name"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {formData.offerItems.length === 0 && editingItemIndex === -1 && !addingSparepartItem && (
+            <div className="text-center py-8 text-gray-500">
+              <p>No sparepart items added yet. Click "Add Sparepart" to start.</p>
             </div>
           )}
         </div>
@@ -1371,7 +1830,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         </div>
                         <div>
                           <span className="font-medium text-gray-700">Chassis:</span>
-                          <span className="ml-2 text-gray-900">{item.chassis}</span>
+                          <span className="ml-2 text-gray-900">{item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</span>
                         </div>
                       </div>
 

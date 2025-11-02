@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
+import PriceInput from '../common/PriceInput';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/api/ApiHelper';
 
@@ -19,7 +20,6 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     priority: 'medium',
     expectedDeliveryDate: '',
     confidenceRate: '',
-    estimatedRevenue: '',
     deliveryLocation: '',
     competitor: '',
     canMake: false,
@@ -27,14 +27,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     lineOfBusiness: {
       type: 'karoseri'
     },
-    items: [],
-    service: {
-      serviceName: '',
-      serviceDetails: []
-    },
-    sparepart: {
-      spareparts: []
-    }
+    items: []
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -56,6 +49,16 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
 
   useEffect(() => {
     if (isOpen && rfqToEdit) {
+      // Deep copy items and migrate old serviceDetail to serviceDetails array
+      const migratedItems = Array.isArray(rfqToEdit.items) ? JSON.parse(JSON.stringify(rfqToEdit.items)).map(item => {
+        // For service items: migrate old serviceDetail to serviceDetails array if needed
+        if (rfqToEdit.lineOfBusiness?.type === 'service' && item.serviceDetail && !Array.isArray(item.serviceDetails)) {
+          item.serviceDetails = [item.serviceDetail];
+          delete item.serviceDetail; // Remove old field
+        }
+        return item;
+      }) : [];
+      
       setFormData({
         approverId: rfqToEdit.approverId?._id || '',
         quotationCreatorId: rfqToEdit.quotationCreatorId?._id || '',
@@ -66,15 +69,12 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: rfqToEdit.priority || 'medium',
         expectedDeliveryDate: rfqToEdit.expectedDeliveryDate ? rfqToEdit.expectedDeliveryDate.substr(0,10) : '',
         confidenceRate: rfqToEdit.confidenceRate || '',
-        estimatedRevenue: rfqToEdit.estimatedRevenue || '',
         deliveryLocation: rfqToEdit.deliveryLocation || '',
         competitor: rfqToEdit.competitor || '',
         canMake: typeof rfqToEdit.canMake === 'boolean' ? rfqToEdit.canMake : false,
         projectOngoing: typeof rfqToEdit.projectOngoing === 'boolean' ? rfqToEdit.projectOngoing : false,
         lineOfBusiness: rfqToEdit.lineOfBusiness || { type: 'karoseri' },
-        items: Array.isArray(rfqToEdit.items) ? JSON.parse(JSON.stringify(rfqToEdit.items)) : [],
-        service: rfqToEdit.lineOfBusiness?.service || { serviceName: '', serviceDetails: [] },
-        sparepart: rfqToEdit.lineOfBusiness?.sparepart || { spareparts: [] }
+        items: migratedItems
       });
     } else if (isOpen && !rfqToEdit) {
       setFormData({
@@ -83,7 +83,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
-        items: [], service: { serviceName: '', serviceDetails: [] }, sparepart: { spareparts: [] }
+        items: []
       });
     }
   }, [isOpen, rfqToEdit]);
@@ -92,12 +92,19 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     setLoadingBodyTypes(true);
     try {
       const response = await axiosInstance.get('/api/body-types/list');
-      if (response.data.success) {
-        setBodyTypes(response.data.data);
+      console.log('[RFQ] Body types response:', response.data);
+      if (response.data && response.data.success) {
+        const bodyTypesData = response.data.data || [];
+        setBodyTypes(Array.isArray(bodyTypesData) ? bodyTypesData : []);
+        console.log('[RFQ] Body types set:', bodyTypesData);
+      } else {
+        console.warn('[RFQ] Body types response format unexpected:', response.data);
+        setBodyTypes([]);
       }
     } catch (error) {
       console.error('Error fetching body types:', error);
       toast.error('Failed to load body types');
+      setBodyTypes([]);
     } finally {
       setLoadingBodyTypes(false);
     }
@@ -107,12 +114,19 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     setLoadingChassisTypes(true);
     try {
       const response = await axiosInstance.get('/api/chassis-types/list');
-      if (response.data.success) {
-        setChassisTypes(response.data.data);
+      console.log('[RFQ] Chassis types response:', response.data);
+      if (response.data && response.data.success) {
+        const chassisTypesData = response.data.data || [];
+        setChassisTypes(Array.isArray(chassisTypesData) ? chassisTypesData : []);
+        console.log('[RFQ] Chassis types set:', chassisTypesData);
+      } else {
+        console.warn('[RFQ] Chassis types response format unexpected:', response.data);
+        setChassisTypes([]);
       }
     } catch (error) {
       console.error('Error fetching chassis types:', error);
       toast.error('Failed to load chassis types');
+      setChassisTypes([]);
     } finally {
       setLoadingChassisTypes(false);
     }
@@ -123,13 +137,18 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     try {
       const response = await axiosInstance.get('/api/drawing-specifications');
       console.log('[RFQ] Drawings fetch response:', response.data);
-      if (response.data.success) {
-        setDrawings(response.data.data);
-        console.log('[RFQ] Set drawings:', response.data.data);
+      if (response.data && response.data.success) {
+        const drawingsData = response.data.data || [];
+        setDrawings(Array.isArray(drawingsData) ? drawingsData : []);
+        console.log('[RFQ] Set drawings:', drawingsData);
+      } else {
+        console.warn('[RFQ] Drawings response format unexpected:', response.data);
+        setDrawings([]);
       }
     } catch (error) {
       console.error('Error fetching drawings:', error);
       toast.error('Failed to load drawings');
+      setDrawings([]);
     } finally {
       setLoadingDrawings(false);
     }
@@ -171,18 +190,31 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
 
   // Item management functions
   const addItem = () => {
+    const lineOfBusinessType = formData.lineOfBusiness?.type || 'karoseri';
     const newItem = {
       quantity: 1,
       estimatedRevenue: 0,
-      karoseri: '',
-      chassis: '',
-      chassisTypeId: '',
-      templateMode: 'manual',
-      templateSourceId: '',
-      drawingSpecification: '',
-      specifications: [],
       notes: ''
     };
+    
+    // Type-specific fields
+    if (lineOfBusinessType === 'karoseri') {
+      newItem.karoseri = '';
+      newItem.chassis = '';
+      newItem.chassisModel = '';
+      newItem.chassisTypeId = '';
+      newItem.bodyTypeId = '';
+      newItem.templateMode = 'manual';
+      newItem.templateSourceId = '';
+      newItem.drawingSpecification = '';
+      newItem.specifications = [];
+    } else if (lineOfBusinessType === 'service') {
+      newItem.serviceName = '';
+      newItem.serviceDetails = [''];
+    } else if (lineOfBusinessType === 'sparepart') {
+      newItem.sparepartName = '';
+      newItem.pricePerUnit = 0;
+    }
     setFormData(prev => ({
       ...prev,
       items: [...prev.items, newItem]
@@ -201,6 +233,45 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       ...prev,
       items: prev.items.map((item, i) => 
         i === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  // Service details management functions
+  const addServiceDetail = (itemIndex) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === itemIndex 
+          ? { ...item, serviceDetails: [...(item.serviceDetails || []), ''] }
+          : item
+      )
+    }));
+  };
+
+  const removeServiceDetail = (itemIndex, detailIndex) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === itemIndex 
+          ? { ...item, serviceDetails: item.serviceDetails.filter((_, di) => di !== detailIndex) }
+          : item
+      )
+    }));
+  };
+
+  const updateServiceDetail = (itemIndex, detailIndex, value) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === itemIndex 
+          ? {
+              ...item,
+              serviceDetails: item.serviceDetails.map((detail, di) => 
+                di === detailIndex ? value : detail
+              )
+            }
+          : item
       )
     }));
   };
@@ -311,75 +382,6 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     }));
   };
 
-  // Service management functions
-  const addServiceDetail = () => {
-    setFormData(prev => ({
-      ...prev,
-      service: {
-        ...prev.service,
-        serviceDetails: [...(prev.service.serviceDetails || []), '']
-      }
-    }));
-  };
-
-  const removeServiceDetail = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      service: {
-        ...prev.service,
-        serviceDetails: (prev.service.serviceDetails || []).filter((_, i) => i !== index)
-      }
-    }));
-  };
-
-  const updateServiceDetail = (index, value) => {
-    setFormData(prev => {
-      const newDetails = [...(prev.service.serviceDetails || [])];
-      newDetails[index] = value;
-      return {
-        ...prev,
-        service: {
-          ...prev.service,
-          serviceDetails: newDetails
-        }
-      };
-    });
-  };
-
-  // Sparepart management functions
-  const addSparepart = () => {
-    setFormData(prev => ({
-      ...prev,
-      sparepart: {
-        ...prev.sparepart,
-        spareparts: [...(prev.sparepart.spareparts || []), { sparepartName: '', quantity: 1 }]
-      }
-    }));
-  };
-
-  const removeSparepart = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      sparepart: {
-        ...prev.sparepart,
-        spareparts: (prev.sparepart.spareparts || []).filter((_, i) => i !== index)
-      }
-    }));
-  };
-
-  const updateSparepart = (index, field, value) => {
-    setFormData(prev => {
-      const newSpareparts = [...(prev.sparepart.spareparts || [])];
-      newSpareparts[index] = { ...newSpareparts[index], [field]: value };
-      return {
-        ...prev,
-        sparepart: {
-          ...prev.sparepart,
-          spareparts: newSpareparts
-        }
-      };
-    });
-  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -406,11 +408,6 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     
     if (formData.confidenceRate && !Number.isInteger(parseFloat(formData.confidenceRate))) {
       newErrors.confidenceRate = 'Confidence rate must be an integer';
-    }
-    
-    // Validate estimated revenue
-    if (!formData.estimatedRevenue || formData.estimatedRevenue < 0) {
-      newErrors.estimatedRevenue = 'Estimated revenue is required and must be greater than or equal to 0';
     }
     
     if (!formData.deliveryLocation.trim()) {
@@ -444,8 +441,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           newErrors[`items.${index}.quantity`] = 'Quantity must be at least 1';
         }
         
-        // Estimated Revenue is required
-        if (!item.estimatedRevenue || item.estimatedRevenue < 0) {
+        // Estimated Revenue is required (0 is a valid value)
+        const estimatedRev = item.estimatedRevenue;
+        if (estimatedRev === undefined || estimatedRev === null || estimatedRev === '' || 
+            isNaN(estimatedRev) || (typeof estimatedRev === 'number' && estimatedRev < 0)) {
           newErrors[`items.${index}.estimatedRevenue`] = 'Estimated revenue is required and must be >= 0';
         }
         
@@ -480,26 +479,47 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         }
       });
     } else if (lineOfBusinessType === 'service') {
-      if (!formData.service.serviceName || !formData.service.serviceName.trim()) {
-        newErrors['service.serviceName'] = 'Service name is required';
-      }
-    } else if (lineOfBusinessType === 'sparepart') {
-      if (!formData.sparepart.spareparts || formData.sparepart.spareparts.length === 0) {
-        newErrors['sparepart.spareparts'] = 'At least one sparepart is required';
+      // Validate service items
+      if (!formData.items || formData.items.length === 0) {
+        newErrors['items'] = 'At least one service item is required';
       }
       
-      // Validate each sparepart
-      formData.sparepart.spareparts.forEach((sparepart, index) => {
-        if (!sparepart.sparepartName || !sparepart.sparepartName.trim()) {
-          newErrors[`sparepart.${index}.sparepartName`] = 'Sparepart name is required';
+      formData.items.forEach((item, index) => {
+        if (!item.serviceName || !item.serviceName.trim()) {
+          newErrors[`items.${index}.serviceName`] = 'Service name is required';
         }
-        if (!sparepart.quantity || sparepart.quantity < 1) {
-          newErrors[`sparepart.${index}.quantity`] = 'Quantity must be at least 1';
+        if (item.estimatedRevenue === undefined || item.estimatedRevenue === null || 
+            isNaN(parseFloat(item.estimatedRevenue)) || parseFloat(item.estimatedRevenue) < 0) {
+          newErrors[`items.${index}.estimatedRevenue`] = 'Each service item must have an estimated revenue >= 0';
+        }
+      });
+    } else if (lineOfBusinessType === 'sparepart') {
+      // Validate sparepart items
+      if (!formData.items || formData.items.length === 0) {
+        newErrors['items'] = 'At least one sparepart item is required';
+      }
+      
+      formData.items.forEach((item, index) => {
+        if (!item.sparepartName || !item.sparepartName.trim()) {
+          newErrors[`items.${index}.sparepartName`] = 'Sparepart name is required';
+        }
+        if (!item.quantity || item.quantity < 1) {
+          newErrors[`items.${index}.quantity`] = 'Quantity must be at least 1';
+        }
+        if (item.pricePerUnit === undefined || item.pricePerUnit === null || 
+            isNaN(parseFloat(item.pricePerUnit)) || parseFloat(item.pricePerUnit) < 0) {
+          newErrors[`items.${index}.pricePerUnit`] = 'Price per unit is required and must be >= 0';
         }
       });
     }
     
     setErrors(newErrors);
+    
+    // Debug: Log validation errors if any
+    if (Object.keys(newErrors).length > 0) {
+      console.log('Validation errors:', newErrors);
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
@@ -517,30 +537,75 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       const lineOfBusinessType = formData.lineOfBusiness?.type || 'karoseri';
       const submitData = { ...formData };
       
+      // Remove estimatedRevenue from RFQ level (it's now only in items)
+      delete submitData.estimatedRevenue;
+      
       // Build lineOfBusiness object for submission
       submitData.lineOfBusiness = {
         type: lineOfBusinessType
       };
       
       if (lineOfBusinessType === 'karoseri') {
-        // Include items array for karoseri
-        submitData.items = formData.items;
+        // For karoseri, extract bodyTypeId and chassisTypeId from first item for RFQ level
+        if (formData.items && formData.items.length > 0) {
+          const firstItem = formData.items[0];
+          
+          // Extract bodyTypeId: use bodyTypeId field if available, otherwise fall back to templateSourceId
+          // For manual and bodyType modes, templateSourceId is the bodyTypeId
+          // For drawing mode, bodyTypeId should be stored separately when drawing is selected
+          let bodyTypeId = firstItem.bodyTypeId || firstItem.templateSourceId;
+          
+          // Extract chassisTypeId from first item
+          const chassisTypeId = firstItem.chassisTypeId;
+          
+          // Validate that both are present
+          if (!bodyTypeId) {
+            throw new Error('Body Type is required. Please select a body type for the first item.');
+          }
+          if (!chassisTypeId) {
+            throw new Error('Chassis Type is required. Please select a chassis type for the first item.');
+          }
+          
+          // Set at RFQ level (required by backend)
+          submitData.bodyTypeId = bodyTypeId;
+          submitData.chassisTypeId = chassisTypeId;
+        }
+        
+        // Clean up items: for manual mode, remove templateSourceId as it's not needed by backend
+        submitData.items = formData.items.map(item => {
+          const cleanedItem = { ...item };
+          
+          // For manual mode, backend doesn't need templateSourceId (it uses karoseri and chassis strings)
+          if (item.templateMode === 'manual') {
+            // Remove templateSourceId and bodyTypeId from item data (they're only used at RFQ level)
+            delete cleanedItem.templateSourceId;
+            delete cleanedItem.bodyTypeId;
+          } else {
+            // For bodyType and drawing modes, templateSourceId is the template reference
+            // Remove bodyTypeId as it's only needed for RFQ-level extraction
+            delete cleanedItem.bodyTypeId;
+          }
+          
+          return cleanedItem;
+        });
       } else if (lineOfBusinessType === 'service') {
-        submitData.lineOfBusiness.service = {
-          serviceName: formData.service.serviceName.trim(),
-          serviceDetails: (formData.service.serviceDetails || []).map(d => d.trim()).filter(d => d)
-        };
-        // Don't include items for service
-        delete submitData.items;
+        // Service items are already in submitData.items, just clean them up
+        submitData.items = formData.items.map(item => ({
+          serviceName: item.serviceName.trim(),
+          serviceDetails: Array.isArray(item.serviceDetails) ? item.serviceDetails.map(d => d.trim()).filter(d => d) : [],
+          quantity: parseInt(item.quantity) || 1,
+          estimatedRevenue: parseFloat(item.estimatedRevenue) || 0,
+          notes: item.notes?.trim() || ''
+        }));
       } else if (lineOfBusinessType === 'sparepart') {
-        submitData.lineOfBusiness.sparepart = {
-          spareparts: formData.sparepart.spareparts.map(sp => ({
-            sparepartName: sp.sparepartName.trim(),
-            quantity: parseInt(sp.quantity)
-          }))
-        };
-        // Don't include items for sparepart
-        delete submitData.items;
+        // Sparepart items are already in submitData.items, calculate estimated revenue
+        submitData.items = formData.items.map(item => ({
+          sparepartName: item.sparepartName.trim(),
+          quantity: parseInt(item.quantity) || 1,
+          pricePerUnit: parseFloat(item.pricePerUnit) || 0,
+          estimatedRevenue: (parseInt(item.quantity) || 1) * (parseFloat(item.pricePerUnit) || 0),
+          notes: item.notes?.trim() || ''
+        }));
       }
 
       await onSubmit(submitData);
@@ -551,7 +616,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
-        items: [], service: { serviceName: '', serviceDetails: [] }, sparepart: { spareparts: [] }
+        items: []
       });
       setErrors({});
     } catch (error) {
@@ -569,7 +634,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
-        items: [], service: { serviceName: '', serviceDetails: [] }, sparepart: { spareparts: [] }
+        items: []
       });
       setErrors({});
       onClose();
@@ -971,12 +1036,23 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                     ]}
                     value={item.templateMode || 'manual'}
                     onChange={(value) => {
+                      // Preserve estimatedRevenue and quantity when switching template modes
+                      const currentEstimatedRevenue = item.estimatedRevenue !== undefined && item.estimatedRevenue !== null ? item.estimatedRevenue : 0;
+                      const currentQuantity = item.quantity || 1;
+                      
                       updateItem(itemIndex, 'templateMode', value);
                       updateItem(itemIndex, 'karoseri', '');
                       updateItem(itemIndex, 'chassis', '');
+                      updateItem(itemIndex, 'chassisModel', '');
                       updateItem(itemIndex, 'templateSourceId', '');
+                      updateItem(itemIndex, 'bodyTypeId', '');
+                      updateItem(itemIndex, 'chassisTypeId', '');
                       updateItem(itemIndex, 'drawingSpecification', '');
                       updateItem(itemIndex, 'specifications', []);
+                      
+                      // Ensure estimatedRevenue and quantity are preserved
+                      updateItem(itemIndex, 'estimatedRevenue', currentEstimatedRevenue);
+                      updateItem(itemIndex, 'quantity', currentQuantity);
                     }}
                     placeholder="Select specification source"
                     disabled={loading}
@@ -1023,11 +1099,32 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                     </label>
                     <input
                       type="text"
-                      value={item.estimatedRevenue ? new Intl.NumberFormat('id-ID').format(item.estimatedRevenue) : ''}
+                      value={(item.estimatedRevenue !== undefined && item.estimatedRevenue !== null && item.estimatedRevenue !== '') 
+                        ? new Intl.NumberFormat('id-ID').format(item.estimatedRevenue) 
+                        : ''}
                       onChange={(e) => {
                         const rawValue = e.target.value.replace(/\./g, '');
-                        const numValue = parseFloat(rawValue) || 0;
-                        updateItem(itemIndex, 'estimatedRevenue', numValue);
+                        // If empty, set to empty string (will be handled on blur)
+                        if (rawValue === '') {
+                          updateItem(itemIndex, 'estimatedRevenue', '');
+                        } else {
+                          const numValue = parseFloat(rawValue);
+                          // Only update if it's a valid number
+                          if (!isNaN(numValue)) {
+                            updateItem(itemIndex, 'estimatedRevenue', numValue);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Ensure value is always a number (default to 0 if empty/invalid)
+                        const currentValue = item.estimatedRevenue;
+                        if (currentValue === undefined || currentValue === null || currentValue === '' || isNaN(currentValue)) {
+                          updateItem(itemIndex, 'estimatedRevenue', 0);
+                        } else {
+                          // Ensure it's a number (in case it's a string)
+                          const numValue = typeof currentValue === 'string' ? parseFloat(currentValue) || 0 : currentValue;
+                          updateItem(itemIndex, 'estimatedRevenue', Math.max(0, numValue));
+                        }
                       }}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                         errors[`items.${itemIndex}.estimatedRevenue`] ? 'border-red-500' : 'border-gray-300'
@@ -1048,23 +1145,27 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                           Body Type <span className="text-red-500">*</span>
                         </label>
                         <CustomDropdown
-                          options={bodyTypes.map(bt => ({
+                          options={Array.isArray(bodyTypes) ? bodyTypes.map(bt => ({
                             value: bt._id,
-                            label: `${bt.name} (${bt.shortName})`
-                          }))}
+                            label: `${bt.name || ''} (${bt.shortName || ''})`
+                          })) : []}
                           value={item.templateSourceId || ''}
                           onChange={(value) => {
                             updateItem(itemIndex, 'templateSourceId', value);
-                            const selectedBodyType = bodyTypes.find(bt => bt._id === value);
+                            updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                            const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
                             if (selectedBodyType) {
                               updateItem(itemIndex, 'karoseri', selectedBodyType.name);
                             }
                           }}
-                          placeholder="Select body type"
+                          placeholder={loadingBodyTypes ? "Loading body types..." : "Select body type"}
                           disabled={loading || loadingBodyTypes}
                         />
                         {errors[`items.${itemIndex}.templateSourceId`] && (
                           <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.templateSourceId`]}</p>
+                        )}
+                        {!loadingBodyTypes && Array.isArray(bodyTypes) && bodyTypes.length === 0 && (
+                          <p className="mt-1 text-xs text-yellow-600">No body types available. Please create body types first.</p>
                         )}
                       </div>
                       
@@ -1073,24 +1174,44 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                           Chassis Type <span className="text-red-500">*</span>
                         </label>
                         <CustomDropdown
-                          options={chassisTypes.map(ct => ({
+                          options={Array.isArray(chassisTypes) ? chassisTypes.map(ct => ({
                             value: ct._id,
-                            label: `${ct.name} (${ct.shortName})`
-                          }))}
+                            label: `${ct.name || ''} (${ct.shortName || ''})`
+                          })) : []}
                           value={item.chassisTypeId || ''}
                           onChange={(value) => {
                             updateItem(itemIndex, 'chassisTypeId', value);
-                            const selectedChassisType = chassisTypes.find(ct => ct._id === value);
+                            const selectedChassisType = Array.isArray(chassisTypes) ? chassisTypes.find(ct => ct._id === value) : null;
                             if (selectedChassisType) {
                               updateItem(itemIndex, 'chassis', selectedChassisType.name);
                             }
                           }}
-                          placeholder="Select chassis type"
+                          placeholder={loadingChassisTypes ? "Loading chassis types..." : "Select chassis type"}
                           disabled={loading || loadingChassisTypes}
                         />
                         {errors[`items.${itemIndex}.chassis`] && (
                           <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.chassis`]}</p>
                         )}
+                        {!loadingChassisTypes && Array.isArray(chassisTypes) && chassisTypes.length === 0 && (
+                          <p className="mt-1 text-xs text-yellow-600">No chassis types available. Please create chassis types first.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={item.chassisModel || ''}
+                          onChange={(e) => updateItem(itemIndex, 'chassisModel', e.target.value)}
+                          placeholder="e.g., Dutro 500, Hino 200, etc."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled={loading}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Specify the specific chassis model if needed (e.g., "Dutro 500")
+                        </p>
                       </div>
                     </>
                   )}
@@ -1102,24 +1223,31 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                         Body Type <span className="text-red-500">*</span>
                       </label>
                       <CustomDropdown
-                        options={bodyTypes.map(bt => ({
+                        options={Array.isArray(bodyTypes) ? bodyTypes.map(bt => ({
                           value: bt._id,
-                          label: `${bt.name} (${bt.shortName})`
-                        }))}
+                          label: `${bt.name || ''} (${bt.shortName || ''})`
+                        })) : []}
                         value={item.templateSourceId || ''}
                         onChange={(value) => {
                           updateItem(itemIndex, 'templateSourceId', value);
-                          const selectedBodyType = bodyTypes.find(bt => bt._id === value);
-                          if (selectedBodyType && selectedBodyType.defaultSpecifications) {
-                            updateItem(itemIndex, 'specifications', selectedBodyType.defaultSpecifications);
-                            toast.success('Body type specifications loaded!');
+                          updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                          const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
+                          if (selectedBodyType) {
+                            updateItem(itemIndex, 'karoseri', selectedBodyType.name || '');
+                            if (selectedBodyType.defaultSpecifications) {
+                              updateItem(itemIndex, 'specifications', selectedBodyType.defaultSpecifications);
+                              toast.success('Body type specifications loaded!');
+                            }
                           }
                         }}
-                        placeholder="Select body type"
+                        placeholder={loadingBodyTypes ? "Loading body types..." : "Select body type"}
                         disabled={loading || loadingBodyTypes}
                       />
                       {errors[`items.${itemIndex}.templateSourceId`] && (
                         <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.templateSourceId`]}</p>
+                      )}
+                      {!loadingBodyTypes && Array.isArray(bodyTypes) && bodyTypes.length === 0 && (
+                        <p className="mt-1 text-xs text-yellow-600">No body types available. Please create body types first.</p>
                       )}
                     </div>
                   )}
@@ -1131,32 +1259,44 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                         Drawing <span className="text-red-500">*</span>
                       </label>
                       <CustomDropdown
-                        options={drawings.map(d => {
+                        options={Array.isArray(drawings) ? drawings.map(d => {
                           const bodyTypeName = d.bodyTypeId?.name || 'Unknown Body';
                           const chassisTypeName = d.chassisTypeId?.name || 'Unknown Chassis';
                           return {
                             value: d._id,
-                            label: `${d.drawingNumber || `Drawing ${d._id.substring(0, 8)}`} (${bodyTypeName} / ${chassisTypeName})`
+                            label: `${d.drawingNumber || `Drawing ${d._id?.substring(0, 8) || 'Unknown'}`} (${bodyTypeName} / ${chassisTypeName})`
                           };
-                        })}
+                        }) : []}
                         value={item.templateSourceId || ''}
                         onChange={(value) => {
                           console.log('[RFQ Drawing Selection] Selected value:', value);
                           updateItem(itemIndex, 'templateSourceId', value);
                           updateItem(itemIndex, 'drawingSpecification', value);
-                          const selectedDrawing = drawings.find(d => d._id === value);
+                          const selectedDrawing = Array.isArray(drawings) ? drawings.find(d => d._id === value) : null;
                           console.log('[RFQ Drawing Selection] Found drawing:', selectedDrawing);
                           if (selectedDrawing) {
-                            // Populate body type
+                            // Populate body type - store both ID and name
                             if (selectedDrawing.bodyTypeId) {
                               console.log('[RFQ Drawing Selection] Body Type:', selectedDrawing.bodyTypeId);
+                              const bodyTypeId = typeof selectedDrawing.bodyTypeId === 'object' 
+                                ? selectedDrawing.bodyTypeId._id || selectedDrawing.bodyTypeId 
+                                : selectedDrawing.bodyTypeId;
+                              updateItem(itemIndex, 'bodyTypeId', bodyTypeId);
                               updateItem(itemIndex, 'karoseri', selectedDrawing.bodyTypeId?.name || '');
                             }
                             // Populate chassis type
                             if (selectedDrawing.chassisTypeId) {
                               console.log('[RFQ Drawing Selection] Chassis Type:', selectedDrawing.chassisTypeId);
-                              updateItem(itemIndex, 'chassisTypeId', selectedDrawing.chassisTypeId._id);
+                              const chassisTypeId = typeof selectedDrawing.chassisTypeId === 'object'
+                                ? selectedDrawing.chassisTypeId._id || selectedDrawing.chassisTypeId
+                                : selectedDrawing.chassisTypeId;
+                              updateItem(itemIndex, 'chassisTypeId', chassisTypeId);
                               updateItem(itemIndex, 'chassis', selectedDrawing.chassisTypeId?.name || '');
+                            }
+                            // Populate chassis model if available
+                            if (selectedDrawing.chassisModel) {
+                              console.log('[RFQ Drawing Selection] Chassis Model:', selectedDrawing.chassisModel);
+                              updateItem(itemIndex, 'chassisModel', selectedDrawing.chassisModel);
                             }
                             // Populate specifications
                             if (selectedDrawing.customSpecifications) {
@@ -1195,7 +1335,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                         Chassis Type (from drawing)
                       </label>
                       <div className="text-sm text-green-900 font-medium">
-                        {item.chassis || 'Loading...'}
+                        {item.chassis || 'Loading...'} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                       </div>
                     </div>
                     <div className="col-span-2">
@@ -1208,29 +1348,51 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
 
                 {/* Show chassis field for bodyType mode */}
                 {item.templateMode === 'bodyType' && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Chassis Type <span className="text-red-500">*</span>
-                    </label>
-                    <CustomDropdown
-                      options={chassisTypes.map(ct => ({
-                        value: ct._id,
-                        label: `${ct.name} (${ct.shortName})`
-                      }))}
-                      value={item.chassisTypeId || ''}
-                      onChange={(value) => {
-                        updateItem(itemIndex, 'chassisTypeId', value);
-                        const selectedChassisType = chassisTypes.find(ct => ct._id === value);
-                        if (selectedChassisType) {
-                          updateItem(itemIndex, 'chassis', selectedChassisType.name);
-                        }
-                      }}
-                      placeholder="Select chassis type"
-                      disabled={loading || loadingChassisTypes}
-                    />
-                    {errors[`items.${itemIndex}.chassis`] && (
-                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.chassis`]}</p>
-                    )}
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chassis Type <span className="text-red-500">*</span>
+                      </label>
+                      <CustomDropdown
+                        options={Array.isArray(chassisTypes) ? chassisTypes.map(ct => ({
+                          value: ct._id,
+                          label: `${ct.name || ''} (${ct.shortName || ''})`
+                        })) : []}
+                        value={item.chassisTypeId || ''}
+                        onChange={(value) => {
+                          updateItem(itemIndex, 'chassisTypeId', value);
+                          const selectedChassisType = Array.isArray(chassisTypes) ? chassisTypes.find(ct => ct._id === value) : null;
+                          if (selectedChassisType) {
+                            updateItem(itemIndex, 'chassis', selectedChassisType.name);
+                          }
+                        }}
+                        placeholder={loadingChassisTypes ? "Loading chassis types..." : "Select chassis type"}
+                        disabled={loading || loadingChassisTypes}
+                      />
+                      {errors[`items.${itemIndex}.chassis`] && (
+                        <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.chassis`]}</p>
+                      )}
+                      {!loadingChassisTypes && Array.isArray(chassisTypes) && chassisTypes.length === 0 && (
+                        <p className="mt-1 text-xs text-yellow-600">No chassis types available. Please create chassis types first.</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={item.chassisModel || ''}
+                        onChange={(e) => updateItem(itemIndex, 'chassisModel', e.target.value)}
+                        placeholder="e.g., Dutro 500, Hino 200, etc."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        disabled={loading}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Specify the specific chassis model if needed (e.g., "Dutro 500")
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1335,104 +1497,183 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         )}
         </div>
 
-        {/* Service Form */}
+        {/* Service Form - Unified Items Structure */}
         {formData.lineOfBusiness?.type === 'service' && (
           <div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.service.serviceName}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  service: { ...prev.service, serviceName: e.target.value }
-                }))}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors['service.serviceName'] ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Enter service name"
-                disabled={loading}
-              />
-              {errors['service.serviceName'] && (
-                <p className="mt-1 text-sm text-red-600">{errors['service.serviceName']}</p>
-              )}
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Service Details
-                </label>
-                <button
-                  type="button"
-                  onClick={addServiceDetail}
-                  className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Detail
-                </button>
-              </div>
-              
-              {formData.service.serviceDetails.map((detail, index) => (
-                <div key={index} className="flex items-center gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={detail}
-                    onChange={(e) => updateServiceDetail(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter service detail (e.g., inspection, maintenance)"
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeServiceDetail(index)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-              
-              {formData.service.serviceDetails.length === 0 && (
-                <p className="text-sm text-gray-500">No service details added yet</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Sparepart Form */}
-        {formData.lineOfBusiness?.type === 'sparepart' && (
-          <div>
             <div className="flex items-center justify-between mb-4">
-              <label className="block text-sm font-medium text-gray-700">
-                Spareparts <span className="text-red-500">*</span>
-              </label>
+              <h3 className="text-lg font-semibold text-gray-900">Service Items</h3>
               <button
                 type="button"
-                onClick={addSparepart}
-                className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                onClick={addItem}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
               >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Sparepart
+                <Plus className="h-4 w-4 mr-2" />
+                Add Service Item
               </button>
             </div>
             
-            {errors['sparepart.spareparts'] && (
-              <p className="mb-2 text-sm text-red-600">{errors['sparepart.spareparts']}</p>
+            {formData.items.length === 0 && (
+              <p className="text-sm text-gray-500 mb-4">No service items added yet. Click "Add Service Item" to add one.</p>
             )}
             
-            {formData.sparepart.spareparts.map((sparepart, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4 mb-4">
+            {formData.items.map((item, itemIndex) => (
+              <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-medium text-gray-900">Sparepart {index + 1}</h4>
+                  <h4 className="text-md font-medium text-gray-900">Service Item {itemIndex + 1}</h4>
                   <button
                     type="button"
-                    onClick={() => removeSparepart(index)}
+                    onClick={() => removeItem(itemIndex)}
                     className="text-red-600 hover:text-red-800"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Service Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={item.serviceName || ''}
+                      onChange={(e) => updateItem(itemIndex, 'serviceName', e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors[`items.${itemIndex}.serviceName`] ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter service name"
+                      disabled={loading}
+                    />
+                    {errors[`items.${itemIndex}.serviceName`] && (
+                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.serviceName`]}</p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="number"
+                      value={item.quantity || 1}
+                      onChange={(e) => updateItem(itemIndex, 'quantity', parseInt(e.target.value) || 1)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1"
+                      disabled={loading}
+                      min="1"
+                      step="1"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Service Details
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => addServiceDetail(itemIndex)}
+                        className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Detail
+                      </button>
+                    </div>
+                    
+                    {/* Service Details List */}
+                    {Array.isArray(item.serviceDetails) && item.serviceDetails.length > 0 ? (
+                      <div className="space-y-2">
+                        {item.serviceDetails.map((detail, detailIndex) => (
+                          <div key={detailIndex} className="flex items-start space-x-2">
+                            <input
+                              type="text"
+                              value={detail || ''}
+                              onChange={(e) => updateServiceDetail(itemIndex, detailIndex, e.target.value)}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Enter service detail"
+                              disabled={loading}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeServiceDetail(itemIndex, detailIndex)}
+                              className="text-red-600 hover:text-red-800 p-2"
+                              disabled={loading}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 mb-2">No service details added yet. Click "Add Detail" to add one.</p>
+                    )}
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Estimated Revenue <span className="text-red-500">*</span>
+                    </label>
+                    <div className={errors[`items.${itemIndex}.estimatedRevenue`] ? 'border-2 border-red-500 rounded-md' : ''}>
+                      <PriceInput
+                        value={item.estimatedRevenue || 0}
+                        onChange={(price) => updateItem(itemIndex, 'estimatedRevenue', price)}
+                        placeholder="Enter estimated revenue"
+                        disabled={loading}
+                      />
+                    </div>
+                    {errors[`items.${itemIndex}.estimatedRevenue`] && (
+                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.estimatedRevenue`]}</p>
+                    )}
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      value={item.notes || ''}
+                      onChange={(e) => updateItem(itemIndex, 'notes', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter item notes"
+                      disabled={loading}
+                      rows="2"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Sparepart Form - Unified Items Structure */}
+        {formData.lineOfBusiness?.type === 'sparepart' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Sparepart Items</h3>
+              <button
+                type="button"
+                onClick={addItem}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Sparepart Item
+              </button>
+            </div>
+            
+            {formData.items.length === 0 && (
+              <p className="text-sm text-gray-500 mb-4">No sparepart items added yet. Click "Add Sparepart Item" to add one.</p>
+            )}
+            
+            {formData.items.map((item, itemIndex) => (
+              <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-md font-medium text-gray-900">Sparepart Item {itemIndex + 1}</h4>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(itemIndex)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
                 
@@ -1443,16 +1684,16 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                     </label>
                     <input
                       type="text"
-                      value={sparepart.sparepartName}
-                      onChange={(e) => updateSparepart(index, 'sparepartName', e.target.value)}
+                      value={item.sparepartName || ''}
+                      onChange={(e) => updateItem(itemIndex, 'sparepartName', e.target.value)}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors[`sparepart.${index}.sparepartName`] ? 'border-red-500' : 'border-gray-300'
+                        errors[`items.${itemIndex}.sparepartName`] ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="Enter sparepart name"
                       disabled={loading}
                     />
-                    {errors[`sparepart.${index}.sparepartName`] && (
-                      <p className="mt-1 text-sm text-red-600">{errors[`sparepart.${index}.sparepartName`]}</p>
+                    {errors[`items.${itemIndex}.sparepartName`] && (
+                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.sparepartName`]}</p>
                     )}
                   </div>
                   
@@ -1462,27 +1703,69 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                     </label>
                     <input
                       type="number"
-                      value={sparepart.quantity || ''}
-                      onChange={(e) => updateSparepart(index, 'quantity', parseInt(e.target.value) || 1)}
+                      value={item.quantity || ''}
+                      onChange={(e) => updateItem(itemIndex, 'quantity', parseInt(e.target.value) || 1)}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors[`sparepart.${index}.quantity`] ? 'border-red-500' : 'border-gray-300'
+                        errors[`items.${itemIndex}.quantity`] ? 'border-red-500' : 'border-gray-300'
                       }`}
                       placeholder="Enter quantity"
                       disabled={loading}
                       min="1"
                       step="1"
                     />
-                    {errors[`sparepart.${index}.quantity`] && (
-                      <p className="mt-1 text-sm text-red-600">{errors[`sparepart.${index}.quantity`]}</p>
+                    {errors[`items.${itemIndex}.quantity`] && (
+                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.quantity`]}</p>
                     )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Price Per Unit <span className="text-red-500">*</span>
+                    </label>
+                    <div className={errors[`items.${itemIndex}.pricePerUnit`] ? 'border-2 border-red-500 rounded-md' : ''}>
+                      <PriceInput
+                        value={item.pricePerUnit || 0}
+                        onChange={(price) => {
+                          const qty = parseInt(item.quantity) || 1;
+                          updateItem(itemIndex, 'pricePerUnit', price);
+                          updateItem(itemIndex, 'estimatedRevenue', price * qty);
+                        }}
+                        placeholder="Enter price per unit"
+                        disabled={loading}
+                      />
+                    </div>
+                    {errors[`items.${itemIndex}.pricePerUnit`] && (
+                      <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.pricePerUnit`]}</p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total (Auto-calculated)
+                    </label>
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700">
+                      {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(
+                        (parseFloat(item.pricePerUnit) || 0) * (parseInt(item.quantity) || 1)
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      value={item.notes || ''}
+                      onChange={(e) => updateItem(itemIndex, 'notes', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter item notes"
+                      disabled={loading}
+                      rows="2"
+                    />
                   </div>
                 </div>
               </div>
             ))}
-            
-            {formData.sparepart.spareparts.length === 0 && (
-              <p className="text-sm text-gray-500">No spareparts added yet</p>
-            )}
           </div>
         )}
 
