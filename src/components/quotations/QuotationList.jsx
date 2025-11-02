@@ -142,10 +142,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       headers.forEach(quotation => {
         const quotationNumber = quotation.header.quotationNumber || quotation.header._id?.toString();
         if (quotationNumber) {
-          // Fetch full header details (populated user fields, customer info, etc.)
-          fetchQuotationHeader(quotationNumber);
-          // Fetch offers
-          fetchQuotationDetails(quotationNumber);
+            // Fetch full header details (populated user fields, customer info, etc.)
+            fetchQuotationHeader(quotationNumber);
+            // Fetch offers
+            fetchQuotationDetails(quotationNumber);
         }
       });
     } catch (error) {
@@ -940,6 +940,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 <div className="space-y-3">
                 <div className="flex items-center flex-wrap gap-3">
                     <h3 className="text-xl font-bold text-gray-900">{header.quotationNumber}</h3>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    header.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                    header.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
+                    header.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {header.lineOfBusiness?.type?.charAt(0).toUpperCase() + header.lineOfBusiness?.type?.slice(1) || 'Karoseri'}
+                  </span>
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                     statusClassMap[header.status?.type] || 'bg-gray-100 text-gray-800'
                   }`}>
@@ -1809,7 +1817,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                           />
                           <div className="flex-1">
                             <div className="text-sm font-medium text-gray-900">
-                              Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis}
+                              Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                             </div>
                             <div className="text-xs text-gray-500">
                               {formatPriceWithCurrency(item.netto)}

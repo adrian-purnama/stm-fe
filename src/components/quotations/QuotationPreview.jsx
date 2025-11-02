@@ -36,10 +36,13 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       // Create filename based on offer and revision
       let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}`;
       if (offer) {
-        filename += `_Offer_${offer.offerNumber}`;
-      }
-      if (revision) {
-        filename += `_Revision_${revision.revisionNumber || 'R' + (quotationData.offers.find(o => o.original?._id === offer._id)?.revisions?.indexOf(revision) + 1 || 1)}`;
+        if (revision) {
+          // For revisions, use the revision's offer number which already includes -RevX
+          filename += `_Offer_${revision.offerNumber.replace(/[/\\]/g, '_')}`;
+        } else {
+          // For regular offers, use the offer number
+          filename += `_Offer_${offer.offerNumber.replace(/[/\\]/g, '_')}`;
+        }
       }
       filename += '.docx';
       
@@ -276,7 +279,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     <div>
                       <h3 className="font-bold text-lg">PENAWARAN</h3>
                       <p>Cikande, {new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                      <p>No. Quo. {header.quotationNumber}</p>
+                      <p>No. Quo. {currentOffer?.offerNumber || header.quotationNumber}</p>
                     </div>
                     
                     <div>
@@ -301,7 +304,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                           ) : (
                             <p className="font-medium">          {index + 1}. Karoseri    : {item.karoseri || ''}</p>
                           )}
-                          <p className="font-medium">          Chassis     : {item.chassis || ''}</p>
+                          <p className="font-medium">          Chassis     : {item.chassis || ''} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
                           <p className="font-medium">          Spesifikasi :</p>
                           {item.specifications && item.specifications.length > 0 ? (
                             <div className="ml-4">
@@ -462,7 +465,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                                     <div className="mb-3">
                                       <h5 className="font-medium text-gray-900">
-                                        Item {currentOffer.offerItems?.indexOf(item) + 1}: {item.karoseri} - {item.chassis}
+                                        Item {currentOffer.offerItems?.indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                                       </h5>
                                       <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>

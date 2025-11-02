@@ -19,6 +19,7 @@ const OfferItemForm = ({
   const [formData, setFormData] = useState({
     karoseri: item?.karoseri || '',
     chassis: item?.chassis || '',
+    chassisModel: item?.chassisModel || '',
     drawingSpecification: item?.drawingSpecification || null,
     bodyTypeId: item?.bodyTypeId || '',
     chassisTypeId: item?.chassisTypeId || '',
@@ -27,6 +28,7 @@ const OfferItemForm = ({
     templateSourceModel: item?.templateSourceModel || null,
     templateSourceId: item?.templateSourceId || null,
     specifications: item?.specifications || [],
+    quantity: item?.quantity || 1,
     price: item?.price || 0,
     discountType: item?.discountType || 'percentage',
     discountValue: item?.discountValue || 0,
@@ -34,12 +36,7 @@ const OfferItemForm = ({
     notes: item?.notes || ''
   });
 
-  const [newSpecLabel, setNewSpecLabel] = useState('');
-  const [newSpecValue, setNewSpecValue] = useState('');
   const [newSpecCategory, setNewSpecCategory] = useState('');
-  const [editingCategoryIndex, setEditingCategoryIndex] = useState(-1);
-  const [editingItemIndex, setEditingItemIndex] = useState(-1);
-  const [addingToCategory, setAddingToCategory] = useState(-1);
   const [showDrawingSelector, setShowDrawingSelector] = useState(false);
   const [selectedDrawingSpec, setSelectedDrawingSpec] = useState(null);
   
@@ -121,14 +118,16 @@ const OfferItemForm = ({
     const newFormData = {
       karoseri: item?.karoseri || '',
       chassis: item?.chassis || '',
+      chassisModel: item?.chassisModel || '',
       drawingSpecification: item?.drawingSpecification || null,
-      bodyTypeId: item?.bodyTypeId || '',
-      chassisTypeId: item?.chassisTypeId || '',
+      bodyTypeId: item?.bodyTypeId?._id || item?.bodyTypeId || '',
+      chassisTypeId: item?.chassisTypeId?._id || item?.chassisTypeId || '',
       sizeTypeId: item?.sizeTypeId || '',
       templateMode: item?.templateMode || 'manual',
       templateSourceModel: item?.templateSourceModel || null,
-      templateSourceId: item?.templateSourceId || null,
+      templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
       specifications: item?.specifications || [],
+      quantity: item?.quantity || 1,
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
       discountValue: item?.discountValue || 0,
@@ -183,13 +182,6 @@ const OfferItemForm = ({
   };
 
 
-  const handleSpecificationKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addSpecification();
-    }
-  };
-
   const addCategory = () => {
     if (newSpecCategory.trim()) {
       console.log('Adding category:', newSpecCategory.trim());
@@ -213,93 +205,21 @@ const OfferItemForm = ({
   };
 
   const addItemToCategory = (categoryIndex) => {
-    if (newSpecLabel.trim() && newSpecValue.trim()) {
-      console.log('Adding item to category:', categoryIndex);
-      console.log('Item name:', newSpecLabel.trim());
-      console.log('Item value:', newSpecValue.trim());
-      console.log('Current specifications before adding item:', formData.specifications);
-      
-      setFormData(prev => {
-        const newSpecifications = prev.specifications.map((spec, index) => 
-          index === categoryIndex ? {
-            ...spec,
-            items: [...spec.items, {
-              name: newSpecLabel.trim(),
-              specification: newSpecValue.trim()
-            }]
-          } : spec
-        );
-        console.log('New specifications after adding item:', newSpecifications);
-        return {
-          ...prev,
-          specifications: newSpecifications
-        };
-      });
-      setNewSpecLabel('');
-      setNewSpecValue('');
-      setAddingToCategory(-1);
-    } else {
-      console.log('Item name or value is empty, not adding');
-    }
-  };
-
-  const startAddingToCategory = (categoryIndex) => {
-    setAddingToCategory(categoryIndex);
-    setNewSpecLabel('');
-    setNewSpecValue('');
-  };
-
-  const cancelAddingToCategory = () => {
-    setAddingToCategory(-1);
-    setNewSpecLabel('');
-    setNewSpecValue('');
-  };
-
-  const editSpecification = (categoryIndex, itemIndex) => {
-    setEditingCategoryIndex(categoryIndex);
-    setEditingItemIndex(itemIndex);
-    const spec = formData.specifications[categoryIndex];
-    if (spec && spec.items && spec.items[itemIndex]) {
-      const item = spec.items[itemIndex];
-      setNewSpecCategory(spec.category || '');
-      setNewSpecLabel(item.name || '');
-      setNewSpecValue(item.specification || '');
-    }
-  };
-
-  const updateSpecification = () => {
-    if (editingCategoryIndex >= 0 && editingItemIndex >= 0) {
-      if (newSpecCategory.trim() && newSpecLabel.trim() && newSpecValue.trim()) {
-        setFormData(prev => ({
-          ...prev,
-          specifications: prev.specifications.map((spec, i) => 
-            i === editingCategoryIndex ? {
-              ...spec,
-              items: spec.items.map((item, j) => 
-                j === editingItemIndex ? {
-                  name: newSpecLabel.trim(),
-                  specification: newSpecValue.trim()
-                } : item
-              )
-            } : spec
-          )
-        }));
-        setNewSpecCategory('');
-        setNewSpecLabel('');
-        setNewSpecValue('');
-        setEditingCategoryIndex(-1);
-        setEditingItemIndex(-1);
-      }
-    }
-  };
-
-  const cancelEditSpecification = () => {
-    setNewSpecLabel('');
-    setNewSpecValue('');
-    setNewSpecCategory('');
-    setEditingCategoryIndex(-1);
-    setEditingItemIndex(-1);
-    setAddingToCategory(-1);
+    setFormData(prev => {
+      const newSpecifications = prev.specifications.map((spec, index) => 
+        index === categoryIndex ? {
+          ...spec,
+          items: [...spec.items, {
+            name: '',
+            specification: ''
+          }]
+        } : spec
+      );
+      return {
+        ...prev,
+        specifications: newSpecifications
+      };
+    });
   };
 
   const removeSpecification = (categoryIndex, itemIndex = null) => {
@@ -355,6 +275,11 @@ const OfferItemForm = ({
       return;
     }
     
+    if (formData.quantity <= 0) {
+      console.log('Validation failed: quantity is invalid:', formData.quantity);
+      toast.error('Please enter a valid quantity');
+      return;
+    }
     if (formData.price <= 0) {
       console.log('Validation failed: price is invalid:', formData.price);
       toast.error('Please enter a valid price');
@@ -376,6 +301,7 @@ const OfferItemForm = ({
     setFormData({
       karoseri: item?.karoseri || '',
       chassis: item?.chassis || '',
+      chassisModel: item?.chassisModel || '',
       drawingSpecification: item?.drawingSpecification || null,
       bodyTypeId: item?.bodyTypeId || '',
       chassisTypeId: item?.chassisTypeId || '',
@@ -384,18 +310,14 @@ const OfferItemForm = ({
       templateSourceModel: item?.templateSourceModel || null,
       templateSourceId: item?.templateSourceId || null,
       specifications: item?.specifications || [],
+      quantity: item?.quantity || 1,
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
       discountValue: item?.discountValue || 0,
       netto: item?.netto || 0,
       notes: item?.notes || ''
     });
-    setNewSpecLabel('');
-    setNewSpecValue('');
     setNewSpecCategory('');
-    setEditingCategoryIndex(-1);
-    setEditingItemIndex(-1);
-    setAddingToCategory(-1);
     onCancel && onCancel();
   };
 
@@ -429,6 +351,7 @@ const OfferItemForm = ({
           {isEditing ? (
             <>
               <button
+                type="button"
                 onClick={handleSave}
                 className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200"
               >
@@ -436,6 +359,7 @@ const OfferItemForm = ({
                 Save Item
               </button>
               <button
+                type="button"
                 onClick={handleCancel}
                 className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200"
               >
@@ -446,6 +370,7 @@ const OfferItemForm = ({
           ) : (
             <>
               <button
+                type="button"
                 onClick={handleAdd}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200"
               >
@@ -454,6 +379,7 @@ const OfferItemForm = ({
               </button>
               {item && (
                 <button
+                  type="button"
                   onClick={handleDelete}
                   className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200"
                 >
@@ -493,6 +419,7 @@ const OfferItemForm = ({
                   handleInputChange('templateMode', value);
                   handleInputChange('karoseri', '');
                   handleInputChange('chassis', '');
+                  handleInputChange('chassisModel', '');
                   handleInputChange('templateSourceId', '');
                   handleInputChange('bodyTypeId', '');
                   handleInputChange('chassisTypeId', '');
@@ -557,6 +484,22 @@ const OfferItemForm = ({
                     disabled={loadingChassisTypes}
                   />
                 </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.chassisModel || ''}
+                    onChange={(e) => handleInputChange('chassisModel', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Dutro 500, Hino 200, etc."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Specify the specific chassis model if needed
+                  </p>
+                </div>
               </>
             )}
 
@@ -576,6 +519,7 @@ const OfferItemForm = ({
                     onChange={(value) => {
                       handleInputChange('templateSourceModel', 'BodyType');
                       handleInputChange('templateSourceId', value);
+                      handleInputChange('bodyTypeId', value); // Also store as bodyTypeId
                       const selectedBodyType = bodyTypes.find(bt => bt._id === value);
                       if (selectedBodyType) {
                         handleInputChange('karoseri', selectedBodyType.name);
@@ -611,6 +555,22 @@ const OfferItemForm = ({
                     disabled={loadingChassisTypes}
                   />
                 </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.chassisModel || ''}
+                    onChange={(e) => handleInputChange('chassisModel', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Dutro 500, Hino 200, etc."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Specify the specific chassis model if needed
+                  </p>
+                </div>
               </>
             )}
 
@@ -642,6 +602,10 @@ const OfferItemForm = ({
                         handleInputChange('chassisTypeId', selectedDrawing.chassisTypeId._id);
                         handleInputChange('chassis', selectedDrawing.chassisTypeId.name || '');
                       }
+                      // Populate chassis model if available
+                      if (selectedDrawing.chassisModel) {
+                        handleInputChange('chassisModel', selectedDrawing.chassisModel);
+                      }
                       // Populate specifications
                       if (selectedDrawing.customSpecifications) {
                         handleInputChange('specifications', selectedDrawing.customSpecifications);
@@ -658,16 +622,33 @@ const OfferItemForm = ({
           </div>
         </div>
 
-        {/* Pricing Information */}
-        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center mb-4">
-            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-              <span className="text-green-600 font-semibold text-sm">💰</span>
-            </div>
-            <h5 className="font-semibold text-gray-900">Pricing & Discount</h5>
+      {/* Pricing Information */}
+      <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+        <div className="flex items-center mb-4">
+          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+            <span className="text-green-600 font-semibold text-sm">💰</span>
+          </div>
+          <h5 className="font-semibold text-gray-900">Pricing & Discount</h5>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quantity *
+            </label>
+            <input
+              type="number"
+              value={formData.quantity || 1}
+              onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 1)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter quantity"
+              min="1"
+              step="1"
+              required
+            />
           </div>
           
-          <div className="space-y-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Base Price *
             </label>
@@ -678,6 +659,7 @@ const OfferItemForm = ({
               required
             />
           </div>
+        </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -748,171 +730,108 @@ const OfferItemForm = ({
 
       {/* Specifications */}
       <div className="mt-8 bg-white rounded-lg p-5 shadow-sm border border-gray-100">
-        <div className="flex items-center mb-4">
-          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-            <span className="text-purple-600 font-semibold text-sm">📋</span>
-          </div>
-          <h5 className="font-semibold text-gray-900">Technical Specifications</h5>
+        <div className="flex items-center justify-between mb-4">
+          <h5 className="font-semibold text-gray-900">Specifications (Editable)</h5>
+          <button
+            type="button"
+            onClick={addCategory}
+            className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Category
+          </button>
         </div>
         
-        {/* Add New Category */}
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h6 className="font-medium text-blue-900 mb-3">Add New Category</h6>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newSpecCategory}
-              onChange={(e) => setNewSpecCategory(e.target.value)}
-              placeholder="Category Name (e.g., Engine, Body, Chassis)"
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            />
-            <button
-              type="button"
-              onClick={addCategory}
-              className="flex items-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-md hover:shadow-lg transition-all duration-200"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Category
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
+        <div className="space-y-2">
           {formData.specifications.map((spec, categoryIndex) => (
-            <div key={categoryIndex} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-gray-800 text-lg">{spec.category}</h4>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => startAddingToCategory(categoryIndex)}
-                    className="px-3 py-1 text-green-600 hover:text-green-800 text-sm bg-green-50 hover:bg-green-100 rounded-md transition-colors"
-                  >
-                    + Add Item
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeSpecification(categoryIndex)}
-                    className="px-3 py-1 text-red-600 hover:text-red-800 text-sm bg-red-50 hover:bg-red-100 rounded-md transition-colors"
-                  >
-                    Delete Category
-                  </button>
-                </div>
+            <div key={categoryIndex} className="border border-gray-200 rounded-md p-3">
+              <div className="flex items-center justify-between mb-2">
+                <input
+                  type="text"
+                  value={spec.category || ''}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      specifications: prev.specifications.map((s, i) => 
+                        i === categoryIndex ? { ...s, category: e.target.value } : s
+                      )
+                    }));
+                  }}
+                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Category name"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSpecification(categoryIndex)}
+                  className="ml-2 text-red-600 hover:text-red-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
               
-              {/* Add Item to Category Form */}
-              {addingToCategory === categoryIndex && (
-                <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                  <h6 className="font-medium text-green-900 mb-2">Add Item to {spec.category}</h6>
-                  <div className="flex gap-3">
-                    <input
-                      type="text"
-                      value={newSpecLabel}
-                      onChange={(e) => setNewSpecLabel(e.target.value)}
-                      placeholder="Specification Name (e.g., Engine Type)"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <input
-                      type="text"
-                      value={newSpecValue}
-                      onChange={(e) => setNewSpecValue(e.target.value)}
-                      placeholder="Specification Value (e.g., 4 Cylinder Diesel)"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => addItemToCategory(categoryIndex)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelAddingToCategory}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Edit Item Form */}
-              {editingCategoryIndex === categoryIndex && editingItemIndex >= 0 && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <h6 className="font-medium text-blue-900 mb-2">Edit Item</h6>
-                  <div className="flex gap-3">
-                    <input
-                      type="text"
-                      value={newSpecLabel}
-                      onChange={(e) => setNewSpecLabel(e.target.value)}
-                      placeholder="Specification Name"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      value={newSpecValue}
-                      onChange={(e) => setNewSpecValue(e.target.value)}
-                      placeholder="Specification Value"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={updateSpecification}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelEditSpecification}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <div className="space-y-2">
-                {spec.items && spec.items.length > 0 ? (
-                  spec.items.map((item, itemIndex) => (
-                    <div key={itemIndex} className="flex items-center justify-between p-2 bg-white rounded-md border border-gray-100">
-                      <div className="flex-1">
-                        <span className="font-medium text-gray-700">{item.name}:</span>
-                        <span className="text-gray-600 ml-2">{item.specification}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => editSpecification(categoryIndex, itemIndex)}
-                          className="px-2 py-1 text-blue-600 hover:text-blue-800 text-sm bg-blue-50 hover:bg-blue-100 rounded transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeSpecification(categoryIndex, itemIndex)}
-                          className="px-2 py-1 text-red-600 hover:text-red-800 text-sm bg-red-50 hover:bg-red-100 rounded transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm text-center py-4 bg-white rounded-md border-2 border-dashed border-gray-200">
-                    No items in this category yet. Click "+ Add Item" to add specifications.
-                  </p>
-                )}
+                {spec.items && spec.items.map((item, specItemIndex) => (
+                  <div key={specItemIndex} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={item.name || ''}
+                      onChange={(e) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          specifications: prev.specifications.map((s, i) => 
+                            i === categoryIndex ? {
+                              ...s,
+                              items: s.items.map((it, j) => 
+                                j === specItemIndex ? { ...it, name: e.target.value } : it
+                              )
+                            } : s
+                          )
+                        }));
+                      }}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Specification name"
+                    />
+                    <span className="text-gray-500">:</span>
+                    <input
+                      type="text"
+                      value={item.specification || ''}
+                      onChange={(e) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          specifications: prev.specifications.map((s, i) => 
+                            i === categoryIndex ? {
+                              ...s,
+                              items: s.items.map((it, j) => 
+                                j === specItemIndex ? { ...it, specification: e.target.value } : it
+                              )
+                            } : s
+                          )
+                        }));
+                      }}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Specification value"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecification(categoryIndex, specItemIndex)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                <button
+                  type="button"
+                  onClick={() => addItemToCategory(categoryIndex)}
+                  className="inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Specification
+                </button>
               </div>
             </div>
           ))}
-          {formData.specifications.length === 0 && (
-            <p className="text-gray-500 text-sm text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-              No categories added yet. Add a category above to get started.
-            </p>
-          )}
         </div>
       </div>
 

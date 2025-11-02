@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
+import PriceInput from '../common/PriceInput';
 import toast from 'react-hot-toast';
 import { Wrench, CheckCircle, XCircle, Clock, Eye, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 
@@ -15,9 +16,7 @@ const EngineeringReviewTab = () => {
   const [reviewData, setReviewData] = useState({
     canDo: null,
     comments: '',
-    specsModified: [],
-    modifiedService: null,
-    modifiedSparepart: null
+    specsModified: []
   });
 
   // Fetch RFQs for engineering review - shows all RFQs in engineering stage
@@ -69,9 +68,7 @@ const EngineeringReviewTab = () => {
       setReviewData({
         canDo: null,
         comments: '',
-        specsModified: [],
-        modifiedService: null,
-        modifiedSparepart: null
+        specsModified: []
       });
     } catch (error) {
       console.error('Error submitting engineering review:', error);
@@ -79,15 +76,32 @@ const EngineeringReviewTab = () => {
     }
   };
 
-  // Item management functions for Karoseri
+  // Item management functions - unified for all types
   const addItem = () => {
+    const lineOfBusinessType = selectedRFQ?.lineOfBusiness?.type || 'karoseri';
     const newItem = {
       itemNumber: reviewData.specsModified.length + 1,
-      karoseri: '',
-      chassis: '',
-      notes: '',
-      specifications: []
+      notes: ''
     };
+    
+    // Type-specific fields
+    if (lineOfBusinessType === 'karoseri') {
+      newItem.karoseri = '';
+      newItem.chassis = '';
+      newItem.chassisModel = '';
+      newItem.specifications = [];
+    } else if (lineOfBusinessType === 'service') {
+      newItem.serviceName = '';
+      newItem.serviceDetails = [''];
+      newItem.estimatedRevenue = 0;
+      newItem.quantity = 1;
+    } else if (lineOfBusinessType === 'sparepart') {
+      newItem.sparepartName = '';
+      newItem.quantity = 1;
+      newItem.pricePerUnit = 0;
+      newItem.estimatedRevenue = 0;
+    }
+    
     setReviewData(prev => ({
       ...prev,
       specsModified: [...prev.specsModified, newItem]
@@ -109,6 +123,45 @@ const EngineeringReviewTab = () => {
       ...prev,
       specsModified: prev.specsModified.map((item, i) => 
         i === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  // Service details management functions
+  const addServiceDetail = (itemIndex) => {
+    setReviewData(prev => ({
+      ...prev,
+      specsModified: prev.specsModified.map((item, i) => 
+        i === itemIndex 
+          ? { ...item, serviceDetails: [...(item.serviceDetails || []), ''] }
+          : item
+      )
+    }));
+  };
+
+  const removeServiceDetail = (itemIndex, detailIndex) => {
+    setReviewData(prev => ({
+      ...prev,
+      specsModified: prev.specsModified.map((item, i) => 
+        i === itemIndex 
+          ? { ...item, serviceDetails: item.serviceDetails.filter((_, di) => di !== detailIndex) }
+          : item
+      )
+    }));
+  };
+
+  const updateServiceDetail = (itemIndex, detailIndex, value) => {
+    setReviewData(prev => ({
+      ...prev,
+      specsModified: prev.specsModified.map((item, i) => 
+        i === itemIndex 
+          ? {
+              ...item,
+              serviceDetails: item.serviceDetails.map((detail, di) => 
+                di === detailIndex ? value : detail
+              )
+            }
+          : item
       )
     }));
   };
@@ -213,84 +266,6 @@ const EngineeringReviewTab = () => {
     }));
   };
 
-  // Service management functions
-  const updateServiceName = (value) => {
-    setReviewData(prev => ({
-      ...prev,
-      modifiedService: { ...prev.modifiedService, serviceName: value },
-      specsModified: [{ ...prev.modifiedService, serviceName: value }]
-    }));
-  };
-
-  const addServiceDetail = () => {
-    setReviewData(prev => ({
-      ...prev,
-      modifiedService: {
-        ...prev.modifiedService,
-        serviceDetails: [...(prev.modifiedService?.serviceDetails || []), '']
-      },
-      specsModified: [{
-        ...prev.modifiedService,
-        serviceDetails: [...(prev.modifiedService?.serviceDetails || []), '']
-      }]
-    }));
-  };
-
-  const removeServiceDetail = (index) => {
-    setReviewData(prev => ({
-      ...prev,
-      modifiedService: {
-        ...prev.modifiedService,
-        serviceDetails: prev.modifiedService?.serviceDetails.filter((_, i) => i !== index) || []
-      },
-      specsModified: [{
-        ...prev.modifiedService,
-        serviceDetails: prev.modifiedService?.serviceDetails.filter((_, i) => i !== index) || []
-      }]
-    }));
-  };
-
-  const updateServiceDetail = (index, value) => {
-    setReviewData(prev => {
-      const newDetails = [...(prev.modifiedService?.serviceDetails || [])];
-      newDetails[index] = value;
-      return {
-        ...prev,
-        modifiedService: { ...prev.modifiedService, serviceDetails: newDetails },
-        specsModified: [{ ...prev.modifiedService, serviceDetails: newDetails }]
-      };
-    });
-  };
-
-  // Sparepart management functions
-  const addSparepart = () => {
-    const newSparepart = { sparepartName: '', quantity: 1 };
-    setReviewData(prev => ({
-      ...prev,
-      modifiedSparepart: [...(prev.modifiedSparepart || []), newSparepart],
-      specsModified: [...(prev.modifiedSparepart || []), newSparepart]
-    }));
-  };
-
-  const removeSparepart = (index) => {
-    setReviewData(prev => ({
-      ...prev,
-      modifiedSparepart: prev.modifiedSparepart.filter((_, i) => i !== index),
-      specsModified: prev.modifiedSparepart.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateSparepart = (index, field, value) => {
-    setReviewData(prev => {
-      const newSpareparts = [...(prev.modifiedSparepart || [])];
-      newSpareparts[index] = { ...newSpareparts[index], [field]: value };
-      return {
-        ...prev,
-        modifiedSparepart: newSpareparts,
-        specsModified: newSpareparts
-      };
-    });
-  };
 
   // Show review modal
   const showReview = (rfq) => {
@@ -299,16 +274,19 @@ const EngineeringReviewTab = () => {
     // Initialize review data with a deep copy of original specs for modification
     const lineOfBusinessType = rfq.lineOfBusiness?.type || 'karoseri';
     let specsModified = [];
-    let modifiedService = null;
-    let modifiedSparepart = null;
     
     // If already has modified specs, use those; otherwise deep copy from original
     if (rfq.engineeringTransit?.specsModified && rfq.engineeringTransit.specsModified.length > 0) {
       specsModified = JSON.parse(JSON.stringify(rfq.engineeringTransit.specsModified));
+      // Migrate old serviceDetail to serviceDetails array if needed
       if (lineOfBusinessType === 'service') {
-        modifiedService = JSON.parse(JSON.stringify(rfq.engineeringTransit.specsModified[0] || {}));
-      } else if (lineOfBusinessType === 'sparepart') {
-        modifiedSparepart = JSON.parse(JSON.stringify(rfq.engineeringTransit.specsModified || []));
+        specsModified = specsModified.map(item => {
+          if (item.serviceDetail && !Array.isArray(item.serviceDetails)) {
+            item.serviceDetails = [item.serviceDetail];
+            delete item.serviceDetail;
+          }
+          return item;
+        });
       }
     } else {
       // Deep copy from original specs (from specsOriginal if available, otherwise from items)
@@ -318,27 +296,46 @@ const EngineeringReviewTab = () => {
           itemNumber: item.itemNumber,
           karoseri: item.karoseri || '',
           chassis: item.chassis || '',
+          chassisModel: item.chassisModel || '',
           notes: item.notes || '',
           specifications: JSON.parse(JSON.stringify(item.specifications || []))
         }));
       } else if (lineOfBusinessType === 'service') {
-        modifiedService = {
-          serviceName: rfq.lineOfBusiness.service?.serviceName || '',
-          serviceDetails: JSON.parse(JSON.stringify(rfq.lineOfBusiness.service?.serviceDetails || []))
-        };
-        specsModified = [modifiedService];
+        // Service now uses items structure
+        const sourceSpecs = rfq.engineeringTransit?.specsOriginal || rfq.items || [];
+        specsModified = sourceSpecs.map(item => {
+          const migratedItem = {
+            itemNumber: item.itemNumber,
+            serviceName: item.serviceName || '',
+            serviceDetails: item.serviceDetails || [],
+            estimatedRevenue: item.estimatedRevenue || 0,
+            quantity: item.quantity || 1,
+            notes: item.notes || ''
+          };
+          // Migrate old serviceDetail to serviceDetails array if needed
+          if (item.serviceDetail && !Array.isArray(item.serviceDetails)) {
+            migratedItem.serviceDetails = [item.serviceDetail];
+          }
+          return migratedItem;
+        });
       } else if (lineOfBusinessType === 'sparepart') {
-        modifiedSparepart = JSON.parse(JSON.stringify(rfq.lineOfBusiness.sparepart?.spareparts || []));
-        specsModified = modifiedSparepart;
+        // Sparepart now uses items structure
+        const sourceSpecs = rfq.engineeringTransit?.specsOriginal || rfq.items || [];
+        specsModified = sourceSpecs.map(item => ({
+          itemNumber: item.itemNumber,
+          sparepartName: item.sparepartName || '',
+          quantity: item.quantity || 1,
+          pricePerUnit: item.pricePerUnit || 0,
+          estimatedRevenue: item.estimatedRevenue || 0,
+          notes: item.notes || ''
+        }));
       }
     }
     
     setReviewData({
       canDo: rfq.engineeringTransit?.canDo ?? null,
       comments: rfq.engineeringTransit?.comments || '',
-      specsModified: specsModified,
-      modifiedService: modifiedService,
-      modifiedSparepart: modifiedSparepart
+      specsModified: specsModified
     });
     setShowReviewModal(true);
   };
@@ -413,8 +410,16 @@ const EngineeringReviewTab = () => {
               <div className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h3 className="text-lg font-semibold text-gray-900">{rfq.rfqNumber}</h3>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                        rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                        rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
+                        rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {rfq.lineOfBusiness?.type?.charAt(0).toUpperCase() + rfq.lineOfBusiness?.type?.slice(1) || 'N/A'}
+                      </span>
                       {getStatusBadge(rfq)}
                     </div>
                     
@@ -496,7 +501,7 @@ const EngineeringReviewTab = () => {
                             <p className="text-sm font-medium text-gray-700">Items:</p>
                             {rfq.items.map((item, index) => (
                               <div key={index} className="p-3 bg-gray-50 rounded-md">
-                                <p className="text-sm"><span className="font-medium">Item {item.itemNumber}:</span> {item.karoseri} - {item.chassis}</p>
+                                <p className="text-sm"><span className="font-medium">Item {item.itemNumber}:</span> {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
                                 {item.specifications && item.specifications.length > 0 && (
                                   <p className="text-xs text-gray-600 mt-1">Specifications: {item.specifications.length} categories</p>
                                 )}
@@ -505,23 +510,30 @@ const EngineeringReviewTab = () => {
                           </div>
                         )}
 
-                        {rfq.lineOfBusiness?.type === 'service' && (
-                          <div className="p-3 bg-gray-50 rounded-md">
-                            <p className="text-sm"><span className="font-medium">Service:</span> {rfq.lineOfBusiness.service?.serviceName}</p>
-                            {rfq.lineOfBusiness.service?.serviceDetails && rfq.lineOfBusiness.service.serviceDetails.length > 0 && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                Details: {rfq.lineOfBusiness.service.serviceDetails.join(', ')}
-                              </p>
-                            )}
+                        {rfq.lineOfBusiness?.type === 'service' && rfq.items && (
+                          <div className="space-y-3">
+                            <p className="text-sm font-medium text-gray-700">Service Items:</p>
+                            {rfq.items.map((item, index) => (
+                              <div key={index} className="p-3 bg-gray-50 rounded-md">
+                                <p className="text-sm"><span className="font-medium">Item {item.itemNumber}:</span> {item.serviceName}</p>
+                                {item.serviceDetails && item.serviceDetails.length > 0 && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    {item.serviceDetails.map((detail, idx) => (
+                                      <div key={idx}>{detail}</div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         )}
 
-                        {rfq.lineOfBusiness?.type === 'sparepart' && (
+                        {rfq.lineOfBusiness?.type === 'sparepart' && rfq.items && (
                           <div className="space-y-2">
-                            <p className="text-sm font-medium text-gray-700">Spareparts:</p>
-                            {rfq.lineOfBusiness.sparepart?.spareparts?.map((sp, index) => (
+                            <p className="text-sm font-medium text-gray-700">Sparepart Items:</p>
+                            {rfq.items.map((item, index) => (
                               <div key={index} className="p-3 bg-gray-50 rounded-md">
-                                <p className="text-sm">{sp.sparepartName} - Quantity: {sp.quantity}</p>
+                                <p className="text-sm"><span className="font-medium">Item {item.itemNumber}:</span> {item.sparepartName}</p>
                               </div>
                             ))}
                           </div>
@@ -668,6 +680,14 @@ const EngineeringReviewTab = () => {
                                     {originalItem.chassis || '-'}
                                   </div>
                                 </div>
+                                {originalItem.chassisModel && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Chassis Model</label>
+                                    <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
+                                      {originalItem.chassisModel || '-'}
+                                    </div>
+                                  </div>
+                                )}
                                 <div>
                                   <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
                                   <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900 min-h-[3rem]">
@@ -738,6 +758,22 @@ const EngineeringReviewTab = () => {
                                   backgroundColor: (() => {
                                     const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
                                     return orig && item.chassis !== orig.chassis ? '#fef3c7' : 'white';
+                                  })()
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Chassis Model</label>
+                              <input
+                                type="text"
+                                value={item.chassisModel || ''}
+                                onChange={(e) => updateItem(itemIndex, 'chassisModel', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                placeholder="e.g., Dutro 500"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
+                                    return orig && item.chassisModel !== orig.chassisModel ? '#fef3c7' : 'white';
                                   })()
                                 }}
                               />
@@ -855,107 +891,271 @@ const EngineeringReviewTab = () => {
               </div>
             )}
 
-            {/* Service Editor */}
-            {selectedRFQ.lineOfBusiness?.type === 'service' && reviewData.modifiedService && (
+            {/* Service Items Editor - Unified */}
+            {selectedRFQ.lineOfBusiness?.type === 'service' && (
               <div className="border border-gray-200 rounded-lg p-4">
-                <label className="block text-sm font-medium text-gray-700 mb-4">
-                  Modified Service Details
-                </label>
-                
-                <div className="mb-4">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Service Name</label>
-                  <input
-                    type="text"
-                    value={reviewData.modifiedService.serviceName || ''}
-                    onChange={(e) => updateServiceName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                  />
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Modified Service Items
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Service Item
+                  </button>
                 </div>
                 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-medium text-gray-700">Service Details</label>
-                    <button
-                      type="button"
-                      onClick={addServiceDetail}
-                      className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                    >
-                      <Plus className="h-3 w-3 inline mr-1" />
-                      Add Detail
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {reviewData.modifiedService.serviceDetails && reviewData.modifiedService.serviceDetails.map((detail, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={detail}
-                          onChange={(e) => updateServiceDetail(index, e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                          placeholder="Service detail"
-                        />
+                <div className="space-y-4">
+                  {reviewData.specsModified && reviewData.specsModified.map((item, itemIndex) => (
+                    <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium text-gray-900">Service Item {item.itemNumber}</h4>
                         <button
                           type="button"
-                          onClick={() => removeServiceDetail(index)}
+                          onClick={() => removeItem(itemIndex)}
                           className="text-red-600 hover:text-red-800"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
-                    ))}
-                  </div>
+                      
+                      {/* Side-by-side comparison */}
+                      <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Original (Left Side - Uneditable) */}
+                        <div className="p-4 bg-gray-50">
+                          <div className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                            Original (Read Only)
+                          </div>
+                          
+                          {(() => {
+                            const originalItem = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex] || null;
+                            return originalItem ? (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Service Name</label>
+                                  <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
+                                    {originalItem.serviceName || '-'}
+                                  </div>
+                                </div>
+                                {originalItem.serviceDetails && originalItem.serviceDetails.length > 0 && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Service Details</label>
+                                    <div className="space-y-1">
+                                      {originalItem.serviceDetails.map((detail, idx) => (
+                                        <div key={idx} className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
+                                          {detail || '-'}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {originalItem.notes && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                                    <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900 min-h-[3rem]">
+                                      {originalItem.notes || '-'}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400">Original item not found</div>
+                            );
+                          })()}
+                        </div>
+                        
+                        {/* Modified (Right Side - Editable) */}
+                        <div className="p-4 bg-white">
+                          <div className="text-xs font-semibold text-blue-600 mb-3 uppercase tracking-wide">
+                            Modified (Editable)
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Service Name</label>
+                              <input
+                                type="text"
+                                value={item.serviceName || ''}
+                                onChange={(e) => updateItem(itemIndex, 'serviceName', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
+                                    return orig && item.serviceName !== orig.serviceName ? '#fef3c7' : 'white';
+                                  })()
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-gray-700">Service Details</label>
+                                <button
+                                  type="button"
+                                  onClick={() => addServiceDetail(itemIndex)}
+                                  className="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
+                                >
+                                  <Plus className="h-3 w-3 inline mr-1" />
+                                  Add
+                                </button>
+                              </div>
+                              
+                              {/* Service Details List */}
+                              {Array.isArray(item.serviceDetails) && item.serviceDetails.length > 0 ? (
+                                <div className="space-y-1">
+                                  {item.serviceDetails.map((detail, detailIndex) => (
+                                    <div key={detailIndex} className="flex items-start space-x-1">
+                                      <input
+                                        type="text"
+                                        value={detail || ''}
+                                        onChange={(e) => updateServiceDetail(itemIndex, detailIndex, e.target.value)}
+                                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                        placeholder="Enter service detail"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeServiceDetail(itemIndex, detailIndex)}
+                                        className="text-red-600 hover:text-red-800 p-1"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-500">No details added yet</p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                              <textarea
+                                value={item.notes || ''}
+                                onChange={(e) => updateItem(itemIndex, 'notes', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                rows="2"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
+                                    return orig && item.notes !== orig.notes ? '#fef3c7' : 'white';
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Sparepart Editor */}
+            {/* Sparepart Items Editor - Unified */}
             {selectedRFQ.lineOfBusiness?.type === 'sparepart' && (
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <label className="block text-sm font-medium text-gray-700">
-                    Modified Spareparts
+                    Modified Sparepart Items
                   </label>
                   <button
                     type="button"
-                    onClick={addSparepart}
+                    onClick={addItem}
                     className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Sparepart
+                    Add Sparepart Item
                   </button>
                 </div>
                 
-                <div className="space-y-3">
-                  {reviewData.modifiedSparepart && reviewData.modifiedSparepart.map((sparepart, index) => (
-                    <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded border border-gray-200">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Sparepart Name</label>
-                        <input
-                          type="text"
-                          value={sparepart.sparepartName || ''}
-                          onChange={(e) => updateSparepart(index, 'sparepartName', e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                          placeholder="Sparepart name"
-                        />
+                <div className="space-y-4">
+                  {reviewData.specsModified && reviewData.specsModified.map((item, itemIndex) => (
+                    <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium text-gray-900">Sparepart Item {item.itemNumber}</h4>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(itemIndex)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="w-32">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
-                        <input
-                          type="number"
-                          value={sparepart.quantity || 1}
-                          onChange={(e) => updateSparepart(index, 'quantity', parseInt(e.target.value) || 1)}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                          min="1"
-                        />
+                      
+                      {/* Side-by-side comparison */}
+                      <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Original (Left Side - Uneditable) */}
+                        <div className="p-4 bg-gray-50">
+                          <div className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                            Original (Read Only)
+                          </div>
+                          
+                          {(() => {
+                            const originalItem = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex] || null;
+                            return originalItem ? (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Sparepart Name</label>
+                                  <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
+                                    {originalItem.sparepartName || '-'}
+                                  </div>
+                                </div>
+                                {originalItem.notes && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                                    <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900 min-h-[3rem]">
+                                      {originalItem.notes || '-'}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400">Original item not found</div>
+                            );
+                          })()}
+                        </div>
+                        
+                        {/* Modified (Right Side - Editable) */}
+                        <div className="p-4 bg-white">
+                          <div className="text-xs font-semibold text-blue-600 mb-3 uppercase tracking-wide">
+                            Modified (Editable)
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Sparepart Name</label>
+                              <input
+                                type="text"
+                                value={item.sparepartName || ''}
+                                onChange={(e) => updateItem(itemIndex, 'sparepartName', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
+                                    return orig && item.sparepartName !== orig.sparepartName ? '#fef3c7' : 'white';
+                                  })()
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                              <textarea
+                                value={item.notes || ''}
+                                onChange={(e) => updateItem(itemIndex, 'notes', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                rows="2"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
+                                    return orig && item.notes !== orig.notes ? '#fef3c7' : 'white';
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeSparepart(index)}
-                        className="text-red-600 hover:text-red-800 mt-5"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -968,7 +1168,7 @@ const EngineeringReviewTab = () => {
               onClick={() => {
                 setShowReviewModal(false);
                 setSelectedRFQ(null);
-                setReviewData({ canDo: null, comments: '', specsModified: [], modifiedService: null, modifiedSparepart: null });
+                setReviewData({ canDo: null, comments: '', specsModified: [] });
               }}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >

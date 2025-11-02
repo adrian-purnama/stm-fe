@@ -548,8 +548,16 @@ const RequestQuotationTab = () => {
                 </button>
               )}
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <h3 className="text-lg font-medium text-gray-900">{rfq.rfqNumber || rfq.title}</h3>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                    rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                    rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
+                    rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {rfq.lineOfBusiness?.type?.charAt(0).toUpperCase() + rfq.lineOfBusiness?.type?.slice(1) || 'N/A'}
+                  </span>
                   <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(rfq.status)}`}>
                     {getStatusIcon(rfq.status)}
                     {rfq.status}

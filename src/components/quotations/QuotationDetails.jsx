@@ -1117,9 +1117,22 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis}</p>
-                        {item.drawingSpecification && (
-                          <p className="text-xs text-gray-500">Drawing: {item.drawingSpecification.drawingNumber || 'Selected'}</p>
+                        {/* Karoseri type */}
+                        {(!headerState.lineOfBusiness || headerState.lineOfBusiness.type === 'karoseri') && (
+                          <>
+                            <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
+                            {item.drawingSpecification && (
+                              <p className="text-xs text-gray-500">Drawing: {item.drawingSpecification.drawingNumber || 'Selected'}</p>
+                            )}
+                          </>
+                        )}
+                        {/* Service type */}
+                        {headerState.lineOfBusiness?.type === 'service' && (
+                          <p className="text-sm text-gray-600">{item.serviceName}</p>
+                        )}
+                        {/* Sparepart type */}
+                        {headerState.lineOfBusiness?.type === 'sparepart' && (
+                          <p className="text-sm text-gray-600">{item.sparepartName}</p>
                         )}
                       </div>
                       <div className="text-right">
@@ -1151,7 +1164,44 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                       </div>
                     </div>
 
-                    {item.specifications && item.specifications.length > 0 && (
+                    {/* Service Details */}
+                    {headerState.lineOfBusiness?.type === 'service' && item.serviceDetails && item.serviceDetails.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-gray-600 text-sm">Service Details:</span>
+                        <ul className="list-disc list-inside mt-2 text-sm text-gray-700">
+                          {item.serviceDetails.map((detail, idx) => (
+                            <li key={idx}>{detail}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Sparepart Quantity and Price */}
+                    {headerState.lineOfBusiness?.type === 'sparepart' && (
+                      <div className="mt-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-600">Quantity:</span>
+                            <p className="font-medium">{item.quantity || 1}</p>
+                          </div>
+                          {item.pricePerUnit && (
+                            <>
+                              <div>
+                                <span className="text-gray-600">Price Per Unit:</span>
+                                <p className="font-medium">{formatPriceWithCurrency(item.pricePerUnit)}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Total:</span>
+                                <p className="font-medium">{formatPriceWithCurrency((item.quantity || 1) * item.pricePerUnit)}</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Karoseri Specifications */}
+                    {(!headerState.lineOfBusiness || headerState.lineOfBusiness.type === 'karoseri') && item.specifications && item.specifications.length > 0 && (
                       <div className="mt-3">
                         <span className="text-gray-600 text-sm">Specifications:</span>
                         <div className="mt-2 space-y-3">
@@ -1375,7 +1425,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                       />
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900">
-                          Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis}
+                          Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                         </div>
                         <div className="text-xs text-gray-500">
                           {formatPriceWithCurrency(item.netto)}

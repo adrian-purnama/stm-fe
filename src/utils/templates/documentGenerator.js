@@ -133,8 +133,8 @@ const formatNotes = (selectedNotes, excludePPN) => {
   return formattedNotes.join("\n");
 };
 
-// Build item text for template with exact spacing
-const buildItemText = (offerItems) => {
+// Build item text for template - supports karoseri, service, and sparepart
+const buildItemText = (offerItems, lineOfBusinessType = 'karoseri') => {
   if (!offerItems || offerItems.length === 0) {
     return "";
   }
@@ -143,64 +143,83 @@ const buildItemText = (offerItems) => {
 
   offerItems.forEach((item, index) => {
     const itemNumber = index + 1;
-    const karoseri = item.karoseri || "";
-    const chassis = item.chassis || "";
+    const quantity = item.quantity || 1;
+    const netto = item.netto || 0;
+    const totalPrice = netto * quantity;
+    const formattedPrice = formatPrice(totalPrice);
 
-    // Format specifications with proper indentation (each spec line aligned)
-    let specificationsText = "";
-    
-    if (item.specifications && item.specifications.length > 0) {
-      const specLines = [];
+    // Handle different business types
+    if (lineOfBusinessType === 'karoseri') {
+      // Karoseri format
+      const karoseri = item.karoseri || "";
+      const chassis = item.chassis || "";
+      const chassisModel = item.chassisModel ? ` - ${item.chassisModel}` : "";
+
+      itemText += `${itemNumber}. Karoseri: ${karoseri}\n`;
+      itemText += `   Chassis: ${chassis}${chassisModel}\n`;
+      itemText += `   Harga: ${formattedPrice}\n`;
       
-      item.specifications.forEach((spec, specIndex) => {
-        // Add category header
-        specLines.push(`${spec.category}:`);
+      // Karoseri specifications
+      if (item.specifications && item.specifications.length > 0) {
+        itemText += `\n`;
         
-        // Add items within the category
-        if (spec.items && spec.items.length > 0) {
-          spec.items.forEach((specItem, itemIndex) => {
-            specLines.push(`  ${specItem.name}: ${specItem.specification}`);
-          });
-        }
-        
-        // Add spacing between categories (except for the last one)
-        if (specIndex < item.specifications.length - 1) {
-          specLines.push('');
-        }
-      });
+        item.specifications.forEach((spec, specIndex) => {
+          const categoryName = spec.category || "";
+          const specItems = spec.items || [];
+          
+          if (specItems.length > 0) {
+            itemText += `   ${categoryName}\n`;
+            
+            specItems.forEach((specItem) => {
+              const specificationName = specItem.name || "";
+              const specificationValue = specItem.specification || "";
+              itemText += `      ${specificationName}: ${specificationValue}\n`;
+            });
+          }
+        });
+      }
+
+      // Drawing specification
+      if (item.drawingSpecification) {
+        itemText += `\n   Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`;
+      }
       
-      // Add proper indentation (10 spaces) to all lines
-      specificationsText = specLines.map(line => `${" ".repeat(10)}${line}`).join('\n');
+    } else if (lineOfBusinessType === 'service') {
+      // Service format
+      const serviceName = item.serviceName || "";
+      
+      itemText += `${itemNumber}. Service: ${serviceName}\n`;
+      itemText += `   Harga: ${formattedPrice}\n`;
+      
+      // Service details
+      if (item.serviceDetails && item.serviceDetails.length > 0) {
+        itemText += `\n   Details:\n`;
+        item.serviceDetails.forEach((detail) => {
+          itemText += `      - ${detail}\n`;
+        });
+      }
+      
+      // Notes
+      if (item.notes) {
+        itemText += `\n   Notes: ${item.notes}`;
+      }
+      
+    } else if (lineOfBusinessType === 'sparepart') {
+      // Sparepart format
+      const sparepartName = item.sparepartName || "";
+      const pricePerUnit = item.pricePerUnit || 0;
+      const formattedPricePerUnit = formatPrice(pricePerUnit);
+      
+      itemText += `${itemNumber}. Sparepart: ${sparepartName}\n`;
+      itemText += `   Quantity: ${quantity}\n`;
+      itemText += `   Harga per Unit: ${formattedPricePerUnit}\n`;
+      itemText += `   Total: ${formattedPrice}\n`;
+      
+      // Notes
+      if (item.notes) {
+        itemText += `\n   Notes: ${item.notes}`;
+      }
     }
-    
-
-    // Format drawing number sentence
-    const drawingNumberSentence = item.drawingSpecification
-      ? `Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`
-      : "";
-
-     // Build this item's text with exact spacing
-     // First item (1.) has NO spaces, subsequent items (2., 3., etc.) have 10 spaces
-     if (itemNumber === 1) {
-       itemText += `${itemNumber}.Karoseri        : ${karoseri}\n`;
-     } else {
-       itemText += `${" ".repeat(10)}${itemNumber}. Karoseri     : ${karoseri}\n`;
-     }
-
-     // Chassis with 10 spaces before and 8 spaces after the colon
-     itemText += `${" ".repeat(10)}Chassis         : ${chassis}\n`;
-
-     // Spesifikasi formatting - always use the new category-based format
-     if (specificationsText) {
-       // Put "Spesifikasi:" on its own line with 10 spaces before
-       itemText += `${" ".repeat(10)}Spesifikasi     :\n`;
-       itemText += specificationsText;
-     }
-
-     // Add drawing number sentence with consistent indentation
-     if (drawingNumberSentence) {
-       itemText += `\n${" ".repeat(10)}${drawingNumberSentence}`;
-     }
 
     // Add spacing between items (except for the last one)
     if (index < offerItems.length - 1) {
@@ -222,14 +241,20 @@ const prepareQuotationData = (header, offer, selectedNotes = [], drawingsInfo = 
   const ppn = Math.round(totalNetto * 0.11);
   const total = totalNetto + ppn;
 
-  // Build item text
-  const itemText = buildItemText(offer.offerItems);
+  // Get line of business type
+  const lineOfBusinessType = header.lineOfBusiness?.type || 'karoseri';
+
+  // Build item text with appropriate format based on line of business
+  const itemText = buildItemText(offer.offerItems, lineOfBusinessType);
 
   // Debug: Log the final item text being sent to the template
   
+  // Check if this is a revision (offer.offerNumber contains -RevX)
+  const isRevision = offer.offerNumber && offer.offerNumber.includes('-Rev');
+  
   return {
-    // Header information
-    quotation_number: header.quotationNumber || "",
+    // Header information - use offerNumber if it's a revision (includes -RevX)
+    quotation_number: isRevision ? offer.offerNumber : (header.quotationNumber || ""),
     quotation_date: formatDate(new Date()),
     customer_name: header.customerName || "",
     contact_person: header.contactPerson?.name || "",
@@ -405,7 +430,7 @@ const createDrawingsInfo = (itemsWithDrawings, quotationNumber) => {
     itemsWithDrawings.forEach((item, index) => {
       const drawing = item.drawingSpecification;
       
-      drawingsText += `Item ${index + 1}: ${item.karoseri} - ${item.chassis}\n`;
+      drawingsText += `Item ${index + 1}: ${item.karoseri} - ${item.chassis}${item.chassisModel ? ` - ${item.chassisModel}` : ''}\n`;
       drawingsText += `Drawing Number: ${drawing.drawingNumber}\n`;
       drawingsText += `Truck Type: ${drawing.truckType?.name || 'N/A'}\n`;
       drawingsText += `File: ${drawing.drawingFile.originalName}\n`;
@@ -532,10 +557,30 @@ const createImageModule = () =>
 export const generateQuotationDocument = async (
   quotationData,
   filename = "quotation.docx",
-  selectedNotes = []
+  selectedNotes = [],
+  trackDownload = true
 ) => {
   try {
     const { header, offers } = quotationData;
+    
+    // Track download before generating document
+    if (trackDownload && header.quotationNumber) {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/quotations/${encodeURIComponent(header.quotationNumber)}/track-download`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!response.ok) {
+          console.warn('Failed to track download:', response.statusText);
+        }
+      } catch (error) {
+        console.warn('Error tracking download:', error);
+        // Don't fail the download if tracking fails
+      }
+    }
     
     // Debug: Check the data structure
     
