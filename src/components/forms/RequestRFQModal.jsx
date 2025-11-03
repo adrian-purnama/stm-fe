@@ -17,6 +17,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       name: '',
       gender: 'Male'
     },
+    customerContacts: [],
     priority: 'medium',
     expectedDeliveryDate: '',
     confidenceRate: '',
@@ -66,6 +67,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         description: rfqToEdit.description || '',
         customerName: rfqToEdit.customerName || '',
         contactPerson: rfqToEdit.contactPerson || { name: '', gender: 'Male' },
+        customerContacts: rfqToEdit.customerContacts || [],
         priority: rfqToEdit.priority || 'medium',
         expectedDeliveryDate: rfqToEdit.expectedDeliveryDate ? rfqToEdit.expectedDeliveryDate.substr(0,10) : '',
         confidenceRate: rfqToEdit.confidenceRate || '',
@@ -80,6 +82,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       setFormData({
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
+        customerContacts: [],
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -233,6 +236,49 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       ...prev,
       items: prev.items.map((item, i) => 
         i === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  // Customer contacts management functions
+  const addCustomerContact = () => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: [...prev.customerContacts, { key: '', value: '' }]
+    }));
+  };
+
+  // Add default contacts if none exist (only on new RFQ creation)
+  useEffect(() => {
+    if (isOpen && !rfqToEdit) {
+      setFormData(prev => {
+        // Only add defaults if customerContacts is empty
+        if (prev.customerContacts && prev.customerContacts.length === 0) {
+          return {
+            ...prev,
+            customerContacts: [
+              { key: 'Phone', value: '' },
+              { key: 'Email', value: '' }
+            ]
+          };
+        }
+        return prev;
+      });
+    }
+  }, [isOpen, rfqToEdit]);
+
+  const removeCustomerContact = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: prev.customerContacts.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateCustomerContact = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: prev.customerContacts.map((contact, i) => 
+        i === index ? { ...contact, [field]: value } : contact
       )
     }));
   };
@@ -613,6 +659,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       setFormData({
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
+        customerContacts: [],
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -631,6 +678,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       setFormData({
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
+        customerContacts: [],
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -782,6 +830,63 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   disabled={loading}
                 />
               </div>
+            </div>
+
+            {/* Customer Contacts */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Customer Contacts (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={addCustomerContact}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                  disabled={loading}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Contact
+                </button>
+              </div>
+              
+              {formData.customerContacts.length === 0 && (
+                <p className="text-sm text-gray-500 mb-2">No additional contacts added</p>
+              )}
+              
+              {formData.customerContacts.map((contact, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 mb-2">
+                  <div className="col-span-12 md:col-span-4">
+                    <input
+                      type="text"
+                      value={contact.key}
+                      onChange={(e) => updateCustomerContact(index, 'key', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g., Phone, Email"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="col-span-12 md:col-span-7">
+                    <input
+                      type="text"
+                      value={contact.value}
+                      onChange={(e) => updateCustomerContact(index, 'value', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Contact value"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="col-span-12 md:col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeCustomerContact(index)}
+                      className="w-full px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition"
+                      disabled={loading}
+                    >
+                      <X className="w-5 h-5 mx-auto" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

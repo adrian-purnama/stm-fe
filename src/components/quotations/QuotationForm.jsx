@@ -17,6 +17,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       name: '',
       gender: 'Male'
     },
+    customerContacts: [],
     lineOfBusiness: {
       type: 'karoseri'
     },
@@ -272,6 +273,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const rfqFormData = {
           customerName: header.customerName || processedQuotation.customerName || '',
           contactPerson: header.contactPerson || processedQuotation.contactPerson || { name: '', gender: 'Male' },
+          customerContacts: header.customerContacts || processedQuotation.customerContacts || [],
           lineOfBusiness: header.lineOfBusiness || processedQuotation.lineOfBusiness || { type: 'karoseri' },
           offerItems: offerItems,
           excludePPN: false,
@@ -296,6 +298,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const newFormData = {
           customerName: header.customerName || '',
           contactPerson: header.contactPerson || { name: '', gender: 'Male' },
+          customerContacts: header.customerContacts || [],
           lineOfBusiness: header.lineOfBusiness || { type: 'karoseri' },
           offerItems: [],
           excludePPN: false,
@@ -325,6 +328,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const editFormData = {
           customerName: header.customerName || '',
           contactPerson: header.contactPerson || { name: '', gender: 'Male' },
+          customerContacts: header.customerContacts || [],
           lineOfBusiness: header.lineOfBusiness || { type: 'karoseri' },
           offerItems: activeOffer.offerItems || [],
           excludePPN: activeOffer.excludePPN || false,
@@ -390,6 +394,30 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         ...prev[parent],
         [field]: value
       }
+    }));
+  };
+
+  // Customer contacts management functions
+  const addCustomerContact = () => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: [...prev.customerContacts, { key: '', value: '' }]
+    }));
+  };
+
+  const removeCustomerContact = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: prev.customerContacts.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateCustomerContact = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      customerContacts: prev.customerContacts.map((contact, i) => 
+        i === index ? { ...contact, [field]: value } : contact
+      )
     }));
   };
 
@@ -627,6 +655,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         const headerData = {
           customerName: formData.customerName,
           contactPerson: formData.contactPerson,
+          customerContacts: formData.customerContacts,
           lineOfBusiness: formData.lineOfBusiness
         };
         
@@ -926,6 +955,76 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               className={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' ? 'opacity-50 cursor-not-allowed' : ''}
             />
           </div>
+
+          {/* Customer Contacts */}
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Customer Contacts (Optional)
+              </label>
+              <button
+                type="button"
+                onClick={addCustomerContact}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                disabled={loading || mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+              >
+                <Plus className="w-4 h-4" />
+                Add Contact
+              </button>
+            </div>
+            
+            {formData.customerContacts.length === 0 && (
+              <p className="text-sm text-gray-500 mb-2">No additional contacts added</p>
+            )}
+            
+            {formData.customerContacts.map((contact, index) => (
+              <div key={index} className="grid grid-cols-12 gap-2 mb-2">
+                <div className="col-span-12 md:col-span-4">
+                  <input
+                    type="text"
+                    value={contact.key}
+                    onChange={(e) => updateCustomerContact(index, 'key', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'
+                        ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                    placeholder="e.g., Phone, Email"
+                    disabled={loading || mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+                  />
+                </div>
+                <div className="col-span-12 md:col-span-7">
+                  <input
+                    type="text"
+                    value={contact.value}
+                    onChange={(e) => updateCustomerContact(index, 'value', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'
+                        ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                    placeholder="Contact value"
+                    disabled={loading || mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+                  />
+                </div>
+                <div className="col-span-12 md:col-span-1">
+                  <button
+                    type="button"
+                    onClick={() => removeCustomerContact(index)}
+                    className={`w-full px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition ${
+                      mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : ''
+                    }`}
+                    disabled={loading || mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+                  >
+                    <X className="w-5 h-5 mx-auto" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Business Type *
