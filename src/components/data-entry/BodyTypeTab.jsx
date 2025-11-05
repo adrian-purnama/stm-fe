@@ -3,6 +3,7 @@ import { Plus, Search, Edit, Trash2, Eye, Loader2, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
+import RichTextEditor from '../common/RichTextEditor';
 
 const BodyTypeTab = () => {
   // State for body types
@@ -17,6 +18,7 @@ const BodyTypeTab = () => {
     name: '',
     shortName: '',
     description: '',
+    article: '',
     defaultSpecifications: []
   });
 
@@ -58,7 +60,7 @@ const BodyTypeTab = () => {
       await ApiHelper.post('/api/body-types', bodyTypeFormData);
       toast.success('Body type created successfully');
       setShowBodyTypeModal(false);
-      setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+      setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
       loadBodyTypes();
     } catch (error) {
       console.error('Error creating body type:', error);
@@ -82,7 +84,7 @@ const BodyTypeTab = () => {
       toast.success('Body type updated successfully');
       setShowBodyTypeEditModal(false);
       setSelectedBodyType(null);
-      setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+      setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
       loadBodyTypes();
     } catch (error) {
       console.error('Error updating body type:', error);
@@ -111,6 +113,7 @@ const BodyTypeTab = () => {
       name: bodyType.name,
       shortName: bodyType.shortName || '',
       description: bodyType.description || '',
+      article: bodyType.article || '',
       defaultSpecifications: Array.isArray(bodyType.defaultSpecifications) ? bodyType.defaultSpecifications : []
     });
     setShowBodyTypeEditModal(true);
@@ -269,7 +272,7 @@ const BodyTypeTab = () => {
         isOpen={showBodyTypeModal}
         onClose={() => {
           setShowBodyTypeModal(false);
-          setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+          setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
         }}
         title="Create New Body Type"
         size="lg"
@@ -388,12 +391,22 @@ const BodyTypeTab = () => {
               )}
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Article
+            </label>
+            <RichTextEditor
+              value={bodyTypeFormData.article || ''}
+              onChange={(html) => setBodyTypeFormData({ ...bodyTypeFormData, article: html })}
+              placeholder="Write article content with formatting..."
+            />
+          </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
           <button
             onClick={() => {
               setShowBodyTypeModal(false);
-              setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+              setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
             }}
             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
@@ -414,7 +427,7 @@ const BodyTypeTab = () => {
         onClose={() => {
           setShowBodyTypeEditModal(false);
           setSelectedBodyType(null);
-          setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+          setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
         }}
         title="Edit Body Type"
         size="lg"
@@ -533,13 +546,23 @@ const BodyTypeTab = () => {
               )}
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Article
+            </label>
+            <RichTextEditor
+              value={bodyTypeFormData.article || ''}
+              onChange={(html) => setBodyTypeFormData({ ...bodyTypeFormData, article: html })}
+              placeholder="Write article content with formatting..."
+            />
+          </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
           <button
             onClick={() => {
               setShowBodyTypeEditModal(false);
               setSelectedBodyType(null);
-              setBodyTypeFormData({ name: '', shortName: '', description: '', defaultSpecifications: [] });
+              setBodyTypeFormData({ name: '', shortName: '', description: '', article: '', defaultSpecifications: [] });
             }}
             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
@@ -585,6 +608,17 @@ const BodyTypeTab = () => {
                   Description
                 </label>
                 <p className="text-gray-900">{selectedBodyType.description}</p>
+              </div>
+            )}
+            {selectedBodyType.article && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Article
+                </label>
+                <div 
+                  className="prose prose-sm max-w-none border border-gray-200 rounded-lg p-4 bg-gray-50"
+                  dangerouslySetInnerHTML={{ __html: selectedBodyType.article }}
+                />
               </div>
             )}
             {selectedBodyType.defaultSpecifications && selectedBodyType.defaultSpecifications.length > 0 && (
