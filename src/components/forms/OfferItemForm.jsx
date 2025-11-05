@@ -56,8 +56,9 @@ const OfferItemForm = ({
       fetchBodyTypes();
       fetchChassisTypes();
       fetchSizeTypes();
-      fetchDrawings();
     }
+    // Always load drawings since they're available in all modes (manual, bodyType, drawing)
+    fetchDrawings();
   }, [isEditing]);
 
   const fetchBodyTypes = async () => {
@@ -500,6 +501,47 @@ const OfferItemForm = ({
                     Specify the specific chassis model if needed
                   </p>
                 </div>
+
+                {/* Drawing selector for manual mode (optional) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Drawing <span className="text-xs text-gray-500">(Optional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDrawingSelector(true)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <span className={selectedDrawingSpec ? 'text-gray-900' : 'text-gray-500'}>
+                          {selectedDrawingSpec 
+                            ? `${selectedDrawingSpec.drawingNumber || 'Drawing'} ${selectedDrawingSpec.bodyTypeId?.name || ''}`
+                            : 'Select drawing (optional)'
+                          }
+                        </span>
+                      </div>
+                    </button>
+                    {selectedDrawingSpec && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleInputChange('drawingSpecification', null);
+                          setSelectedDrawingSpec(null);
+                          toast.success('Drawing removed');
+                        }}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove drawing"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Optional: Link a drawing to this item. This won't override your current settings.
+                  </p>
+                </div>
               </>
             )}
 
@@ -569,6 +611,47 @@ const OfferItemForm = ({
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     Specify the specific chassis model if needed
+                  </p>
+                </div>
+
+                {/* Drawing selector for bodyType mode (optional) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Drawing <span className="text-xs text-gray-500">(Optional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDrawingSelector(true)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <span className={selectedDrawingSpec ? 'text-gray-900' : 'text-gray-500'}>
+                          {selectedDrawingSpec 
+                            ? `${selectedDrawingSpec.drawingNumber || 'Drawing'} ${selectedDrawingSpec.bodyTypeId?.name || ''}`
+                            : 'Select drawing (optional)'
+                          }
+                        </span>
+                      </div>
+                    </button>
+                    {selectedDrawingSpec && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleInputChange('drawingSpecification', null);
+                          setSelectedDrawingSpec(null);
+                          toast.success('Drawing removed');
+                        }}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove drawing"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Optional: Link a drawing to this item. This won't override your current settings.
                   </p>
                 </div>
               </>
@@ -889,11 +972,15 @@ const OfferItemForm = ({
       {/* Drawing Specification Selector Modal */}
       <DrawingSpecificationSelector
         isOpen={showDrawingSelector}
-        value={formData.drawingSpecification}
+        value={formData.drawingSpecification?._id || formData.drawingSpecification}
         onChange={(drawingSpec) => {
           handleInputChange('drawingSpecification', drawingSpec._id);
           setSelectedDrawingSpec(drawingSpec);
           setShowDrawingSelector(false);
+          // Only show toast for manual/bodyType modes (not drawing mode which auto-fills)
+          if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
+            toast.success('Drawing selected (optional - other fields not changed)');
+          }
         }}
         onClose={() => setShowDrawingSelector(false)}
       />

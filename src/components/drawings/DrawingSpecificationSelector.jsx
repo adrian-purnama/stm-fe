@@ -37,7 +37,6 @@ const DrawingSpecificationSelector = ({
   
   // State for form data
   const [formData, setFormData] = useState({
-    drawingNumber: '',
     truckType: ''
   });
   
@@ -49,7 +48,8 @@ const DrawingSpecificationSelector = ({
   });
   
   // State for file uploads
-  const [uploadFiles, setUploadFiles] = useState([]);
+  const [uploadFiles, setUploadFiles] = useState([]); // AutoCAD file
+  const [uploadImageFiles, setUploadImageFiles] = useState([]); // JPG file
   const [uploading, setUploading] = useState(false);
 
   // Load truck types
@@ -81,10 +81,16 @@ const DrawingSpecificationSelector = ({
     }
   }, [selectedTruckType, searchTerm]);
 
-  // Handle file selection for upload
-  const handleFileSelect = (event) => {
+  // Handle AutoCAD file selection for upload
+  const handleDrawingFileSelect = (event) => {
     const file = event.target.files[0];
     setUploadFiles(file ? [file] : []);
+  };
+
+  // Handle JPG image file selection for upload
+  const handleImageFileSelect = (event) => {
+    const file = event.target.files[0];
+    setUploadImageFiles(file ? [file] : []);
   };
 
   // Get file preview URL
@@ -129,25 +135,25 @@ const DrawingSpecificationSelector = ({
   // Create new drawing specification
   const createDrawing = async () => {
     try {
-      if (!formData.drawingNumber.trim()) {
-        toast.error('Drawing number is required');
-        return;
-      }
       if (!formData.truckType) {
         toast.error('Truck type is required');
         return;
       }
       if (uploadFiles.length === 0) {
-        toast.error('Drawing file is required');
+        toast.error('AutoCAD file (DWG/DXF) is required for archive purposes.');
+        return;
+      }
+      if (uploadImageFiles.length === 0) {
+        toast.error('Quotation image (JPG) is required for quotation display.');
         return;
       }
 
       setUploading(true);
 
       const data = new FormData();
-      data.append('drawingNumber', formData.drawingNumber);
-      data.append('truckType', formData.truckType);
-      data.append('file', uploadFiles[0]);
+      data.append('bodyTypeId', formData.truckType); // truckType is actually bodyTypeId
+      data.append('drawingFile', uploadFiles[0]);
+      data.append('quotationImage', uploadImageFiles[0]);
 
       const response = await axiosInstance.post('/api/drawing-specifications', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -155,8 +161,9 @@ const DrawingSpecificationSelector = ({
 
       toast.success('Drawing specification created successfully');
       setShowUploadModal(false);
-      setFormData({ drawingNumber: '', truckType: '' });
+      setFormData({ truckType: '' });
       setUploadFiles([]);
+      setUploadImageFiles([]);
       
       // Reload drawings and auto-select the new one
       await loadDrawings();
@@ -295,28 +302,16 @@ const DrawingSpecificationSelector = ({
         isOpen={showUploadModal}
         onClose={() => {
           setShowUploadModal(false);
-          setFormData({ drawingNumber: '', truckType: '' });
+          setFormData({ truckType: '' });
           setUploadFiles([]);
+          setUploadImageFiles([]);
         }}
         title="Upload New Drawing Specification"
       >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Drawing Number *
-            </label>
-            <input
-              type="text"
-              value={formData.drawingNumber}
-              onChange={(e) => setFormData({ ...formData, drawingNumber: e.target.value.toUpperCase() })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., TRK-001"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Truck Type *
+              Body Type (Truck Type) *
             </label>
             <div className="flex gap-2">
               <div className="flex-1">
@@ -346,38 +341,72 @@ const DrawingSpecificationSelector = ({
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Drawing File (Required)
+              Upload AutoCAD File (DWG/DXF) - For Archive *
             </label>
             <input
               type="file"
-              accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png"
-              onChange={handleFileSelect}
+              accept=".dwg,.dxf"
+              onChange={handleDrawingFileSelect}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Supported formats: PDF, DWG, DXF, JPG, PNG (max 50MB)
+              Only DWG and DXF files are allowed (max 50MB)
             </p>
             
             {uploadFiles.length > 0 && (
               <div className="mt-3">
-                <p className="text-sm font-medium text-gray-700 mb-2">Selected File:</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Selected AutoCAD File:</p>
                 <div className="border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center gap-3">
-                    {getFilePreviewUrl(uploadFiles[0]) ? (
-                      <img 
-                        src={getFilePreviewUrl(uploadFiles[0])} 
-                        alt={uploadFiles[0].name}
-                        className="w-12 h-12 object-cover rounded border"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center text-2xl">
-                        {getFileIcon(uploadFiles[0].type)}
-                      </div>
-                    )}
+                    <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center text-2xl">
+                      📐
+                    </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{uploadFiles[0].name}</p>
                       <p className="text-xs text-gray-500">
                         {(uploadFiles[0].size / 1024 / 1024).toFixed(2)} MB • {uploadFiles[0].type}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Quotation Image (JPG) - For Quotation Display *
+            </label>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,image/jpeg"
+              onChange={handleImageFileSelect}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Only JPG/JPEG files are allowed (max 10MB). This image will be used in quotations.
+            </p>
+            
+            {uploadImageFiles.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Selected Image:</p>
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    {getFilePreviewUrl(uploadImageFiles[0]) ? (
+                      <img 
+                        src={getFilePreviewUrl(uploadImageFiles[0])} 
+                        alt={uploadImageFiles[0].name}
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-2xl">
+                        🖼️
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{uploadImageFiles[0].name}</p>
+                      <p className="text-xs text-gray-500">
+                        {(uploadImageFiles[0].size / 1024 / 1024).toFixed(2)} MB • {uploadImageFiles[0].type}
                       </p>
                     </div>
                   </div>

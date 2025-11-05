@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
-import { generateQuotationDocument, formatPrice } from '../../utils/templates/documentGenerator';
+import { formatPrice } from '../../utils/templates/documentGenerator';
 import toast from 'react-hot-toast';
 import { getDrawingAssetUrl, getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
+import axios from 'axios';
 
 // Format file size in human readable format
 const formatFileSize = (bytes) => {
@@ -33,32 +34,68 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       setLoading(true);
       const { header } = quotationData;
       
-      // Create filename based on offer and revision
-      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}`;
-      if (offer) {
-        if (revision) {
-          // For revisions, use the revision's offer number which already includes -RevX
-          filename += `_Offer_${revision.offerNumber.replace(/[/\\]/g, '_')}`;
-        } else {
-          // For regular offers, use the offer number
-          filename += `_Offer_${offer.offerNumber.replace(/[/\\]/g, '_')}`;
+      // Determine quotation ID (can be _id or quotationNumber)
+      const quotationId = header._id || header.quotationNumber;
+      
+      // Determine offer ID if specific offer/revision is selected
+      let offerId = null;
+      if (revision) {
+        offerId = revision._id;
+      } else if (offer) {
+        offerId = offer._id;
+      }
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (offerId) {
+        params.append('offerId', offerId);
+      }
+      if (selectedNotes && selectedNotes.length > 0) {
+        params.append('selectedNotes', JSON.stringify(selectedNotes));
+      }
+      
+      // Call backend download endpoint - use axios directly for blob response
+      const token = localStorage.getItem('asb-token');
+      const env = import.meta.env.VITE_NODE_ENV || import.meta.env.VITE_NODE_ENV_BUILD || "development";
+      const protocol = (env === "preprod" || env === "production") ? "https://" : "http://";
+      const baseURL = protocol + import.meta.env.VITE_BACKEND_URL;
+      
+      const response = await axios.get(
+        `${baseURL}/api/quotations/${quotationId}/download?${params.toString()}`,
+        {
+          responseType: 'blob', // Important for file downloads
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      console.log(response)
+      
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      
+      // Determine filename from response headers or generate default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}.docx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
         }
       }
-      filename += '.docx';
       
-      // Create modified quotation data for specific offer/revision
-      let modifiedQuotationData = { ...quotationData };
-      
-      if (offer) {
-        // Filter to only include the selected offer
-        modifiedQuotationData.offers = [{
-          original: revision || offer,
-          revisions: revision ? [revision] : (quotationData.offers.find(o => o.original?._id === offer._id)?.revisions || [])
-        }];
-      }
-      
-      // Generate document with the new simplified generator
-      await generateQuotationDocument(modifiedQuotationData, filename, selectedNotes);
+      // Create download link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast.success('Document downloaded successfully');
       
@@ -67,7 +104,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       }
     } catch (error) {
       console.error('Download error:', error);
-      toast.error('Failed to download document');
+      toast.error(error.response?.data?.message || 'Failed to download document');
     } finally {
       setLoading(false);
     }
@@ -158,7 +195,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 ) : (
                   <Download className="w-4 h-4 mr-2" />
                 )}
-                Current Offer
+                Current Offerssss
             </button>
             </div>
           </div>
@@ -307,19 +344,31 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                           <p className="font-medium">          Chassis     : {item.chassis || ''} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
                           <p className="font-medium">          Spesifikasi :</p>
                           {item.specifications && item.specifications.length > 0 ? (
-                            <div className="ml-4">
-                              {item.specifications.map((spec, specIndex) => (
-                                <div key={specIndex} className="mb-2">
-                                  <p className="font-semibold text-sm">
-                                    {`          ${spec.category}:`}
-                                  </p>
-                                  {spec.items && spec.items.map((specItem, itemIndex) => (
-                                    <p key={itemIndex} className="text-sm ml-4">
-                                      {`          ${specItem.name}: ${specItem.specification}`}
-                                    </p>
-                                  ))}
-                                </div>
-                              ))}
+                            <div className="ml-4 mt-2">
+                              <table className="w-full border-collapse border border-gray-300 text-sm">
+                                <thead>
+                                  <tr className="bg-gray-100">
+                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Kategori</th>
+                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Nama</th>
+                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Spesifikasi</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {item.specifications.flatMap((spec, specIndex) =>
+                                    spec.items ? spec.items.map((specItem, itemIndex) => (
+                                      <tr key={`${specIndex}-${itemIndex}`}>
+                                        {itemIndex === 0 && (
+                                          <td className="border border-gray-300 px-3 py-2 font-semibold align-top" rowSpan={spec.items.length}>
+                                            {spec.category}
+                                          </td>
+                                        )}
+                                        <td className="border border-gray-300 px-3 py-2">{specItem.name || ''}</td>
+                                        <td className="border border-gray-300 px-3 py-2">{specItem.specification || ''}</td>
+                                      </tr>
+                                    )) : []
+                                  )}
+                                </tbody>
+                              </table>
                             </div>
                           ) : (
                             <p className="ml-4 text-sm text-gray-500">No specifications provided</p>
@@ -433,8 +482,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     {(() => {
                       const itemsWithDrawings = currentOffer.offerItems?.filter(item => 
                         item.drawingSpecification && 
-                        item.drawingSpecification.drawingFile && 
-                        item.drawingSpecification.drawingFile.fileId
+                        item.drawingSpecification.quotationImage && 
+                        item.drawingSpecification.quotationImage.fileId
                       ) || [];
                       
                       if (itemsWithDrawings.length > 0) {
@@ -454,12 +503,12 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                             <div className="space-y-6">
                               {itemsWithDrawings.map((item, index) => {
                                 const drawing = item.drawingSpecification;
-                                const isImage = drawing.drawingFile.fileType === 'JPG' || 
-                                              drawing.drawingFile.fileType === 'PNG' || 
-                                              drawing.drawingFile.fileType === 'JPEG';
                                 
-                                // Create asset URL for the drawing
-                                const assetUrl = getDrawingAssetUrl(drawing._id, drawing.drawingFile.fileId);
+                                // Use quotationImage for display (JPG file)
+                                const quotationImage = drawing.quotationImage;
+                                
+                                // Create asset URL for the quotation image
+                                const assetUrl = getDrawingAssetUrl(drawing._id, quotationImage.fileId);
                                 
                                 return (
                                   <div key={index} className="border border-gray-200 rounded-lg p-4">
@@ -469,85 +518,56 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                       </h5>
                                       <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>
-                                        <p><strong>Truck Type:</strong> {drawing.truckType?.name || 'N/A'}</p>
-                                        <p><strong>File:</strong> {drawing.drawingFile.originalName}</p>
-                                        <p><strong>File Type:</strong> {drawing.drawingFile.fileType}</p>
-                                        <p><strong>File Size:</strong> {formatFileSize(drawing.drawingFile.fileSize)}</p>
-                                        <p><strong>Upload Date:</strong> {new Date(drawing.drawingFile.uploadDate).toLocaleDateString('id-ID')}</p>
+                                        <p><strong>Quotation Image:</strong> {quotationImage.originalName}</p>
+                                        <p><strong>File Size:</strong> {formatFileSize(quotationImage.fileSize)}</p>
+                                        <p><strong>Upload Date:</strong> {new Date(quotationImage.uploadDate).toLocaleDateString('id-ID')}</p>
                   </div>
                 </div>
 
-                                    {/* Image Preview */}
-                                    {isImage ? (
-                                      <div className="mt-4">
-                                        <h6 className="text-sm font-medium text-gray-700 mb-2">Drawing Preview:</h6>
-                                        <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                                          <img
-                                            src={assetUrl}
-                                            alt={`Drawing ${drawing.drawingNumber}`}
-                                            className="w-full h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                                            onClick={() => window.open(assetUrl, '_blank')}
-                                            onError={(e) => {
-                                              console.error('Image failed to load:', assetUrl);
-                                              e.target.style.display = 'none';
-                                              e.target.nextSibling.style.display = 'flex';
-                                            }}
-                                          />
-                                          <div className="w-full h-64 bg-gray-100 items-center justify-center text-gray-500 hidden">
-                                            <div className="text-center">
-                                              <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                                              <p className="text-sm">Image could not be loaded</p>
-                                              <p className="text-xs text-gray-400">{drawing.drawingFile.originalName}</p>
-                                            </div>
+                                    {/* Image Preview - Always show image since quotationImage is always JPG */}
+                                    <div className="mt-4">
+                                      <h6 className="text-sm font-medium text-gray-700 mb-2">Drawing Preview:</h6>
+                                      <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                                        <img
+                                          src={assetUrl}
+                                          alt={`Drawing ${drawing.drawingNumber}`}
+                                          className="w-full h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                          onClick={() => window.open(assetUrl, '_blank')}
+                                          onError={(e) => {
+                                            console.error('Image failed to load:', assetUrl);
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'flex';
+                                          }}
+                                        />
+                                        <div className="w-full h-64 bg-gray-100 items-center justify-center text-gray-500 hidden">
+                                          <div className="text-center">
+                                            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                                            <p className="text-sm">Image could not be loaded</p>
+                                            <p className="text-xs text-gray-400">{quotationImage.originalName}</p>
                                           </div>
                                         </div>
-                                        <div className="mt-2 flex justify-between items-center">
-                                          <button
-                                            onClick={() => window.open(assetUrl, '_blank')}
-                                            className="text-sm text-blue-600 hover:text-blue-800 underline"
-                                          >
-                                            View Full Size
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              const link = document.createElement('a');
-                                              link.href = `${assetUrl}&download=true`;
-                                              link.download = drawing.drawingFile.originalName;
-                                              link.click();
-                                            }}
-                                            className="text-sm text-green-600 hover:text-green-800 underline"
-                                          >
-                                            Download
-                                          </button>
-                                        </div>
                                       </div>
-                                    ) : (
-                                      <div className="mt-4">
-                                        <h6 className="text-sm font-medium text-gray-700 mb-2">File Information:</h6>
-                                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                                          <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                                          <p className="text-sm text-gray-600 mb-2">
-                                            {drawing.drawingFile.fileType} File
-                                          </p>
-                                          <p className="text-xs text-gray-500 mb-3">
-                                            {drawing.drawingFile.originalName}
-                                          </p>
-                                          <button
-                                            onClick={() => {
-                                              const link = document.createElement('a');
-                                              link.href = `${assetUrl}&download=true`;
-                                              link.download = drawing.drawingFile.originalName;
-                                              link.click();
-                                            }}
-                                            className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                                          >
-                                            <Download className="w-3 h-3 mr-1" />
-                                            Download File
-                                          </button>
-                                        </div>
+                                      <div className="mt-2 flex justify-between items-center">
+                                        <button
+                                          onClick={() => window.open(assetUrl, '_blank')}
+                                          className="text-sm text-blue-600 hover:text-blue-800 underline"
+                                        >
+                                          View Full Size
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const link = document.createElement('a');
+                                            link.href = `${assetUrl}&download=true`;
+                                            link.download = quotationImage.originalName;
+                                            link.click();
+                                          }}
+                                          className="text-sm text-green-600 hover:text-green-800 underline"
+                                        >
+                                          Download
+                                        </button>
                                       </div>
-                                    )}
-                          </div>
+                                    </div>
+                                  </div>
                                 );
                               })}
                             </div>

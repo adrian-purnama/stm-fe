@@ -44,7 +44,6 @@ const TruckDrawingManager = () => {
   
   // State for new drawing
   const [newDrawing, setNewDrawing] = useState({
-    drawingNumber: '',
     truckType: ''
   });
   
@@ -122,10 +121,6 @@ const TruckDrawingManager = () => {
   // Create new drawing specification
   const createDrawing = async () => {
     try {
-      if (!newDrawing.drawingNumber.trim()) {
-        toast.error('Drawing number is required');
-        return;
-      }
       if (!newDrawing.truckType) {
         toast.error('Truck type is required');
         return;
@@ -135,8 +130,7 @@ const TruckDrawingManager = () => {
       
       // Create FormData to handle both text data and files
       const formData = new FormData();
-      formData.append('drawingNumber', newDrawing.drawingNumber);
-      formData.append('truckType', newDrawing.truckType);
+      formData.append('bodyTypeId', newDrawing.truckType); // truckType is actually bodyTypeId
       
       // Add files if any
       createDrawingFiles.forEach(file => {
@@ -149,7 +143,7 @@ const TruckDrawingManager = () => {
       
       toast.success(response.data.message);
       setShowDrawingModal(false);
-      setNewDrawing({ drawingNumber: '', truckType: '' });
+      setNewDrawing({ truckType: '' });
       setCreateDrawingFiles([]);
       loadDrawings();
     } catch (error) {
@@ -468,20 +462,7 @@ const TruckDrawingManager = () => {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Drawing Number *
-            </label>
-            <input
-              type="text"
-              value={newDrawing.drawingNumber}
-              onChange={(e) => setNewDrawing({ ...newDrawing, drawingNumber: e.target.value.toUpperCase() })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., TRK-001"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Truck Type *
+              Body Type (Truck Type) *
             </label>
             <div className="flex gap-2">
               <div className="flex-1">

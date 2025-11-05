@@ -44,6 +44,7 @@ const QuotationFormPage = () => {
               header: {
                 customerName: rfqData.customerName,
                 contactPerson: rfqData.contactPerson,
+                customerContacts: rfqData.customerContacts || [],
                 lineOfBusiness: rfqData.lineOfBusiness
               },
               offers: [{

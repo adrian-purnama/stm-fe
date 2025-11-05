@@ -57,10 +57,12 @@ const DrawingSpecificationsPage = () => {
   });
   
   // State for file uploads
-  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null); // AutoCAD file
+  const [uploadImageFile, setUploadImageFile] = useState(null); // JPG file
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileSize, setFileSize] = useState(null);
+  const [imageFileSize, setImageFileSize] = useState(null);
   
   // State for selected drawing
   const [selectedDrawing, setSelectedDrawing] = useState(null);
@@ -72,6 +74,67 @@ const DrawingSpecificationsPage = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Helper function to normalize key segments (UPPERCASE, remove spaces and slashes)
+  const normalizeKeySegment = (str) => {
+    if (!str) return '';
+    return String(str)
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .replace(/\//g, '')
+      .replace(/-/g, '');
+  };
+
+  // Helper function to format features for composite key
+  const formatFeatures = (features) => {
+    if (!features || features.length === 0) return '';
+    
+    return features
+      .map(feature => {
+        if (!feature.featureId) return null;
+        // Get feature shortName from featureTypes array
+        const featureType = featureTypes.find(ft => ft._id === feature.featureId);
+        const featureKey = featureType?.shortName || feature.featureId.toString();
+        const specValue = feature.spec ? normalizeKeySegment(feature.spec) : '';
+        return specValue ? `${normalizeKeySegment(featureKey)}_${specValue}` : normalizeKeySegment(featureKey);
+      })
+      .filter(Boolean)
+      .join('-');
+  };
+
+  // Generate drawing number from form data
+  const generateDrawingNumber = () => {
+    // Get body type shortName
+    const bodyType = bodyTypes.find(bt => bt._id === formData.bodyTypeId);
+    const bodyTypeKey = bodyType?.shortName || '';
+    
+    // Get chassis type shortName
+    const chassisType = chassisTypes.find(ct => ct._id === formData.chassisTypeId);
+    const chassisKey = chassisType?.shortName || '';
+    
+    // Get size type shortName
+    const sizeType = sizeTypes.find(st => st._id === formData.sizeTypeId);
+    const sizeKey = sizeType?.shortName || '';
+    
+    // Normalize other fields
+    const chassisModelKey = normalizeKeySegment(formData.chassisModel || '');
+    const dimensionKey = normalizeKeySegment(formData.dimension || '');
+    const featuresKey = formatFeatures(formData.features || []);
+    
+    // Build composite key: BODYTYPE/CHASSIS/CHASSISMODEL/SIZE/DIMENSION/FEATURES
+    // Always include all segments, use "-" for empty optional fields
+    const keyParts = [
+      normalizeKeySegment(bodyTypeKey) || '-', // Body type is required, but show "-" if not selected yet
+      chassisKey ? normalizeKeySegment(chassisKey) : '-',
+      chassisModelKey || '-',
+      sizeKey ? normalizeKeySegment(sizeKey) : '-',
+      dimensionKey || '-',
+      featuresKey || '-'
+    ];
+    
+    return keyParts.join('/');
   };
 
   // Load master data
@@ -144,20 +207,31 @@ const DrawingSpecificationsPage = () => {
   // Create drawing specification
   const createDrawing = async () => {
     try {
-      // Validation - only bodyType is required (file upload is also required)
+      // Validation - only bodyType is required (file uploads are also required)
       if (!formData.bodyTypeId) {
         toast.error('Body type is required');
         return;
       }
       if (!uploadFile) {
-        toast.error('Drawing file upload is required. Please upload a DWG or DXF file.');
+        toast.error('AutoCAD file (DWG/DXF) upload is required for archive purposes.');
+        return;
+      }
+      if (!uploadImageFile) {
+        toast.error('Quotation image (JPG) upload is required for quotation display.');
         return;
       }
 
-      // Validate file type
+      // Validate AutoCAD file type
       const fileName = uploadFile.name.toLowerCase();
       if (!fileName.endsWith('.dwg') && !fileName.endsWith('.dxf')) {
-        toast.error('Invalid file type. Only DWG and DXF files are allowed.');
+        toast.error('Invalid file type for AutoCAD file. Only DWG and DXF files are allowed.');
+        return;
+      }
+
+      // Validate JPG file type
+      const imageFileName = uploadImageFile.name.toLowerCase();
+      if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
+        toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
         return;
       }
 
@@ -181,8 +255,9 @@ const DrawingSpecificationsPage = () => {
       formDataToSend.append('features', JSON.stringify(formData.features));
       formDataToSend.append('customSpecifications', JSON.stringify(formData.customSpecifications));
       
-      // Append file with correct field name
+      // Append both files with correct field names
       formDataToSend.append('drawingFile', uploadFile);
+      formDataToSend.append('quotationImage', uploadImageFile);
       
       await axiosInstance.post('/api/drawing-specifications', formDataToSend, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -371,7 +446,9 @@ const DrawingSpecificationsPage = () => {
       customSpecifications: []
     });
     setUploadFile(null);
+    setUploadImageFile(null);
     setFileSize(null);
+    setImageFileSize(null);
     setUploadProgress(0);
   };
 
@@ -667,6 +744,19 @@ const DrawingSpecificationsPage = () => {
           size="lg"
         >
           <div className="space-y-4">
+            {/* Drawing Number Preview - Auto-generated */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Drawing Number (Auto-generated)
+              </label>
+              <p className="text-lg font-mono font-semibold text-blue-900">
+                {generateDrawingNumber()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                This number will update automatically as you fill in the fields below
+              </p>
+            </div>
+
             {/* Body Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -890,55 +980,108 @@ const DrawingSpecificationsPage = () => {
               </div>
             </div>
 
-            {/* File Upload - Required for create */}
+            {/* File Uploads - Required for create */}
             {showCreateModal && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Drawing File (DWG/DXF) *
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) => {
-                    const file = e.target.files[0] || null;
-                    setUploadFile(file);
-                    if (file) {
-                      setFileSize({
-                        original: file.size,
-                        formatted: formatFileSize(file.size)
-                      });
-                    } else {
-                      setFileSize(null);
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  accept=".dwg,.dxf"
-                  required
-                />
-                {uploadFile && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-700">
-                      {uploadFile.name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Original size: {fileSize?.formatted || formatFileSize(uploadFile.size)}
-                    </p>
-                    {uploading && (
-                      <div className="mt-3">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}
+              <>
+                {/* AutoCAD File Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    AutoCAD File (DWG/DXF) * - For Archive
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files[0] || null;
+                      setUploadFile(file);
+                      if (file) {
+                        setFileSize({
+                          original: file.size,
+                          formatted: formatFileSize(file.size)
+                        });
+                      } else {
+                        setFileSize(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    accept=".dwg,.dxf"
+                    required
+                  />
+                  {uploadFile && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium text-gray-700">
+                        {uploadFile.name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Original size: {fileSize?.formatted || formatFileSize(uploadFile.size)}
+                      </p>
+                    </div>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Only DWG and DXF files are allowed. DWG files will be converted to DXF automatically.
+                  </p>
+                </div>
+
+                {/* JPG Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quotation Image (JPG) * - For Quotation Display
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files[0] || null;
+                      setUploadImageFile(file);
+                      if (file) {
+                        setImageFileSize({
+                          original: file.size,
+                          formatted: formatFileSize(file.size)
+                        });
+                      } else {
+                        setImageFileSize(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    accept=".jpg,.jpeg,image/jpeg"
+                    required
+                  />
+                  {uploadImageFile && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {uploadImageFile.type.startsWith('image/') && (
+                          <img 
+                            src={URL.createObjectURL(uploadImageFile)} 
+                            alt={uploadImageFile.name}
+                            className="w-16 h-16 object-cover rounded border"
                           />
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-700">
+                            {uploadImageFile.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Original size: {imageFileSize?.formatted || formatFileSize(uploadImageFile.size)}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">{uploadProgress}% uploaded</p>
                       </div>
-                    )}
+                    </div>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Only JPG/JPEG files are allowed. This image will be used in quotations.
+                  </p>
+                </div>
+
+                {uploading && (
+                  <div className="mt-3">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{uploadProgress}% uploaded</p>
                   </div>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
-                  Only DWG and DXF files are allowed. DWG files will be converted to DXF automatically.
-                </p>
-              </div>
+              </>
             )}
           </div>
 
@@ -1100,7 +1243,7 @@ const DrawingSpecificationsPage = () => {
               {selectedDrawing.drawingFile && selectedDrawing.drawingFile.fileId && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Drawing File
+                    AutoCAD File (Archive)
                   </label>
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-2">
@@ -1117,6 +1260,30 @@ const DrawingSpecificationsPage = () => {
                         >
                           <Download className="h-4 w-4" />
                         </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedDrawing.quotationImage && selectedDrawing.quotationImage.fileId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quotation Image (JPG)
+                  </label>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FileImage className="h-5 w-5 text-gray-400" />
+                      <span className="text-sm text-gray-700">{selectedDrawing.quotationImage.originalName}</span>
+                    </div>
+                    <button
+                      onClick={() => downloadFile(
+                        selectedDrawing._id, 
+                        selectedDrawing.quotationImage.fileId, 
+                        selectedDrawing.quotationImage.originalName
+                      )}
+                      className="text-blue-600 hover:text-blue-900 p-1"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
