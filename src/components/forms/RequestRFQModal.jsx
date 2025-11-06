@@ -691,7 +691,12 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     
     // Debug: Log validation errors if any
     if (Object.keys(newErrors).length > 0) {
-      console.log('Validation errors:', newErrors);
+      const errorKeys = Object.keys(newErrors);
+      const errorList = errorKeys.slice(0, 10).map(key => `${key}: ${newErrors[key]}`);
+      console.log(`Validation errors (${errorKeys.length} total):`, errorList);
+      if (errorKeys.length > 10) {
+        console.log(`... and ${errorKeys.length - 10} more validation errors`);
+      }
     }
     
     return Object.keys(newErrors).length === 0;

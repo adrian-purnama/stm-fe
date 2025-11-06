@@ -3,7 +3,7 @@ import { UserContext } from '../../utils/contexts/UserContext';
 import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
 import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
-import { Plus, FileText, Clock, CheckCircle, XCircle, ArrowRight, Info, Filter, FolderPlus, CheckSquare, Square } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, XCircle, ArrowRight, Info, Filter, FolderPlus, CheckSquare, Square, Upload, Trash2, MoreVertical } from 'lucide-react';
 import RequestRFQModal from '../forms/RequestRFQModal';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
@@ -35,6 +35,19 @@ const RequestQuotationTab = () => {
   const [newFolderColor, setNewFolderColor] = useState('#3B82F6');
   const [selectedRFQIds, setSelectedRFQIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  
+  // CSV Upload states
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  
+  // Folder edit/delete modal states
+  const [showFolderEditModal, setShowFolderEditModal] = useState(false);
+  const [editingFolder, setEditingFolder] = useState(null);
+  const [editFolderName, setEditFolderName] = useState('');
+  const [editFolderColor, setEditFolderColor] = useState('#3B82F6');
   
   // Color options for folders
   const folderColors = [
@@ -214,6 +227,57 @@ const RequestQuotationTab = () => {
     }
   };
 
+  // Handle CSV file upload
+  const handleCSVUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('Please upload a CSV file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setIsProcessing(false);
+    setUploadResult(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await axiosInstance.post('/api/rfq/upload-seed', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          setUploadProgress(percentCompleted);
+          
+          // When upload reaches 100%, switch to processing state
+          if (percentCompleted >= 100) {
+            setIsProcessing(true);
+          }
+        },
+      });
+
+      setUploadResult(response.data.data);
+      toast.success('CSV uploaded and processed successfully!');
+      
+      // Refresh RFQ list
+      fetchRFQs(1, true);
+      fetchFolders();
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      toast.error(error.response?.data?.message || 'Failed to upload CSV file');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      setIsProcessing(false);
+    }
+  };
+
   // Create new folder
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) {
@@ -256,6 +320,72 @@ const RequestQuotationTab = () => {
     } catch (error) {
       console.error('Error moving RFQs:', error);
       toast.error(error.response?.data?.message || 'Failed to move RFQs');
+    }
+  };
+
+  // Open folder edit modal
+  const handleOpenFolderEdit = (folder) => {
+    setEditingFolder(folder);
+    setEditFolderName(folder.name);
+    setEditFolderColor(folder.color);
+    setShowFolderEditModal(true);
+  };
+
+  // Update folder
+  const handleUpdateFolder = async () => {
+    if (!editFolderName.trim()) {
+      toast.error('Folder name is required');
+      return;
+    }
+
+    if (!editingFolder) return;
+
+    try {
+      await axiosInstance.put(`/api/auth/folders/${editingFolder._id}`, {
+        name: editFolderName.trim(),
+        color: editFolderColor
+      });
+      toast.success('Folder updated successfully');
+      setShowFolderEditModal(false);
+      setEditingFolder(null);
+      fetchFolders();
+      fetchRFQs(1, true);
+    } catch (error) {
+      console.error('Error updating folder:', error);
+      toast.error(error.response?.data?.message || 'Failed to update folder');
+    }
+  };
+
+  // Delete folder
+  const handleDeleteFolder = async () => {
+    if (!editingFolder) return;
+    
+    if (!window.confirm('Are you sure you want to delete this folder? RFQs in this folder will be moved to default (no folder).')) {
+      return;
+    }
+
+    try {
+      const response = await axiosInstance.delete(`/api/auth/folders/${editingFolder._id}`);
+      const rfqsMoved = response.data.data?.rfqsMovedToDefault || 0;
+      
+      if (rfqsMoved > 0) {
+        toast.success(`Folder deleted. ${rfqsMoved} RFQ${rfqsMoved > 1 ? 's' : ''} moved to default.`);
+      } else {
+        toast.success('Folder deleted successfully');
+      }
+      
+      // Clear folder filter if deleted folder was selected
+      if (selectedFolderFilter === editingFolder._id) {
+        setSelectedFolderFilter('');
+      }
+      
+      setShowFolderEditModal(false);
+      setEditingFolder(null);
+      fetchFolders();
+      fetchRFQs(1, true);
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete folder');
     }
   };
 
@@ -359,13 +489,22 @@ const RequestQuotationTab = () => {
           <h2 className="text-xl font-semibold text-gray-900">Request Quotation</h2>
           <p className="text-sm text-gray-600 mt-1">Create and manage your quotation requests</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          Request Quotation
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Upload size={16} />
+            Upload RFQ CSV
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Request Quotation
+          </button>
+        </div>
       </div>
 
       {/* WebSocket Connection Status */}
@@ -396,22 +535,36 @@ const RequestQuotationTab = () => {
                 All RFQs
               </button>
               {folders.map(folder => (
-                <button
+                <div
                   key={folder._id}
-                  onClick={() => {
-                    setSelectedFolderFilter(folder._id);
-                    fetchRFQs(1, true);
-                  }}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-2 ${
-                    selectedFolderFilter === folder._id
-                      ? 'text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={selectedFolderFilter === folder._id ? { backgroundColor: folder.color } : {}}
+                  className="flex items-center gap-1 group relative"
                 >
-                  <span style={{ color: folder.color }}>●</span>
-                  {folder.name}
-                </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFolderFilter(folder._id);
+                      fetchRFQs(1, true);
+                    }}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-2 ${
+                      selectedFolderFilter === folder._id
+                        ? 'text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    style={selectedFolderFilter === folder._id ? { backgroundColor: folder.color } : {}}
+                  >
+                    <span style={{ color: folder.color }}>●</span>
+                    {folder.name}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenFolderEdit(folder);
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    title="Folder options"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -854,6 +1007,114 @@ const RequestQuotationTab = () => {
         </div>
       </BaseModal>
 
+      {/* CSV Upload Modal */}
+      <BaseModal isOpen={showUploadModal} onClose={() => { setShowUploadModal(false); setUploadResult(null); }} title="Upload RFQ CSV">
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-900 mb-2 font-medium">CSV Format Requirements:</p>
+            <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
+              <li>Required columns: Cutoff Date, Category, Line of Business, Product Type, Opportunity Description, Customer, Chassis, Probability, Location, Total Est Revenue</li>
+              <li>Line of Business values: karoseri, service, or sparepart</li>
+              <li>Category will be used to create/organize folders (max 5 folders per user)</li>
+              <li>Missing BodyType and ChassisType will be created automatically</li>
+            </ul>
+          </div>
+
+          <div>
+            <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700 mb-2">
+              Select CSV File <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="file"
+              id="csvFile"
+              accept=".csv"
+              onChange={handleCSVUpload}
+              disabled={uploading || isProcessing}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          {(uploading || isProcessing) && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>
+                  {isProcessing ? 'Processing CSV file...' : `Uploading... ${uploadProgress}%`}
+                </span>
+                {!isProcessing && <span>{uploadProgress}%</span>}
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                <div
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    isProcessing ? 'bg-blue-600 animate-pulse' : 'bg-green-600'
+                  }`}
+                  style={{ width: isProcessing ? '100%' : `${uploadProgress}%` }}
+                />
+              </div>
+              {isProcessing && (
+                <p className="text-xs text-gray-500">Please wait while we process your data...</p>
+              )}
+            </div>
+          )}
+
+          {uploadResult && !uploading && !isProcessing && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-green-900">Upload Summary</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-600">Total Rows:</span>
+                  <span className="ml-2 font-medium text-gray-900">{uploadResult.summary?.totalRows || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Processed:</span>
+                  <span className="ml-2 font-medium text-green-700">{uploadResult.summary?.processed || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">RFQs Created:</span>
+                  <span className="ml-2 font-medium text-green-700">{uploadResult.summary?.rfqsCreated || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Errors:</span>
+                  <span className="ml-2 font-medium text-red-600">{uploadResult.summary?.errors || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">New BodyTypes:</span>
+                  <span className="ml-2 font-medium text-blue-700">{uploadResult.summary?.newBodyTypes || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">New ChassisTypes:</span>
+                  <span className="ml-2 font-medium text-blue-700">{uploadResult.summary?.newChassisTypes || 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Folders Created:</span>
+                  <span className="ml-2 font-medium text-purple-700">{uploadResult.summary?.foldersCreated || 0}</span>
+                </div>
+              </div>
+
+              {uploadResult.errors && uploadResult.errors.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-green-300">
+                  <p className="text-sm font-medium text-red-700 mb-2">Errors ({uploadResult.errors.length}):</p>
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {uploadResult.errors.map((error, index) => (
+                      <p key={index} className="text-xs text-red-600">{error}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            <button
+              onClick={() => { setShowUploadModal(false); setUploadResult(null); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              disabled={uploading}
+            >
+              {uploadResult ? 'Close' : 'Cancel'}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
+
       {/* Folder Creation Modal */}
       <BaseModal isOpen={showFolderModal} onClose={() => setShowFolderModal(false)} title="Create New Folder">
         <div className="space-y-4">
@@ -905,6 +1166,70 @@ const RequestQuotationTab = () => {
             >
               Create Folder
             </button>
+          </div>
+        </div>
+      </BaseModal>
+
+      {/* Folder Edit/Delete Modal */}
+      <BaseModal isOpen={showFolderEditModal} onClose={() => { setShowFolderEditModal(false); setEditingFolder(null); }} title="Edit Folder">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="editFolderName" className="block text-sm font-medium text-gray-700 mb-2">
+              Folder Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="editFolderName"
+              value={editFolderName}
+              onChange={(e) => setEditFolderName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              placeholder="Enter folder name"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Folder Color
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {folderColors.map(color => (
+                <button
+                  key={color.value}
+                  onClick={() => setEditFolderColor(color.value)}
+                  className={`h-10 rounded-lg border-2 transition-all ${
+                    editFolderColor === color.value 
+                      ? 'border-gray-900 ring-2 ring-purple-500' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+            <button
+              onClick={handleDeleteFolder}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-2"
+            >
+              <Trash2 size={14} />
+              Delete Folder
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowFolderEditModal(false); setEditingFolder(null); }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateFolder}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+              >
+                Save Changes
+              </button>
+            </div>
           </div>
         </div>
       </BaseModal>
