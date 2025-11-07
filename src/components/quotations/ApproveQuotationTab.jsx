@@ -1,11 +1,10 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserContext } from '../../utils/contexts/UserContext';
 import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
 import axiosInstance from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
 import toast from 'react-hot-toast';
-import { CheckCircle, XCircle, Clock, Users, FileText, Eye, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Eye, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, Search, SlidersHorizontal, Filter, XCircle as XCircleIcon } from 'lucide-react';
 
 const ApproveQuotationTab = () => {
   const navigate = useNavigate();
@@ -17,6 +16,14 @@ const ApproveQuotationTab = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [selectedRFQ, setSelectedRFQ] = useState(null);
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    lineOfBusiness: [],
+    priority: [],
+    verdict: 'all',
+    minConfidence: 0
+  });
 
   // Fetch RFQs for the current user (as approver) - only RFQs that have been reviewed by Engineering and are ready for approval
   const fetchRFQs = async () => {
@@ -115,6 +122,81 @@ const ApproveQuotationTab = () => {
     }
   }, [connected]);
 
+  const toggleFilterValue = (key, value) => {
+    setFilters((prev) => {
+      const currentValues = prev[key];
+      const exists = currentValues.includes(value);
+      const updatedValues = exists
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value];
+
+      return {
+        ...prev,
+        [key]: updatedValues
+      };
+    });
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      lineOfBusiness: [],
+      priority: [],
+      verdict: 'all',
+      minConfidence: 0
+    });
+    setSearchTerm('');
+  };
+
+  const filteredRfqs = useMemo(() => {
+    return rfqs.filter((rfq) => {
+      const searchTarget = [
+        rfq.rfqNumber,
+        rfq.customerName,
+        rfq.contactPerson?.name,
+        rfq.lineOfBusiness?.type,
+        rfq.priority,
+        rfq.competitor
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch = searchTerm
+        ? searchTarget.includes(searchTerm.trim().toLowerCase())
+        : true;
+
+      const matchesLOB =
+        filters.lineOfBusiness.length === 0 ||
+        (rfq.lineOfBusiness?.type &&
+          filters.lineOfBusiness.includes(rfq.lineOfBusiness.type));
+
+      const matchesPriority =
+        filters.priority.length === 0 ||
+        (rfq.priority && filters.priority.includes(rfq.priority));
+
+      const verdict = rfq.engineeringTransit?.canDo;
+      const matchesVerdict =
+        filters.verdict === 'all' ||
+        (filters.verdict === 'canDo' && verdict === true) ||
+        (filters.verdict === 'cannotDo' && verdict === false) ||
+        (filters.verdict === 'noVerdict' && (verdict === null || verdict === undefined));
+
+      const confidence = parseInt(rfq.confidenceRate, 10) || 0;
+      const matchesConfidence = confidence >= (filters.minConfidence || 0);
+
+      return matchesSearch && matchesLOB && matchesPriority && matchesVerdict && matchesConfidence;
+    });
+  }, [rfqs, searchTerm, filters]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.lineOfBusiness.length > 0) count += filters.lineOfBusiness.length;
+    if (filters.priority.length > 0) count += filters.priority.length;
+    if (filters.verdict !== 'all') count += 1;
+    if ((filters.minConfidence || 0) > 0) count += 1;
+    return count;
+  }, [filters]);
+
   const getStatusIcon = (status) => {
     switch (status) {
       case 'approved':
@@ -163,24 +245,280 @@ const ApproveQuotationTab = () => {
         </span>
       </div>
 
+      {/* Search & Filters */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search RFQs by number, customer, contact, line of business, priority, competitor..."
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Tip: combine filters to quickly narrow down RFQs. Showing {filteredRfqs.length} of {rfqs.length}.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+              >
+                <X className="h-4 w-4" />
+                Clear Search
+              </button>
+            )}
+            <button
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-white text-blue-600 font-semibold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {filtersOpen && (
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <Filter className="h-4 w-4 text-blue-500" />
+                Advanced Filters
+              </h3>
+              <button
+                onClick={resetFilters}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Reset Filters
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Line of Business</p>
+                <div className="flex flex-wrap gap-2">
+                  {['karoseri', 'service', 'sparepart'].map((lob) => {
+                    const isActive = filters.lineOfBusiness.includes(lob);
+                    return (
+                      <button
+                        key={lob}
+                        onClick={() => toggleFilterValue('lineOfBusiness', lob)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          isActive
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >
+                        {lob.charAt(0).toUpperCase() + lob.slice(1)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Priority</p>
+                <div className="flex flex-wrap gap-2">
+                  {['urgent', 'high', 'medium', 'low'].map((priority) => {
+                    const isActive = filters.priority.includes(priority);
+                    const colorMap = {
+                      urgent: 'bg-red-600 border-red-600',
+                      high: 'bg-orange-500 border-orange-500',
+                      medium: 'bg-yellow-500 border-yellow-500',
+                      low: 'bg-green-600 border-green-600'
+                    };
+                    const inactiveMap = {
+                      urgent: 'text-red-600',
+                      high: 'text-orange-600',
+                      medium: 'text-yellow-600',
+                      low: 'text-green-600'
+                    };
+
+                    return (
+                      <button
+                        key={priority}
+                        onClick={() => toggleFilterValue('priority', priority)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          isActive
+                            ? `${colorMap[priority]} text-white`
+                            : `bg-white border-gray-200 hover:border-gray-300 ${inactiveMap[priority]}`
+                        }`}
+                      >
+                        {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Engineering Verdict</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'canDo', label: 'Can Do' },
+                    { value: 'cannotDo', label: 'Cannot Do' },
+                    { value: 'noVerdict', label: 'No Verdict' }
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          verdict: option.value
+                        }))
+                      }
+                      className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                        filters.verdict === option.value
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Minimum Confidence Rate
+                  </p>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {filters.minConfidence || 0}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={filters.minConfidence || 0}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      minConfidence: Number(e.target.value)
+                    }))
+                  }
+                  className="w-full accent-blue-600"
+                />
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            </div>
+
+            {activeFilterCount > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {filters.lineOfBusiness.map((lob) => (
+                  <span
+                    key={`lob-${lob}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-blue-100 text-blue-700 rounded-full"
+                  >
+                    {lob.charAt(0).toUpperCase() + lob.slice(1)}
+                    <button
+                      onClick={() => toggleFilterValue('lineOfBusiness', lob)}
+                      className="text-blue-500 hover:text-blue-700"
+                    >
+                      <XCircleIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                {filters.priority.map((priority) => (
+                  <span
+                    key={`priority-${priority}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
+                  >
+                    {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    <button
+                      onClick={() => toggleFilterValue('priority', priority)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <XCircleIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                {filters.verdict !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-full">
+                    Verdict: {
+                      {
+                        canDo: 'Can Do',
+                        cannotDo: 'Cannot Do',
+                        noVerdict: 'No Verdict'
+                      }[filters.verdict]
+                    }
+                    <button
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          verdict: 'all'
+                        }))
+                      }
+                      className="text-emerald-500 hover:text-emerald-700"
+                    >
+                      <XCircleIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {(filters.minConfidence || 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
+                    Confidence ≥ {filters.minConfidence}%
+                    <button
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          minConfidence: 0
+                        }))
+                      }
+                      className="text-purple-500 hover:text-purple-700"
+                    >
+                      <XCircleIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* RFQs List */}
       {loading ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Loading RFQs...</p>
         </div>
-      ) : rfqs.length === 0 ? (
+      ) : filteredRfqs.length === 0 ? (
         <div className="text-center py-12">
           <div className="bg-green-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} className="text-green-500" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">All caught up!</h3>
-          <p className="text-gray-600">No pending RFQs require your approval at the moment.</p>
-          <p className="text-sm text-gray-500 mt-2">You'll be notified when new RFQs are assigned to you.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No RFQs match your criteria</h3>
+          <p className="text-gray-600">Try adjusting your search or filters to see more results.</p>
+          {rfqs.length > 0 && (
+            <button
+              onClick={resetFilters}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+            >
+              <Filter className="h-4 w-4" />
+              Reset Filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {rfqs.map((rfq) => {
+          {filteredRfqs.map((rfq) => {
             // Calculate total revenue
             const totalRevenue = rfq.items?.reduce((sum, item) => {
               const itemRevenue = parseFloat(item.estimatedRevenue) || 0;

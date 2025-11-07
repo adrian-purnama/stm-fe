@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import Navigation from '../components/common/Navigation';
 import LazyTabs from '../components/common/LazyTabs';
-import { Truck, Settings, Ruler, Sparkles } from 'lucide-react';
+import { Truck, Settings, Ruler, Sparkles, FileText } from 'lucide-react';
 
 const DataEntryPage = () => {
 
@@ -12,6 +12,12 @@ const DataEntryPage = () => {
       label: 'Body Type',
       icon: Truck,
       component: () => import('../components/data-entry/BodyTypeTab')
+    },
+    {
+      key: 'article',
+      label: 'Articles',
+      icon: FileText,
+      component: () => import('../components/data-entry/ArticleTab')
     },
     {
       key: 'chassis',

@@ -3,10 +3,19 @@ import { UserContext } from '../../utils/contexts/UserContext';
 import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
 import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
-import { Plus, FileText, Clock, CheckCircle, XCircle, ArrowRight, Info, Filter, FolderPlus, CheckSquare, Square, Upload, Trash2, MoreVertical } from 'lucide-react';
+import { Plus, Clock, CheckCircle, XCircle, ArrowRight, Info, Filter, FolderPlus, CheckSquare, Square, Upload, Trash2, MoreVertical, SlidersHorizontal } from 'lucide-react';
 import RequestRFQModal from '../forms/RequestRFQModal';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
+
+const ADVANCED_FILTER_DEFAULTS = {
+  lineOfBusiness: [],
+  priority: [],
+  stage: '',
+  status: '',
+  dateFrom: '',
+  dateTo: ''
+};
 
 const RequestQuotationTab = () => {
   const { connected } = useContext(NotificationsContext);
@@ -25,7 +34,103 @@ const RequestQuotationTab = () => {
   const listRef = useRef(null);
   const [chips, setChips] = useState([]); // [{ type: 'app', value: 'budi' }, ...]
   const [infoOpen, setInfoOpen] = useState(false);
-  const [meetingFilter, setMeetingFilter] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({ ...ADVANCED_FILTER_DEFAULTS });
+
+  const toggleMultiFilter = (key, value) => {
+    setAdvancedFilters((prev) => {
+      const currentValues = prev[key] || [];
+      const exists = currentValues.includes(value);
+      const updatedValues = exists
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value];
+
+      return {
+        ...prev,
+        [key]: updatedValues
+      };
+    });
+  };
+
+  const toggleSingleFilter = (key, value) => {
+    setAdvancedFilters((prev) => ({
+      ...prev,
+      [key]: prev[key] === value ? '' : value
+    }));
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters({ ...ADVANCED_FILTER_DEFAULTS });
+  };
+
+  const advancedFilterChips = [];
+
+  const capitalize = (value = '') =>
+    value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+
+  const formatStatusLabel = (value = '') => {
+    if (!value) return value;
+    if (value === 'quotation_created') return 'Quotation Created';
+    return capitalize(value);
+  };
+
+  (advancedFilters.lineOfBusiness || []).forEach((value) => {
+    advancedFilterChips.push({
+      key: `lob-${value}`,
+      label: `Line of Business: ${capitalize(value)}`,
+      onRemove: () => toggleMultiFilter('lineOfBusiness', value)
+    });
+  });
+
+  (advancedFilters.priority || []).forEach((value) => {
+    advancedFilterChips.push({
+      key: `priority-${value}`,
+      label: `Priority: ${capitalize(value)}`,
+      onRemove: () => toggleMultiFilter('priority', value)
+    });
+  });
+
+  if (advancedFilters.stage) {
+    advancedFilterChips.push({
+      key: `stage-${advancedFilters.stage}`,
+      label: `Stage: ${capitalize(advancedFilters.stage)}`,
+      onRemove: () => toggleSingleFilter('stage', advancedFilters.stage)
+    });
+  }
+
+  if (advancedFilters.status) {
+    advancedFilterChips.push({
+      key: `status-${advancedFilters.status}`,
+      label: `Status: ${formatStatusLabel(advancedFilters.status)}`,
+      onRemove: () => toggleSingleFilter('status', advancedFilters.status)
+    });
+  }
+
+  if (advancedFilters.dateFrom) {
+    advancedFilterChips.push({
+      key: `dateFrom`,
+      label: `From: ${advancedFilters.dateFrom}`,
+      onRemove: () =>
+        setAdvancedFilters((prev) => ({
+          ...prev,
+          dateFrom: ''
+        }))
+    });
+  }
+
+  if (advancedFilters.dateTo) {
+    advancedFilterChips.push({
+      key: `dateTo`,
+      label: `To: ${advancedFilters.dateTo}`,
+      onRemove: () =>
+        setAdvancedFilters((prev) => ({
+          ...prev,
+          dateTo: ''
+        }))
+    });
+  }
+
+  const advancedFilterCount = advancedFilterChips.length;
   
   // Folder management states
   const [folders, setFolders] = useState([]);
@@ -103,20 +208,28 @@ const RequestQuotationTab = () => {
     const params = { page, limit: 20, search };
     
     // Apply meeting filter if selected
-    if (meetingFilter) {
-      const filterMap = {
-        'not_submitted': { stage: 'sales', status: 'pending' },
-        'rejected': { status: 'rejected' },
-        'pending_approval': { stage: 'approver', status: 'pending' },
-        'in_engineering': { stage: 'engineering', status: 'pending' },
-        'approved': { status: 'approved' },
-        'quotation_created': { status: 'quotation_created' }
-      };
-      const filter = filterMap[meetingFilter];
-      if (filter) {
-        if (filter.stage) params.stage = filter.stage;
-        if (filter.status) params.status = filter.status;
-      }
+    if (advancedFilters.lineOfBusiness?.length) {
+      params.lineOfBusiness = advancedFilters.lineOfBusiness;
+    }
+
+    if (advancedFilters.priority?.length) {
+      params.priority = advancedFilters.priority;
+    }
+
+    if (advancedFilters.stage) {
+      params.stage = advancedFilters.stage;
+    }
+
+    if (advancedFilters.status) {
+      params.status = advancedFilters.status;
+    }
+
+    if (advancedFilters.dateFrom) {
+      params.from = advancedFilters.dateFrom;
+    }
+
+    if (advancedFilters.dateTo) {
+      params.to = advancedFilters.dateTo;
     }
     
     // Apply folder filter if selected
@@ -167,7 +280,7 @@ const RequestQuotationTab = () => {
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, [chips, searchInput, meetingFilter, selectedFolderFilter]);
+  }, [chips, searchInput, selectedFolderFilter, advancedFilters]);
 
   // Debounced search
   useEffect(() => {
@@ -175,7 +288,7 @@ const RequestQuotationTab = () => {
       fetchRFQs(1, true); // Reset to page 1 on new search
     }, 350);
     return () => clearTimeout(timeout);
-  }, [searchInput, chips, meetingFilter, selectedFolderFilter, fetchRFQs]);
+  }, [searchInput, chips, selectedFolderFilter, fetchRFQs]);
 
 
   const onSearchInput = (val) => {
@@ -650,7 +763,7 @@ const RequestQuotationTab = () => {
         )}
       </div>
 
-      {/* UI: Search bar, meeting filter, and info */}
+      {/* UI: Search bar and filters */}
       <div className="space-y-3 mb-4">
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
@@ -670,45 +783,167 @@ const RequestQuotationTab = () => {
             <Info className="w-5 h-5" />
           </button>
         </div>
-        
-        {/* Meeting Purpose Filter */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Meeting Filter:</span>
-          </div>
-          <div className="flex-1 max-w-xs">
-            <CustomDropdown
-              options={[
-                { value: '', label: 'All RFQs' },
-                { value: 'not_submitted', label: 'Not Yet Submitted (Sales/Pending)' },
-                { value: 'rejected', label: 'Rejected' },
-                { value: 'pending_approval', label: 'Pending Approval (Awaiting Approver)' },
-                { value: 'in_engineering', label: 'In Engineering Review' },
-                { value: 'approved', label: 'Approved (Ready for Quotation)' },
-                { value: 'quotation_created', label: 'Quotation Created' }
-              ]}
-              value={meetingFilter}
-              onChange={(val) => {
-                setMeetingFilter(val);
-                setPagination((p) => ({ ...p, page: 1 }));
-              }}
-              placeholder="Filter for meeting..."
-            />
-          </div>
-          {meetingFilter && (
-            <button
-              onClick={() => {
-                setMeetingFilter('');
-                setPagination((p) => ({ ...p, page: 1 }));
-              }}
-              className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              Clear Filter
-            </button>
-          )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            {showAdvancedFilters ? 'Hide advanced filters' : 'Show advanced filters'}
+            {advancedFilterCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-white text-blue-600 font-semibold">
+                {advancedFilterCount}
+              </span>
+            )}
+          </button>
         </div>
+
+        {showAdvancedFilters && (
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                Advanced Filters
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="text-xs font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Line of Business</p>
+                <div className="flex flex-wrap gap-2">
+                  {['karoseri', 'service', 'sparepart'].map((value) => {
+                    const active = advancedFilters.lineOfBusiness.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleMultiFilter('lineOfBusiness', value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >
+                        {capitalize(value)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Priority</p>
+                <div className="flex flex-wrap gap-2">
+                  {['urgent', 'high', 'medium', 'low'].map((value) => {
+                    const active = advancedFilters.priority.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleMultiFilter('priority', value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-purple-400 hover:text-purple-600'
+                        }`}
+                      >
+                        {capitalize(value)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Stage</p>
+                <div className="flex flex-wrap gap-2">
+                  {['sales', 'engineering', 'approver', 'quotation'].map((value) => {
+                    const active = advancedFilters.stage === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleSingleFilter('stage', value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-emerald-400 hover:text-emerald-600'
+                        }`}
+                      >
+                        {capitalize(value)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</p>
+                <div className="flex flex-wrap gap-2">
+                  {['pending', 'approved', 'rejected', 'quotation_created'].map((value) => {
+                    const active = advancedFilters.status === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleSingleFilter('status', value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-amber-500 text-white border-amber-500'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:text-amber-600'
+                        }`}
+                      >
+                        {formatStatusLabel(value)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Date Range</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">From</label>
+                    <input
+                      type="date"
+                      value={advancedFilters.dateFrom}
+                      onChange={(e) =>
+                        setAdvancedFilters((prev) => ({
+                          ...prev,
+                          dateFrom: e.target.value
+                        }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">To</label>
+                    <input
+                      type="date"
+                      value={advancedFilters.dateTo}
+                      min={advancedFilters.dateFrom || undefined}
+                      onChange={(e) =>
+                        setAdvancedFilters((prev) => ({
+                          ...prev,
+                          dateTo: e.target.value
+                        }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
       {/* chips UI */}
       <div className="flex flex-wrap gap-2 mb-2">
         {chips.map((chip, i) => (
@@ -718,6 +953,30 @@ const RequestQuotationTab = () => {
         ))}
         {chips.length > 0 && <button onClick={() => setChips([])} className="ml-2 px-2 py-1 bg-gray-100 text-xs rounded">Clear Filters</button>}
       </div>
+      {advancedFilterChips.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {advancedFilterChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-purple-100 text-purple-700 rounded-full"
+            >
+              {chip.label}
+              <button
+                onClick={chip.onRemove}
+                className="text-purple-500 hover:text-purple-700"
+              >
+                <XCircle className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          <button
+            onClick={clearAdvancedFilters}
+            className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+          >
+            Clear advanced filters
+          </button>
+        </div>
+      )}
 
       {/* List container, infinite scrollable area */}
       <div ref={listRef} style={{ maxHeight: '70vh', overflowY: 'auto' }}>
