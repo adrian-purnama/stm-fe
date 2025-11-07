@@ -35,6 +35,8 @@ const RequestQuotationTab = () => {
   const [newFolderColor, setNewFolderColor] = useState('#3B82F6');
   const [selectedRFQIds, setSelectedRFQIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const isFetchingRef = useRef(false); // Prevent duplicate fetches
+  const currentPageRef = useRef(1); // Track current page for reliable access
   
   // CSV Upload states
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -81,7 +83,12 @@ const RequestQuotationTab = () => {
     return found;
   };
   const fetchRFQs = useCallback(async (pageOverride, reset = false) => {
-    let page = pageOverride || (pagination.page || 1);
+    // Prevent duplicate fetches
+    if (isFetchingRef.current && !reset) return;
+    
+    isFetchingRef.current = true;
+    const page = pageOverride !== undefined ? pageOverride : (reset ? 1 : currentPageRef.current);
+    
     setLoading(true);
     // Build search string from chips and searchInput
     let search = '';
@@ -118,6 +125,8 @@ const RequestQuotationTab = () => {
     }
     
     try {
+      const el = listRef.current;
+      
       const resp = await axiosInstance.get('/api/rfq', { params });
       let newResults = resp.data.data?.rfqs || resp.data.data?.rfq || [];
       // Ensure newResults is always an array
@@ -125,16 +134,40 @@ const RequestQuotationTab = () => {
         console.error('API returned non-array data:', newResults);
         newResults = [];
       }
-      setPagination(resp.data.pagination || resp.data.data?.pagination || { page: 1, pages: 1, total: 0 });
-      setRfqResults(prev => reset ? newResults : [...prev, ...newResults]);
+      
+      const responsePagination = resp.data.pagination || resp.data.data?.pagination || { page: 1, pages: 1, total: 0 };
+      
+      // Update current page ref
+      currentPageRef.current = responsePagination.page || page;
+      
+      // Update results - use React's batching to update both states together
+      if (reset) {
+        // Reset: replace all results and scroll to top
+        setRfqResults(newResults);
+        setPagination(responsePagination);
+        if (el) {
+          // Scroll to top after state updates
+          requestAnimationFrame(() => {
+            el.scrollTop = 0;
+          });
+        }
+      } else {
+        // Infinite scroll: append results
+        // Batch both updates together - React 18 automatically batches these
+        setRfqResults(prev => [...prev, ...newResults]);
+        setPagination(responsePagination);
+      }
     } catch (error) {
       console.error('Error fetching RFQs:', error);
       toast.error('Failed to fetch RFQs');
-      setRfqResults([]); // Reset to empty array on error
+      if (reset) {
+        setRfqResults([]); // Reset to empty array on error
+      }
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
-  }, [chips, searchInput, meetingFilter, selectedFolderFilter, pagination.page]);
+  }, [chips, searchInput, meetingFilter, selectedFolderFilter]);
 
   // Debounced search
   useEffect(() => {
@@ -167,14 +200,24 @@ const RequestQuotationTab = () => {
   const handleScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
-    if (loading) return;
-    if (pagination.page >= pagination.pages) return;
-    // near bottom
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
-      fetchRFQs(pagination.page + 1);
-      setPagination((p) => ({ ...p, page: p.page + 1 }));
-    }
-  }, [loading, pagination, fetchRFQs]);
+    if (loading || isFetchingRef.current) return;
+    
+    // Check pagination state via ref to avoid stale closures
+    // Use functional update to get latest pagination state
+    setPagination(current => {
+      // Check if we can load more
+      if (current.page >= current.pages) return current;
+      
+      // Check if near bottom (within 150px)
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom < 150) {
+        // Fetch next page - pagination will be updated by fetchRFQs after API response
+        const nextPage = current.page + 1;
+        fetchRFQs(nextPage, false);
+      }
+      return current;
+    });
+  }, [loading, fetchRFQs]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -395,7 +438,7 @@ const RequestQuotationTab = () => {
       await axiosInstance.post('/api/rfq', rfqData);
       toast.success('RFQ submitted successfully');
       setShowModal(false);
-      fetchRFQs();
+      fetchRFQs(1, true);
     } catch (error) {
       console.error('Error creating RFQ:', error);
       toast.error('Failed to submit RFQ');
