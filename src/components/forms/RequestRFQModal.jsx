@@ -18,6 +18,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       gender: 'Male'
     },
     customerContacts: [],
+    endUser: '',
     priority: 'medium',
     expectedDeliveryDate: '',
     confidenceRate: '',
@@ -178,6 +179,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
 
   useEffect(() => {
     if (isOpen && rfqToEdit) {
+      // Get RFQ-level bodyTypeId and chassisTypeId (handle both populated objects and plain IDs)
+      const rfqBodyTypeId = rfqToEdit.bodyTypeId?._id || rfqToEdit.bodyTypeId || null;
+      const rfqChassisTypeId = rfqToEdit.chassisTypeId?._id || rfqToEdit.chassisTypeId || null;
+      
       // Deep copy items and migrate old serviceDetail to serviceDetails array
       const migratedItems = Array.isArray(rfqToEdit.items) ? JSON.parse(JSON.stringify(rfqToEdit.items)).map(item => {
         // For service items: migrate old serviceDetail to serviceDetails array if needed
@@ -185,6 +190,65 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           item.serviceDetails = [item.serviceDetail];
           delete item.serviceDetail; // Remove old field
         }
+        
+        // For karoseri items: populate bodyTypeId and chassisTypeId from RFQ level if not already set
+        if (rfqToEdit.lineOfBusiness?.type === 'karoseri') {
+          // Determine bodyTypeId - check existing fields first, then RFQ level
+          let resolvedBodyTypeId = null;
+          if (item.bodyTypeId) {
+            resolvedBodyTypeId = typeof item.bodyTypeId === 'object' 
+              ? item.bodyTypeId._id || item.bodyTypeId 
+              : item.bodyTypeId;
+          } else if (item.templateSourceId && item.templateSourceModel === 'BodyType') {
+            // If templateSourceId exists and points to BodyType, use it
+            resolvedBodyTypeId = typeof item.templateSourceId === 'object' 
+              ? item.templateSourceId._id || item.templateSourceId 
+              : item.templateSourceId;
+          } else if (rfqBodyTypeId) {
+            // Otherwise, use RFQ-level bodyTypeId
+            resolvedBodyTypeId = rfqBodyTypeId;
+          }
+          
+          // Set bodyTypeId
+          if (resolvedBodyTypeId) {
+            item.bodyTypeId = resolvedBodyTypeId;
+            // Also set templateSourceId (form uses this for dropdown)
+            // Handle case where templateSourceId might be a populated object
+            const currentTemplateSourceId = typeof item.templateSourceId === 'object' 
+              ? item.templateSourceId._id || item.templateSourceId 
+              : item.templateSourceId;
+            
+            // Set templateSourceId if not already set or if it doesn't match bodyTypeId
+            if (!currentTemplateSourceId || currentTemplateSourceId !== resolvedBodyTypeId) {
+              item.templateSourceId = resolvedBodyTypeId;
+              item.templateSourceModel = 'BodyType';
+            } else {
+              // Ensure templateSourceId is a string ID, not an object
+              item.templateSourceId = currentTemplateSourceId;
+              if (!item.templateSourceModel) {
+                item.templateSourceModel = 'BodyType';
+              }
+            }
+          }
+          
+          // Populate chassisTypeId from RFQ level if not already set
+          if (!item.chassisTypeId && rfqChassisTypeId) {
+            item.chassisTypeId = rfqChassisTypeId;
+          }
+          
+          // Ensure templateMode is set (default to 'manual' if not set)
+          if (!item.templateMode) {
+            // If templateSourceId exists and templateSourceModel is 'BodyType', set to 'bodyType'
+            if (item.templateSourceId && item.templateSourceModel === 'BodyType') {
+              item.templateMode = 'bodyType';
+            } else if (item.templateSourceId && item.templateSourceModel === 'DrawingSpecification') {
+              item.templateMode = 'drawing';
+            } else {
+              item.templateMode = 'manual';
+            }
+          }
+        }
+        
         return item;
       }) : [];
       
@@ -196,6 +260,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         customerName: rfqToEdit.customerName || '',
         contactPerson: rfqToEdit.contactPerson || { name: '', gender: 'Male' },
         customerContacts: rfqToEdit.customerContacts || [],
+        endUser: rfqToEdit.endUser || '',
         priority: rfqToEdit.priority || 'medium',
         expectedDeliveryDate: rfqToEdit.expectedDeliveryDate ? rfqToEdit.expectedDeliveryDate.substr(0,10) : '',
         confidenceRate: rfqToEdit.confidenceRate || '',
@@ -211,6 +276,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
         customerContacts: [],
+        endUser: '',
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -793,6 +859,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
         customerContacts: [],
+        endUser: '',
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -812,6 +879,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         approverId: '', quotationCreatorId: '', engineeringId: '',
         description: '', customerName: '', contactPerson: { name: '', gender: 'Male' },
         customerContacts: [],
+        endUser: '',
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
@@ -1021,6 +1089,22 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* End User Field */}
+            <div>
+              <label htmlFor="endUser" className="block text-sm font-medium text-gray-700 mb-2">
+                End User (Optional)
+              </label>
+              <input
+                type="text"
+                id="endUser"
+                value={formData.endUser}
+                onChange={(e) => handleInputChange('endUser', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter end user"
+                disabled={loading}
+              />
             </div>
           </div>
         </div>

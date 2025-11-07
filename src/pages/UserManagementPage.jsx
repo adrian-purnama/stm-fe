@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Trash2, Copy, Key, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Copy, Settings, ArrowLeft } from 'lucide-react';
 import Navigation from '../components/common/Navigation';
 import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
@@ -8,6 +8,8 @@ import ConfirmModal from '../components/modals/ConfirmModal';
 import RoleManagementModal from '../components/modals/RoleManagementModal';
 import CustomDropdown from '../components/common/CustomDropdown';
 import AddUserModal from '../components/modals/AddUserModal';
+import EditUserModal from '../components/modals/EditUserModal';
+import BaseModal from '../components/modals/BaseModal';
 
 
 const UserManagementPage = () => {
@@ -23,6 +25,9 @@ const UserManagementPage = () => {
   const [actionType, setActionType] = useState('');
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [showAddUser, setShowAddUser] = useState(false);
+  const [showEditUser, setShowEditUser] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [selectedUserPermissions, setSelectedUserPermissions] = useState([]);
 
   const fetchUsers = async (page = 1, search = '') => {
     try {
@@ -149,22 +154,38 @@ const UserManagementPage = () => {
   };
 
 
-  const handleResetPassword = async (userId) => {
-    const newPassword = prompt('Enter new password (minimum 6 characters):');
-    if (!newPassword || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long');
-      return;
-    }
+  const handleEditUser = (user) => {
+    setSelectedUser(user);
+    setShowEditUser(true);
+  };
 
+  const handleUpdateUser = async (userId, updateData) => {
     try {
-      const resetToast = toast.loading('Resetting password...');
-      await axiosInstance.post(`/api/auth/users/${userId}/reset-password`, {
-        newPassword: newPassword
-      });
-      toast.success('Password reset successfully', { id: resetToast });
+      const updateToast = toast.loading('Updating user...');
+      
+      // If password is being changed, use reset-password endpoint
+      if (updateData.newPassword) {
+        await axiosInstance.post(`/api/auth/users/${userId}/reset-password`, {
+          newPassword: updateData.newPassword
+        });
+        delete updateData.newPassword;
+      }
+
+      // Update other fields (fullName, email) if they exist
+      if (updateData.fullName || updateData.email) {
+        await axiosInstance.put(`/api/auth/users/${userId}`, {
+          fullName: updateData.fullName,
+          email: updateData.email
+        });
+      }
+
+      toast.success('User updated successfully', { id: updateToast });
+      setShowEditUser(false);
+      setSelectedUser(null);
+      fetchUsers(pagination.current, searchTerm);
     } catch (error) {
-      console.error('Error resetting password:', error);
-      toast.error('Failed to reset password');
+      console.error('Error updating user:', error);
+      toast.error(error.response?.data?.message || 'Failed to update user');
     }
   };
 
@@ -190,9 +211,22 @@ const UserManagementPage = () => {
     return matchesSearch;
   });
 
-  const getPermissionNames = (userPermissions) => {
+  const getPermissionNames = (userPermissions, maxLength = 50) => {
     if (!userPermissions || userPermissions.length === 0) return 'No permissions';
-    return userPermissions.map(permission => permission.displayName).join(', ');
+    const permissionString = userPermissions.map(permission => permission.displayName || permission.name).join(', ');
+    
+    if (permissionString.length <= maxLength) {
+      return permissionString;
+    }
+    
+    // Truncate and add "View All" indicator
+    return permissionString.substring(0, maxLength) + '...';
+  };
+
+  const handleViewAllPermissions = (user) => {
+    setSelectedUser(user);
+    setSelectedUserPermissions(user.permissions || []);
+    setShowPermissionsModal(true);
   };
 
   const formatDate = (date) => {
@@ -304,6 +338,15 @@ const UserManagementPage = () => {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
                           {getPermissionNames(user.permissions)}
+                          {user.permissions && user.permissions.length > 0 && 
+                           getPermissionNames(user.permissions, Infinity).length > 50 && (
+                            <button
+                              onClick={() => handleViewAllPermissions(user)}
+                              className="ml-2 text-blue-600 hover:text-blue-800 hover:underline text-xs"
+                            >
+                              View All
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -328,11 +371,11 @@ const UserManagementPage = () => {
                             <Copy className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleResetPassword(user._id || user.id)}
-                            className="text-yellow-600 hover:text-yellow-900"
-                            title="Reset Password"
+                            onClick={() => handleEditUser(user)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit User"
                           >
-                            <Key className="w-4 h-4" />
+                            <Settings className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => {
@@ -366,6 +409,18 @@ const UserManagementPage = () => {
             isOpen={showAddUser}
             onClose={() => setShowAddUser(false)}
             onSubmit={submitCreateUser}
+          />
+        )}
+
+        {showEditUser && selectedUser && (
+          <EditUserModal
+            isOpen={showEditUser}
+            onClose={() => {
+              setShowEditUser(false);
+              setSelectedUser(null);
+            }}
+            user={selectedUser}
+            onSubmit={handleUpdateUser}
           />
         )}
 
@@ -412,6 +467,62 @@ const UserManagementPage = () => {
           onConfirm={confirmAction}
           onCancel={() => setShowConfirmModal(false)}
         />
+      )}
+
+      {/* Permissions View Modal */}
+      {showPermissionsModal && selectedUser && (
+        <BaseModal
+          isOpen={showPermissionsModal}
+          onClose={() => {
+            setShowPermissionsModal(false);
+            setSelectedUserPermissions([]);
+          }}
+          title={`Permissions - ${selectedUser.fullName}`}
+        >
+          <div className="space-y-4">
+            {selectedUserPermissions.length === 0 ? (
+              <p className="text-gray-500">No permissions assigned</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedUserPermissions.map((permission, index) => (
+                  <div
+                    key={permission._id || permission.id || index}
+                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          {permission.displayName || permission.name}
+                        </h4>
+                        {permission.description && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            {permission.description}
+                          </p>
+                        )}
+                        {permission.category && (
+                          <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                            {permission.category}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowPermissionsModal(false);
+                  setSelectedUserPermissions([]);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </BaseModal>
       )}
     </div>
   );
