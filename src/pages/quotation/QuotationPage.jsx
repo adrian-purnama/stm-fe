@@ -16,8 +16,19 @@ const QuotationPage = () => {
   const fetchRFQDetails = useCallback(async () => {
     try {
       setRfqLoading(true);
-      const response = await axiosInstance.get(`/api/rfq/${rfqId}`);
-      setRfqDetails(response.data.data.rfq);
+      const [rfqResponse, documentsResponse] = await Promise.all([
+        axiosInstance.get(`/api/rfq/${rfqId}`),
+        axiosInstance.get(`/api/rfq/${rfqId}/documents`)
+      ]);
+
+      const rfqData = rfqResponse.data?.data?.rfq || null;
+      const documents = documentsResponse.data?.data?.documents || [];
+
+      const enrichedRFQ = rfqData
+        ? { ...rfqData, documents }
+        : null;
+
+      setRfqDetails(enrichedRFQ);
     } catch (error) {
       console.error('Error fetching RFQ details:', error);
       toast.error('Failed to fetch RFQ details');

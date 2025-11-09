@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import { formatPrice } from '../../utils/templates/documentGenerator';
 import toast from 'react-hot-toast';
@@ -13,21 +13,101 @@ const formatFileSize = (bytes) => {
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
 };
 
+const safeNumber = (value, fallback = 0) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const calculateItemFinancials = (item = {}) => {
+  const quantity = safeNumber(item.quantity, 1) > 0 ? safeNumber(item.quantity, 1) : 1;
+  const basePrice = safeNumber(item.price, 0);
+  const discountValue = safeNumber(item.discountValue, 0);
+  let discountPerUnit = 0;
+
+  if (item.discountType === 'percentage') {
+    discountPerUnit = Math.round((basePrice * discountValue) / 100);
+  } else {
+    discountPerUnit = discountValue;
+  }
+
+  const commissionPerUnit = safeNumber(item.commission, 0);
+  const clientNetPerUnit = Math.max(basePrice - discountPerUnit, 0);
+  const internalNetPerUnit = Math.max(clientNetPerUnit - commissionPerUnit, 0);
+
+  return {
+    quantity,
+    basePrice,
+    discountPerUnit,
+    commissionPerUnit,
+    clientNetPerUnit,
+    internalNetPerUnit,
+    baseTotal: basePrice * quantity,
+    discountTotal: discountPerUnit * quantity,
+    commissionTotal: commissionPerUnit * quantity,
+    clientNetTotal: clientNetPerUnit * quantity,
+    internalNetTotal: internalNetPerUnit * quantity
+  };
+};
+
+const aggregateOfferFinancials = (items = []) => {
+  return items.reduce(
+    (acc, item) => {
+      const breakdown = calculateItemFinancials(item);
+      acc.quantity += breakdown.quantity;
+      acc.baseTotal += breakdown.baseTotal;
+      acc.discountTotal += breakdown.discountTotal;
+      acc.commissionTotal += breakdown.commissionTotal;
+      acc.clientNetTotal += breakdown.clientNetTotal;
+      acc.internalNetTotal += breakdown.internalNetTotal;
+      acc.details.push({ item, breakdown });
+      return acc;
+    },
+    {
+      quantity: 0,
+      baseTotal: 0,
+      discountTotal: 0,
+      commissionTotal: 0,
+      clientNetTotal: 0,
+      internalNetTotal: 0,
+      details: []
+    }
+  );
+};
+
+const formatDiscountDescriptor = (item, breakdown) => {
+  if (!breakdown || breakdown.discountPerUnit <= 0) return '';
+  if (item.discountType === 'percentage') {
+    return `${safeNumber(item.discountValue, 0)}%`;
+  }
+  return formatPrice(breakdown.discountPerUnit);
+};
+
 const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
   const [loading, setLoading] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
-  const [predefinedNotes] = useState([
-    { text: 'Payment Dp.50 % sisa cash before delivery', selected: true },
+  const paymentTermsNote = useMemo(() => {
+    const rfqPayment = quotationData?.rfq?.paymentTerms;
+    const headerPayment = quotationData?.header?.paymentTerms;
+    const fallback = 'Payment DP 50% sisa cash before delivery';
+    return (rfqPayment && rfqPayment.trim()) ||
+      (headerPayment && headerPayment.trim()) ||
+      fallback;
+  }, [quotationData]);
+
+  const predefinedNotes = useMemo(() => ([
+    { text: paymentTermsNote, selected: true },
     { text: 'Loco Pabrik Cikandel', selected: true },
     { text: 'Harga tidak mengikat bisa berubah sewaktu-waktu tanpa pemberitahuan terlebih dahulu.', selected: true },
     { text: 'DIMENSI KAROSERI diluar SKRB tidak diperuntukan untuk dijalan raya (OFF ROAD)', selected: true },
     { text: 'Uji Type yang terbit hanya untuk karoseri dengan ukuran standard Dishub. Ukuran Oversize STM tidak bertanggung jawab jika uji type tidak dapat terbit dari Dishub', selected: true },
     { text: 'Tanpa acc keur', selected: true }
-  ]);
-  const [selectedNotes, setSelectedNotes] = useState(() => {
-    // Default all notes to checked (yes)
-    return [0, 1, 2, 3, 4, 5];
-  });
+  ]), [paymentTermsNote]);
+
+  const [selectedNotes, setSelectedNotes] = useState([]);
+
+  useEffect(() => {
+    setSelectedNotes(predefinedNotes.map((_, index) => index));
+  }, [predefinedNotes]);
 
   const handleDownload = async (offer = null, revision = null) => {
     try {
@@ -69,8 +149,6 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
           }
         }
       );
-
-      console.log(response)
       
       // Create blob URL and trigger download
       const blob = new Blob([response.data], {
@@ -100,7 +178,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       toast.success('Document downloaded successfully');
       
       if (onDownload) {
-        onDownload();
+        await onDownload();
       }
     } catch (error) {
       console.error('Download error:', error);
@@ -122,6 +200,32 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
 
   const { header, offers } = quotationData;
 
+  useEffect(() => {
+    const offerGroups = offers || [];
+    if (!offerGroups.length) {
+      if (selectedOffer) {
+        setSelectedOffer(null);
+      }
+      return;
+    }
+
+    const firstOffer = offerGroups[0]?.original || offerGroups[0];
+    const offerStillExists = selectedOffer
+      ? offerGroups.some((group) => {
+          const original = group.original || group;
+          if (original?._id === selectedOffer._id) return true;
+          if (group.revisions && group.revisions.length > 0) {
+            return group.revisions.some((rev) => rev._id === selectedOffer._id);
+          }
+          return false;
+        })
+      : false;
+
+    if (!selectedOffer || !offerStillExists) {
+      setSelectedOffer(firstOffer);
+    }
+  }, [offers, selectedOffer]);
+
   if (!offers || offers.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -141,16 +245,45 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
     );
   }
 
-  // Set default selected offer if none selected
-  if (!selectedOffer && offers.length > 0) {
-    setSelectedOffer(offers[0]);
+  const currentOffer = useMemo(() => {
+    if (selectedOffer) return selectedOffer;
+    if (offers && offers.length > 0) {
+      return offers[0]?.original || offers[0];
+    }
+    return null;
+  }, [selectedOffer, offers]);
+
+  const offerFinancials = useMemo(
+    () => aggregateOfferFinancials(currentOffer?.offerItems || []),
+    [currentOffer]
+  );
+
+  const totalBase = offerFinancials.baseTotal;
+  const clientNetTotal = offerFinancials.clientNetTotal;
+  const internalNetTotal = offerFinancials.internalNetTotal;
+  const totalDiscount = offerFinancials.discountTotal;
+  const effectiveTotalDiscount = totalDiscount;
+
+  let ppnAmount = 0;
+  let grandTotal = clientNetTotal;
+  let subtotalExclusive = clientNetTotal;
+
+  if (currentOffer?.excludePPN) {
+    subtotalExclusive = clientNetTotal;
+    ppnAmount = Math.round(subtotalExclusive * 0.11);
+    grandTotal = subtotalExclusive + ppnAmount;
+  } else {
+    subtotalExclusive = Math.round(clientNetTotal / 1.11);
+    ppnAmount = Math.max(clientNetTotal - subtotalExclusive, 0);
+    grandTotal = clientNetTotal;
   }
 
-  // Calculate totals for selected offer
-  const currentOffer = selectedOffer || offers[0];
-  const totalNetto = currentOffer.offerItems?.reduce((sum, item) => sum + (item.netto || 0), 0) || 0;
-  const ppn = Math.round(totalNetto * 0.11);
-  const total = totalNetto + ppn;
+  const ppnStatusLabel = currentOffer?.excludePPN
+    ? 'Belum termasuk PPN (harga Nett)'
+    : 'Sudah termasuk PPN (harga Gross)';
+  const ppnLabel = currentOffer?.excludePPN
+    ? 'Estimasi PPN (11%)'
+    : 'Komponen PPN (dari harga termasuk PPN)';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -215,81 +348,114 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                         </div>
             <div className="p-6">
               <div className="space-y-6">
-                {offers.map((offerGroup, groupIndex) => (
-                  <div key={groupIndex} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Offer {offerGroup.original?.offerNumber || `#${groupIndex + 1}`}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          {offerGroup.original?.offerItems?.length || 0} items
-                        </p>
-                        </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setSelectedOffer(offerGroup.original)}
-                          className={`px-3 py-1 text-sm rounded-md ${
-                            selectedOffer?._id === offerGroup.original?._id
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
-                          }`}
-                        >
-                          Preview
-                        </button>
-                        <button
-                          onClick={() => handleDownload(offerGroup.original)}
-                          disabled={loading}
-                          className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
-                        >
-                          <Download className="w-3 h-3 mr-1" />
-                          Download
-                        </button>
+                {offers.map((offerGroup, groupIndex) => {
+                  const winningOfferId = quotationData?.header?.selectedOfferId?.toString?.() || '';
+                  const selectedOfferItemIds = quotationData?.header?.selectedOfferItemIds?.map((id) =>
+                    id?.toString?.()
+                  ) || [];
+
+                  const buildWinningBadge = (offer) => {
+                    if (!offer || !winningOfferId) return null;
+                    const offerId = offer._id?.toString?.() ?? offer._id;
+                    if (offerId !== winningOfferId) return null;
+
+                    const acceptedItems = (offer.offerItems || []).filter((item) =>
+                      selectedOfferItemIds.includes(item._id?.toString?.() ?? item._id)
+                    );
+
+                    return (
+                      <div className="mt-2 text-xs font-semibold text-emerald-600 uppercase tracking-wide">
+                        Winning Offer
+                        {acceptedItems.length > 0 && (
+                          <span className="ml-2 normal-case text-gray-600 font-normal">
+                            · Items:{' '}
+                            {acceptedItems
+                              .map((item) => item.itemNumber || item.karoseri || item.serviceName || '#')
+                              .join(', ')}
+                          </span>
+                        )}
                       </div>
+                    );
+                  };
+
+                  return (
+                    <div key={groupIndex} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            Offer {offerGroup.original?.offerNumber || `#${groupIndex + 1}`}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {offerGroup.original?.offerItems?.length || 0} items
+                          </p>
+                          {buildWinningBadge(offerGroup.original)}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setSelectedOffer(offerGroup.original)}
+                            className={`px-3 py-1 text-sm rounded-md ${
+                              selectedOffer?._id === offerGroup.original?._id
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
+                            }`}
+                          >
+                            Preview
+                          </button>
+                          <button
+                            onClick={() => handleDownload(offerGroup.original)}
+                            disabled={loading}
+                            className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Revisions */}
+                      {offerGroup.revisions && offerGroup.revisions.length > 0 && (
+                        <div className="ml-4 border-l-2 border-gray-200 pl-4">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Revisions:</h4>
+                          <div className="space-y-2">
+                            {offerGroup.revisions.map((revision, revIndex) => (
+                              <div key={revIndex} className="flex items-center justify-between bg-gray-50 rounded p-3">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    Revision {revision.revisionNumber || `R${revIndex + 1}`}
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    {revision.offerItems?.length || 0} items
+                                  </p>
+                                  {buildWinningBadge(revision)}
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => setSelectedOffer(revision)}
+                                    className={`px-2 py-1 text-xs rounded ${
+                                      selectedOffer?._id === revision._id
+                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    Preview
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownload(offerGroup.original, revision)}
+                                    disabled={loading}
+                                    className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Download
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    
-                    {/* Revisions */}
-                    {offerGroup.revisions && offerGroup.revisions.length > 0 && (
-                      <div className="ml-4 border-l-2 border-gray-200 pl-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Revisions:</h4>
-                        <div className="space-y-2">
-                          {offerGroup.revisions.map((revision, revIndex) => (
-                            <div key={revIndex} className="flex items-center justify-between bg-gray-50 rounded p-3">
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  Revision {revision.revisionNumber || `R${revIndex + 1}`}
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  {revision.offerItems?.length || 0} items
-                                </p>
-                          </div>
-                              <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={() => setSelectedOffer(revision)}
-                                  className={`px-2 py-1 text-xs rounded ${
-                                    selectedOffer?._id === revision._id
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                      : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
-                                  }`}
-                                >
-                                  Preview
-                                </button>
-                                <button
-                                  onClick={() => handleDownload(offerGroup.original, revision)}
-                                  disabled={loading}
-                                  className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
-                                >
-                                  <Download className="w-3 h-3 mr-1" />
-                                  Download
-                                </button>
-                          </div>
-                        </div>
-                    ))}
-                  </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -305,7 +471,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   Preview of the Word document that will be generated
                   {currentOffer && (
                     <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                      {currentOffer.offerNumber || 'Selected Offer'}
+                      {currentOffer?.offerNumber || header.quotationNumber}
                     </span>
                   )}
                 </p>
@@ -333,53 +499,130 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     
                     {/* Items Preview */}
                     <div className="bg-white p-4 rounded border">
-                      <h4 className="font-semibold mb-2">Items ({currentOffer.offerItems?.length || 0}):</h4>
-                      {currentOffer.offerItems?.map((item, index) => (
-                        <div key={index} className="mb-4 last:mb-0">
-                          {index === 0 ? (
-                            <p className="font-medium">{index + 1}. Karoseri    : {item.karoseri || ''}</p>
-                          ) : (
-                            <p className="font-medium">          {index + 1}. Karoseri    : {item.karoseri || ''}</p>
-                          )}
-                          <p className="font-medium">          Chassis     : {item.chassis || ''} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
-                          <p className="font-medium">          Spesifikasi :</p>
-                          {item.specifications && item.specifications.length > 0 ? (
-                            <div className="ml-4 mt-2">
-                              <table className="w-full border-collapse border border-gray-300 text-sm">
-                                <thead>
-                                  <tr className="bg-gray-100">
-                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Kategori</th>
-                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Nama</th>
-                                    <th className="border border-gray-300 px-3 py-2 text-left font-semibold">Spesifikasi</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {item.specifications.flatMap((spec, specIndex) =>
-                                    spec.items ? spec.items.map((specItem, itemIndex) => (
-                                      <tr key={`${specIndex}-${itemIndex}`}>
-                                        {itemIndex === 0 && (
-                                          <td className="border border-gray-300 px-3 py-2 font-semibold align-top" rowSpan={spec.items.length}>
-                                            {spec.category}
-                                          </td>
-                                        )}
-                                        <td className="border border-gray-300 px-3 py-2">{specItem.name || ''}</td>
-                                        <td className="border border-gray-300 px-3 py-2">{specItem.specification || ''}</td>
-                                      </tr>
-                                    )) : []
-                                  )}
-                                </tbody>
-                              </table>
+                      <h4 className="font-semibold mb-4">
+                        Items ({currentOffer?.offerItems?.length || 0})
+                      </h4>
+                      {currentOffer?.offerItems?.map((item, index) => {
+                        const breakdown = calculateItemFinancials(item);
+                        const discountDescriptor = formatDiscountDescriptor(item, breakdown);
+                        const clientNetPerUnit = breakdown.clientNetPerUnit;
+                        const effectiveDiscountValue = Math.max(breakdown.basePrice - clientNetPerUnit, 0);
+                        const hasEffectiveDiscount = effectiveDiscountValue > 0;
+                        const title =
+                          item.karoseri ||
+                          item.serviceName ||
+                          item.sparepartName ||
+                          `Item ${index + 1}`;
+                        const discountLabel =
+                          hasEffectiveDiscount && item.discountType === 'percentage' && safeNumber(item.discountValue, 0) > 0
+                            ? ` (${safeNumber(item.discountValue, 0)}%)`
+                            : '';
+
+                        return (
+                          <div key={index} className="mb-6 last:mb-0 border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-600">Item {index + 1}</p>
+                                <p className="text-base font-medium text-gray-900">{title}</p>
+                              </div>
+                              {(item.chassis || item.chassisModel) && (
+                                <p className="text-sm text-gray-600">
+                                  Chassis: {item.chassis || '-'}
+                                  {item.chassisModel ? ` • ${item.chassisModel}` : ''}
+                                </p>
+                              )}
                             </div>
-                          ) : (
-                            <p className="ml-4 text-sm text-gray-500">No specifications provided</p>
-                          )}
-                          {item.drawingSpecification && (
-                            <p className="ml-4">
-                              {`          Spesifikasi lain sesuai gambar ${item.drawingSpecification.drawingNumber || 'Selected'}`}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                            <div className="p-4 space-y-4">
+                              {item.serviceDetails && item.serviceDetails.length > 0 && (
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-700">Service Details</h5>
+                                  <ul className="mt-2 list-disc list-inside text-sm text-gray-600 space-y-1">
+                                    {item.serviceDetails.map((detail, detailIndex) => (
+                                      <li key={detailIndex}>{detail}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {item.specifications && item.specifications.length > 0 && (
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-700">Spesifikasi</h5>
+                                  <div className="mt-3 overflow-x-auto">
+                                    <table className="w-full border border-gray-200 text-sm">
+                                      <thead>
+                                        <tr className="bg-gray-100 text-left">
+                                          <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-700">
+                                            Kategori
+                                          </th>
+                                          <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-700">
+                                            Nama
+                                          </th>
+                                          <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-700">
+                                            Spesifikasi
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {item.specifications.flatMap((spec, specIndex) =>
+                                          spec.items
+                                            ? spec.items.map((specItem, itemIndex) => (
+                                                <tr key={`${specIndex}-${itemIndex}`} className="odd:bg-white even:bg-gray-50">
+                                                  {itemIndex === 0 && (
+                                                    <td
+                                                      className="border border-gray-200 px-3 py-2 font-medium align-top text-gray-700"
+                                                      rowSpan={spec.items.length}
+                                                    >
+                                                      {spec.category}
+                                                    </td>
+                                                  )}
+                                                  <td className="border border-gray-200 px-3 py-2 text-gray-600">
+                                                    {specItem.name || ''}
+                                                  </td>
+                                                  <td className="border border-gray-200 px-3 py-2 text-gray-600">
+                                                    {specItem.specification || ''}
+                                                  </td>
+                                                </tr>
+                                              ))
+                                            : []
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {item.drawingSpecification && (
+                                <p className="text-sm text-gray-600">
+                                  Spesifikasi lain sesuai gambar{' '}
+                                  <span className="font-medium text-gray-800">
+                                    {item.drawingSpecification.drawingNumber || 'Selected'}
+                                  </span>
+                                </p>
+                              )}
+
+                              {item.notes && (
+                                <p className="text-sm text-gray-600">
+                                  <span className="font-semibold text-gray-700">Catatan:</span> {item.notes}
+                                </p>
+                              )}
+
+                              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-gray-700 space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="font-semibold text-gray-700">Harga per Unit</span>
+                                  <span className="font-semibold text-blue-700 text-right">
+                                    {formatPrice(clientNetPerUnit)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  {hasEffectiveDiscount
+                                    ? `Perhitungan: ${formatPrice(breakdown.basePrice)} - ${formatPrice(effectiveDiscountValue)}${discountLabel} = ${formatPrice(clientNetPerUnit)}`
+                                    : `Perhitungan: ${formatPrice(breakdown.basePrice)}`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     
                     <div>
@@ -398,16 +641,6 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                             } else {
                               notes.push("Harga tersebut diatas Sudah Termasuk PPN 11%");
                             }
-
-                            // Predefined notes that match the preview component
-                            const predefinedNotes = [
-                              { text: 'Payment Dp.50 % sisa cash before delivery', selected: true },
-                              { text: 'Loco Pabrik Cikandel', selected: true },
-                              { text: 'Harga tidak mengikat bisa berubah sewaktu-waktu tanpa pemberitahuan terlebih dahulu.', selected: true },
-                              { text: 'DIMENSI KAROSERI diluar SKRB tidak diperuntukan untuk dijalan raya (OFF ROAD)', selected: true },
-                              { text: 'Uji Type yang terbit hanya untuk karoseri dengan ukuran standard Dishub. Ukuran Oversize STM tidak bertanggung jawab jika uji type tidak dapat terbit dari Dishub', selected: true },
-                              { text: 'Tanpa acc keur', selected: true }
-                            ];
 
                             // Add selected notes based on indices
                             if (Array.isArray(selectedNotes)) {
@@ -465,7 +698,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                             return formattedNotes.join("\n");
                           };
 
-                          return formatNotes(selectedNotes, currentOffer.excludePPN).split('\n').map((note, index) => (
+                          return formatNotes(selectedNotes, currentOffer?.excludePPN).split('\n').map((note, index) => (
                             <p key={index} className="font-mono text-sm whitespace-pre-wrap break-words overflow-hidden">{note}</p>
                           ));
                         })()}
@@ -480,7 +713,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     
                     {/* Drawings Preview - After Signature */}
                     {(() => {
-                      const itemsWithDrawings = currentOffer.offerItems?.filter(item => 
+                      const itemsWithDrawings = currentOffer?.offerItems?.filter(item => 
                         item.drawingSpecification && 
                         item.drawingSpecification.quotationImage && 
                         item.drawingSpecification.quotationImage.fileId
@@ -514,7 +747,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                                     <div className="mb-3">
                                       <h5 className="font-medium text-gray-900">
-                                        Item {currentOffer.offerItems?.indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
+                                        Item {(currentOffer?.offerItems || []).indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                                       </h5>
                                       <div className="text-sm text-gray-600 space-y-1">
                                         <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>
@@ -579,7 +812,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     
                     {/* Notes Images Preview - After Drawings */}
                     {(() => {
-                      const notesImages = currentOffer.notesImages || [];
+                      const notesImages = currentOffer?.notesImages || [];
                       
                       if (notesImages.length > 0) {
                         return (
@@ -723,18 +956,41 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 <h2 className="text-lg font-semibold text-gray-900">Pricing Summary</h2>
               </div>
               <div className="p-6">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Netto:</span>
-                    <span className="font-medium">{formatPrice(totalNetto)}</span>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      PPN Treatment
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-gray-800">{ppnStatusLabel}</div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">PPN (11%):</span>
-                    <span className="font-medium">{formatPrice(ppn)}</span>
+
+                  <div className="border border-gray-100 rounded-lg divide-y divide-gray-100">
+                    <div className="flex justify-between px-3 py-2">
+                      <span className="font-medium text-gray-700">Total Harga</span>
+                    <span className="font-semibold text-blue-700 text-right">
+                      {formatPrice(clientNetTotal)}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      {effectiveTotalDiscount > 0
+                        ? `Perhitungan: ${formatPrice(totalBase)} - ${formatPrice(effectiveTotalDiscount)} = ${formatPrice(clientNetTotal)}`
+                        : `Perhitungan: ${formatPrice(totalBase)}`}
+                    </div>
+                    {!currentOffer?.excludePPN && (
+                      <div className="flex justify-between px-3 py-2">
+                        <span className="text-gray-600">Subtotal (tanpa PPN)</span>
+                        <span className="font-medium">{formatPrice(subtotalExclusive)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between px-3 py-2">
+                      <span className="text-gray-600">{ppnLabel}</span>
+                      <span className="font-medium">{formatPrice(ppnAmount)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="font-semibold">Total:</span>
-                    <span className="font-semibold text-lg">{formatPrice(total)}</span>
+
+                  <div className="flex justify-between items-center px-4 py-3 bg-gray-900 text-white rounded-lg">
+                    <span className="font-semibold text-sm tracking-wide uppercase">Grand Total</span>
+                    <span className="text-lg font-bold">{formatPrice(grandTotal)}</span>
                   </div>
                 </div>
               </div>

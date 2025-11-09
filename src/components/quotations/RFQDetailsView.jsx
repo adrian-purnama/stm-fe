@@ -1,6 +1,8 @@
 import React from 'react';
-import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, GitCompare } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, GitCompare, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import ApiHelper from '../../utils/api/ApiHelper';
 
 const RFQDetailsView = ({ rfq, loading }) => {
   const navigate = useNavigate();
@@ -33,6 +35,41 @@ const RFQDetailsView = ({ rfq, loading }) => {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const formatDate = (value) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+    return date.toLocaleDateString();
+  };
+
+  const formatFileSize = (bytes = 0) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleDownloadRfqDocument = async (docEntry) => {
+    try {
+      const response = await ApiHelper.get(`/api/rfq/documents/${docEntry._id}/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: docEntry.mimeType || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = docEntry.originalName || 'document';
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading RFQ document:', error);
+      toast.error('Failed to download document');
     }
   };
 
@@ -174,12 +211,69 @@ const RFQDetailsView = ({ rfq, loading }) => {
           </div>
         </div>
 
+        {/* Commercial Terms */}
+        <div className="bg-white border border-purple-200 rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-purple-800 mb-3">Commercial Terms</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-gray-700">Target Close Date:</span>
+              <span className="ml-2 text-gray-900">{formatDate(rfq.targetCloseDate)}</span>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Expected Delivery:</span>
+              <span className="ml-2 text-gray-900">{formatDate(rfq.expectedDeliveryDate)}</span>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Delivery Terms:</span>
+              <span className="ml-2 text-gray-900">{rfq.deliveryTerms || '-'}</span>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Delivery Location:</span>
+              <span className="ml-2 text-gray-900">{rfq.deliveryLocation || '-'}</span>
+            </div>
+            <div className="md:col-span-2">
+              <span className="font-medium text-gray-700">Delivery Notes:</span>
+              <p className="mt-1 text-gray-900 whitespace-pre-wrap">{rfq.deliveryNotes || '-'}</p>
+            </div>
+            <div className="md:col-span-2">
+              <span className="font-medium text-gray-700">Payment Terms:</span>
+              <p className="mt-1 text-gray-900 whitespace-pre-wrap">{rfq.paymentTerms || '-'}</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Prices Include Tax:</span>
+              <span className={`ml-2 px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.isTaxIncluded ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {rfq.isTaxIncluded ? 'Included' : 'Excluded'}
+              </span>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">PPN Handling:</span>
+              <span className={`ml-2 px-3 py-1 rounded-full text-xs font-medium ${
+                rfq.includePPN ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {rfq.includePPN ? 'Include PPN' : 'Exclude PPN'}
+              </span>
+            </div>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="font-medium text-gray-700">Inclusion Notes:</span>
+                <p className="mt-1 text-gray-900 whitespace-pre-wrap">{rfq.inclusionNotes || '-'}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-700">Exclusion Notes:</span>
+                <p className="mt-1 text-gray-900 whitespace-pre-wrap">{rfq.exclusionNotes || '-'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Budget Information */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="text-lg font-semibold text-blue-800 mb-3">Budget Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="flex items-center justify-between">
-              <span className="font-medium text-blue-700">Total Estimated Revenue:</span>
+                <span className="font-medium text-blue-700">Total Estimated Revenue per Quantity:</span>
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                 {(() => {
                   // Calculate total estimated revenue from all items
@@ -465,6 +559,41 @@ const RFQDetailsView = ({ rfq, loading }) => {
             )}
           </div>
         )}
+
+        {/* Supporting Documents */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Supporting Documents</h3>
+          {rfq.documents && rfq.documents.length > 0 ? (
+            <div className="space-y-3">
+              {rfq.documents.map((docEntry) => (
+                <div
+                  key={docEntry._id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
+                >
+                    <div className="flex flex-col">
+                      <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
+                      <span className="text-xs text-gray-500">
+                        {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
+                        {docEntry.uploadedBy && (
+                          <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
+                        )}
+                      </span>
+                    </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadRfqDocument(docEntry)}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                  >
+                    <Download size={14} />
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No documents attached.</p>
+          )}
+        </div>
 
         {rfq.description && (
           <div className="mb-6">

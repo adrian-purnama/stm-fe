@@ -309,12 +309,28 @@ const DrawingSpecificationsPage = () => {
       
       const updatePayload = {
         bodyTypeId: formData.bodyTypeId,
-        chassisTypeId: formData.chassisTypeId,
+        chassisTypeId: formData.chassisTypeId || null,
         chassisModel: formData.chassisModel,
-        sizeTypeId: formData.sizeTypeId,
+        sizeTypeId: formData.sizeTypeId || null,
         dimension: formData.dimension,
-        features: formData.features,
-        customSpecifications: formData.customSpecifications
+        features: (formData.features || []).map((feature) => ({
+          featureId:
+            feature?.featureId && typeof feature.featureId === 'object'
+              ? feature.featureId._id || feature.featureId.id || ''
+              : feature?.featureId || '',
+          spec: feature?.spec?.trim() || ''
+        })),
+        customSpecifications: (formData.customSpecifications || []).map((category) => ({
+          category: category?.category?.trim() || '',
+          items: Array.isArray(category?.items)
+            ? category.items
+                .filter((item) => item && (item.name || item.specification))
+                .map((item) => ({
+                  name: item?.name?.trim() || '',
+                  specification: item?.specification?.trim() || ''
+                }))
+            : []
+        }))
       };
       
       await axiosInstance.put(`/api/drawing-specifications/${selectedDrawing._id}`, updatePayload);
@@ -461,8 +477,19 @@ const DrawingSpecificationsPage = () => {
       chassisModel: drawing.chassisModel || '',
       sizeTypeId: drawing.sizeTypeId?._id || drawing.sizeTypeId || '',
       dimension: drawing.dimension || '',
-      features: drawing.features || [],
-      customSpecifications: drawing.customSpecifications || []
+      features: (drawing.features || []).map((feature) => ({
+        featureId: feature?.featureId?._id || feature?.featureId || '',
+        spec: feature?.spec || ''
+      })),
+      customSpecifications: (drawing.customSpecifications || []).map((category) => ({
+        category: category?.category || '',
+        items: Array.isArray(category?.items)
+          ? category.items.map((item) => ({
+              name: item?.name || '',
+              specification: item?.specification || ''
+            }))
+          : []
+      }))
     });
     setShowEditModal(true);
   };

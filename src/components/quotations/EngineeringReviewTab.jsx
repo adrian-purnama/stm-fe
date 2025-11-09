@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
 import PriceInput from '../common/PriceInput';
 import toast from 'react-hot-toast';
-import { Wrench, CheckCircle, XCircle, Clock, Eye, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
+import { Wrench, CheckCircle, XCircle, Clock, Eye, ChevronDown, ChevronUp, Plus, X, Download } from 'lucide-react';
+import CustomDropdown from '../common/CustomDropdown';
 
 const EngineeringReviewTab = () => {
   const navigate = useNavigate();
@@ -18,13 +19,46 @@ const EngineeringReviewTab = () => {
     comments: '',
     specsModified: []
   });
+  const [documents, setDocuments] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsError, setDocumentsError] = useState(null);
+  const [bodyTypes, setBodyTypes] = useState([]);
+  const [chassisTypes, setChassisTypes] = useState([]);
+  const [loadingBodyTypes, setLoadingBodyTypes] = useState(false);
+  const [loadingChassisTypes, setLoadingChassisTypes] = useState(false);
+
+  const formatFileSize = (bytes = 0) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleDownloadDocument = async (docEntry) => {
+    try {
+      const response = await axiosInstance.get(`/api/rfq/documents/${docEntry._id}/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = docEntry.file?.originalName || docEntry.originalName || 'document';
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading RFQ document:', error);
+      toast.error('Failed to download document');
+    }
+  };
 
   // Fetch RFQs for engineering review - shows all RFQs in engineering stage
   const fetchRFQs = async () => {
     try {
       setLoading(true);
       const response = await axiosInstance.get('/api/rfq', {
-        params: { stage: 'engineering', limit: 100 }
+        params: { stage: 'engineering', limit: 100, viewScope: 'engineer' }
       });
       // Backend returns data in response.data.data.rfqs array
       let rfqsArray = response.data.data?.rfqs || response.data.data?.rfq || [];
@@ -46,6 +80,110 @@ const EngineeringReviewTab = () => {
   useEffect(() => {
     fetchRFQs();
   }, []);
+
+  const fetchBodyTypes = useCallback(async () => {
+    setLoadingBodyTypes(true);
+    try {
+      const response = await axiosInstance.get('/api/body-types/list');
+      const bodyTypesData = response.data?.data || [];
+      setBodyTypes(Array.isArray(bodyTypesData) ? bodyTypesData : []);
+    } catch (error) {
+      console.error('Error fetching body types:', error);
+      toast.error('Failed to load body types');
+      setBodyTypes([]);
+    } finally {
+      setLoadingBodyTypes(false);
+    }
+  }, []);
+
+  const fetchChassisTypes = useCallback(async () => {
+    setLoadingChassisTypes(true);
+    try {
+      const response = await axiosInstance.get('/api/chassis-types/list');
+      const chassisTypesData = response.data?.data || [];
+      setChassisTypes(Array.isArray(chassisTypesData) ? chassisTypesData : []);
+    } catch (error) {
+      console.error('Error fetching chassis types:', error);
+      toast.error('Failed to load chassis types');
+      setChassisTypes([]);
+    } finally {
+      setLoadingChassisTypes(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBodyTypes();
+    fetchChassisTypes();
+  }, [fetchBodyTypes, fetchChassisTypes]);
+
+  const bodyTypeOptions = useMemo(() => {
+    return (bodyTypes || []).map((bt) => {
+      const name = bt.name || bt.displayName || bt.shortName || '';
+      const short = bt.shortName && bt.shortName !== name ? bt.shortName : null;
+      return {
+        value: name,
+        label: short ? `${name} (${short})` : name
+      };
+    });
+  }, [bodyTypes]);
+
+  const chassisTypeOptions = useMemo(() => {
+    return (chassisTypes || []).map((ct) => {
+      const name = ct.name || ct.displayName || ct.shortName || '';
+      const short = ct.shortName && ct.shortName !== name ? ct.shortName : null;
+      return {
+        value: name,
+        label: short ? `${name} (${short})` : name
+      };
+    });
+  }, [chassisTypes]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDocuments = async () => {
+      if (!showReviewModal || !selectedRFQ?._id) {
+        if (isMounted) {
+          setDocuments([]);
+          setDocumentsError(null);
+          setDocumentsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        if (isMounted) {
+          setDocumentsLoading(true);
+          setDocumentsError(null);
+        }
+        const response = await axiosInstance.get(`/api/rfq/${selectedRFQ._id}/documents`);
+        const docs =
+          response.data?.data?.documents ||
+          response.data?.documents ||
+          response.data ||
+          [];
+        if (isMounted) {
+          setDocuments(Array.isArray(docs) ? docs : []);
+        }
+      } catch (error) {
+        console.error('Error fetching RFQ documents:', error);
+        if (isMounted) {
+          setDocuments([]);
+          setDocumentsError(error.response?.data?.message || 'Failed to load documents');
+        }
+      } finally {
+        if (isMounted) {
+          setDocumentsLoading(false);
+        }
+      }
+    };
+
+    fetchDocuments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [showReviewModal, selectedRFQ]);
 
   // Handle engineering review submission
   const handleSubmitReview = async () => {
@@ -499,14 +637,62 @@ const EngineeringReviewTab = () => {
                         {rfq.lineOfBusiness?.type === 'karoseri' && rfq.items && (
                           <div className="space-y-3">
                             <p className="text-sm font-medium text-gray-700">Items:</p>
-                            {rfq.items.map((item, index) => (
-                              <div key={index} className="p-3 bg-gray-50 rounded-md">
-                                <p className="text-sm"><span className="font-medium">Item {item.itemNumber}:</span> {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
-                                {item.specifications && item.specifications.length > 0 && (
-                                  <p className="text-xs text-gray-600 mt-1">Specifications: {item.specifications.length} categories</p>
-                                )}
-                              </div>
-                            ))}
+                            {rfq.items.map((item, index) => {
+                              const isDrawing = item.templateMode === 'drawing';
+                              const drawingId =
+                                (item.templateSourceModel === 'DrawingSpecification' && item.templateSourceId) ||
+                                item.drawingSpecification ||
+                                (item.drawingSpecification?._id);
+                              return (
+                                <div key={index} className="p-3 bg-gray-50 rounded-md space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm">
+                                      <span className="font-medium">Item {item.itemNumber}:</span>{' '}
+                                      {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
+                                    </p>
+                                    {isDrawing && drawingId && (
+                                      <span className="text-xs font-medium text-indigo-600">
+                                        From Drawing: {item.drawingSpecification?.drawingNumber || drawingId}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {isDrawing && item.specifications && item.specifications.length > 0 && (
+                                    <div className="bg-white border border-indigo-100 rounded-md p-3">
+                                      <p className="text-xs font-semibold text-indigo-700 mb-2">
+                                        Drawing Specifications
+                                      </p>
+                                      <div className="space-y-2">
+                                        {item.specifications.map((category, catIndex) => (
+                                          <div key={catIndex} className="text-xs text-gray-700">
+                                            <span className="font-medium text-gray-800">{category.category}</span>
+                                            <ul className="mt-1 ml-4 list-disc space-y-1">
+                                              {(category.items || []).map((specItem, specIndex) => (
+                                                <li key={specIndex} className="text-gray-600">
+                                                  <span className="font-medium">{specItem.name}:</span>{' '}
+                                                  {specItem.specification}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {!isDrawing && item.specifications && item.specifications.length > 0 && (
+                                    <div className="bg-white border border-gray-100 rounded-md p-3">
+                                      <p className="text-xs font-semibold text-gray-700 mb-2">
+                                        Specifications ({item.specifications.length} categories)
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Detailed specs available when using drawing or body template.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 
@@ -539,6 +725,35 @@ const EngineeringReviewTab = () => {
                           </div>
                         )}
                       </div>
+
+                      {rfq.documents && rfq.documents.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Supporting Documents</h4>
+                          <div className="space-y-2">
+                            {rfq.documents.map((docEntry) => (
+                              <div
+                                key={docEntry._id}
+                                className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()} {docEntry.uploadedBy ? `• ${docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}` : ''}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadDocument(docEntry)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                                >
+                                  <Download size={14} />
+                                  Download
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {rfq.engineeringTransit?.specsOriginal && rfq.engineeringTransit.specsOriginal.length > 0 && (
                         <div>
@@ -578,6 +793,55 @@ const EngineeringReviewTab = () => {
               <p className="text-xs text-gray-500 mt-1">
                 Line of Business: <span className="font-medium">{selectedRFQ.lineOfBusiness?.type || 'karoseri'}</span>
               </p>
+            </div>
+
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-gray-800">Supporting Documents</h4>
+                {documentsLoading && (
+                  <span className="text-xs text-gray-500">Loading…</span>
+                )}
+              </div>
+
+              {documentsError && (
+                <p className="text-xs text-red-600">{documentsError}</p>
+              )}
+
+              {!documentsLoading && !documentsError && documents.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  No documents attached to this RFQ.
+                </p>
+              )}
+
+              {!documentsLoading && !documentsError && documents.length > 0 && (
+                <div className="space-y-2">
+                  {documents.map((docEntry) => (
+                    <div
+                      key={docEntry._id}
+                      className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-800">
+                          {docEntry.originalName || docEntry.file?.originalName || 'Document'}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {formatFileSize(docEntry.fileSize || docEntry.file?.fileSize)} • Uploaded{' '}
+                          {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
+                          {docEntry.uploadedBy ? ` • ${docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}` : ''}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadDocument(docEntry)}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                      >
+                        <Download size={14} />
+                        Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -643,7 +907,30 @@ const EngineeringReviewTab = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  {reviewData.specsModified && reviewData.specsModified.map((item, itemIndex) => (
+                  {reviewData.specsModified && reviewData.specsModified.map((item, itemIndex) => {
+                    const originalItem =
+                      selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] ||
+                      selectedRFQ.items?.[itemIndex] ||
+                      null;
+
+                    const karoseriOptionsBase = [...bodyTypeOptions];
+                    if (item.karoseri && !karoseriOptionsBase.some((opt) => opt.value === item.karoseri)) {
+                      karoseriOptionsBase.push({ value: item.karoseri, label: `${item.karoseri} (current)` });
+                    }
+                    const karoseriOptions = [{ value: '', label: 'Clear selection' }, ...karoseriOptionsBase];
+
+                    const chassisOptionsBase = [...chassisTypeOptions];
+                    if (item.chassis && !chassisOptionsBase.some((opt) => opt.value === item.chassis)) {
+                      chassisOptionsBase.push({ value: item.chassis, label: `${item.chassis} (current)` });
+                    }
+                    const chassisOptions = [{ value: '', label: 'Clear selection' }, ...chassisOptionsBase];
+
+                    const isKaroseriDifferent =
+                      originalItem && item.karoseri !== originalItem.karoseri;
+                    const isChassisDifferent =
+                      originalItem && item.chassis !== originalItem.chassis;
+
+                    return (
                     <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
@@ -656,17 +943,13 @@ const EngineeringReviewTab = () => {
                         </button>
                       </div>
                       
-                      {/* Side-by-side comparison */}
                       <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-                        {/* Original (Left Side - Uneditable) */}
                         <div className="p-4 bg-gray-50">
                           <div className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
                             Original (Read Only)
                           </div>
                           
-                          {(() => {
-                            const originalItem = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex] || null;
-                            return originalItem ? (
+                            {originalItem ? (
                               <div className="space-y-3">
                                 <div>
                                   <label className="block text-xs font-medium text-gray-600 mb-1">Karoseri</label>
@@ -700,7 +983,9 @@ const EngineeringReviewTab = () => {
                                     {originalItem.specifications && originalItem.specifications.length > 0 ? (
                                       originalItem.specifications.map((spec, specIdx) => (
                                         <div key={specIdx} className="border border-gray-200 rounded p-2 bg-white">
-                                          <div className="text-xs font-medium text-gray-700 mb-1">{spec.category || 'Unnamed Category'}</div>
+                                          <div className="text-xs font-medium text-gray-700 mb-1">
+                                            {spec.category || 'Unnamed Category'}
+                                          </div>
                                           {spec.items && spec.items.length > 0 && (
                                             <div className="space-y-1 ml-2">
                                               {spec.items.map((si, siIdx) => (
@@ -721,11 +1006,9 @@ const EngineeringReviewTab = () => {
                               </div>
                             ) : (
                               <div className="text-xs text-gray-400">Original item not found</div>
-                            );
-                          })()}
+                            )}
                         </div>
                         
-                        {/* Modified (Right Side - Editable) */}
                         <div className="p-4 bg-white">
                           <div className="text-xs font-semibold text-blue-600 mb-3 uppercase tracking-wide">
                             Modified (Editable)
@@ -734,33 +1017,27 @@ const EngineeringReviewTab = () => {
                           <div className="space-y-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Karoseri</label>
-                              <input
-                                type="text"
+                                <div className={`rounded-lg ${isKaroseriDifferent ? 'bg-amber-50 border border-amber-200 p-1' : ''}`}>
+                                  <CustomDropdown
+                                    options={karoseriOptions}
                                 value={item.karoseri || ''}
-                                onChange={(e) => updateItem(itemIndex, 'karoseri', e.target.value)}
-                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                                style={{
-                                  backgroundColor: (() => {
-                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
-                                    return orig && item.karoseri !== orig.karoseri ? '#fef3c7' : 'white';
-                                  })()
-                                }}
-                              />
+                                    onChange={(value) => updateItem(itemIndex, 'karoseri', value)}
+                                    placeholder={loadingBodyTypes ? 'Loading body types...' : 'Select karoseri'}
+                                    disabled={loadingBodyTypes}
+                                  />
+                                </div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Chassis</label>
-                              <input
-                                type="text"
+                                <div className={`rounded-lg ${isChassisDifferent ? 'bg-amber-50 border border-amber-200 p-1' : ''}`}>
+                                  <CustomDropdown
+                                    options={chassisOptions}
                                 value={item.chassis || ''}
-                                onChange={(e) => updateItem(itemIndex, 'chassis', e.target.value)}
-                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                                style={{
-                                  backgroundColor: (() => {
-                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
-                                    return orig && item.chassis !== orig.chassis ? '#fef3c7' : 'white';
-                                  })()
-                                }}
-                              />
+                                    onChange={(value) => updateItem(itemIndex, 'chassis', value)}
+                                    placeholder={loadingChassisTypes ? 'Loading chassis types...' : 'Select chassis'}
+                                    disabled={loadingChassisTypes}
+                                  />
+                                </div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Chassis Model</label>
@@ -771,10 +1048,7 @@ const EngineeringReviewTab = () => {
                                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                                 placeholder="e.g., Dutro 500"
                                 style={{
-                                  backgroundColor: (() => {
-                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
-                                    return orig && item.chassisModel !== orig.chassisModel ? '#fef3c7' : 'white';
-                                  })()
+                                    backgroundColor: originalItem && item.chassisModel !== originalItem.chassisModel ? '#fef3c7' : 'white'
                                 }}
                               />
                             </div>
@@ -786,16 +1060,13 @@ const EngineeringReviewTab = () => {
                                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                                 rows="3"
                                 style={{
-                                  backgroundColor: (() => {
-                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
-                                    return orig && item.notes !== orig.notes ? '#fef3c7' : 'white';
-                                  })()
+                                    backgroundColor: originalItem && item.notes !== originalItem.notes ? '#fef3c7' : 'white'
                                 }}
                               />
+                              </div>
                             </div>
                             
-                            {/* Specifications - Editable */}
-                            <div>
+                            <div className="mt-4">
                               <div className="flex items-center justify-between mb-2">
                                <label className="block text-xs font-medium text-gray-700">Specifications</label>
                           <button
@@ -810,11 +1081,10 @@ const EngineeringReviewTab = () => {
                               
                               <div className="space-y-2">
                                 {item.specifications && item.specifications.map((spec, specIndex) => {
-                                  const originalSpec = (() => {
-                                    const orig = selectedRFQ.engineeringTransit?.specsOriginal?.[itemIndex] || selectedRFQ.items?.[itemIndex];
-                                    return orig?.specifications?.[specIndex];
-                                  })();
-                                  const isDifferent = originalSpec && JSON.stringify(spec) !== JSON.stringify(originalSpec);
+                                  const originalSpec =
+                                    originalItem?.specifications?.[specIndex] || null;
+                                  const isDifferent =
+                                    originalSpec && JSON.stringify(spec) !== JSON.stringify(originalSpec);
                                   
                                   return (
                                     <div 
@@ -885,8 +1155,8 @@ const EngineeringReviewTab = () => {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

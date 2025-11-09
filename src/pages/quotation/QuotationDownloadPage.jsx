@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Navigation from '../../components/common/Navigation';
@@ -23,35 +23,35 @@ const QuotationDownloadPage = () => {
     }
   }, [searchParams]);
 
+  const fetchQuotation = useCallback(async () => {
+    if (!quotationId) {
+      toast.error('No quotation ID provided');
+      navigate('/quotations');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await ApiHelper.get(`/api/quotations/by-id/${quotationId}`);
+      if (response.data.success) {
+        setQuotationData(response.data.data);
+      } else {
+        toast.error(`Failed to load quotation: ${response.data.message || 'Unknown error'}`);
+        navigate('/quotations');
+      }
+    } catch (error) {
+      console.error('Error fetching quotation:', error);
+      toast.error(`Failed to load quotation: ${error.response?.data?.message || error.message}`);
+      navigate('/quotations');
+    } finally {
+      setLoading(false);
+    }
+  }, [quotationId, navigate]);
+
   // Fetch quotation data from backend using quotationId
   useEffect(() => {
-    const fetchQuotation = async () => {
-      if (!quotationId) {
-        toast.error('No quotation ID provided');
-        navigate('/quotations');
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const response = await ApiHelper.get(`/api/quotations/by-id/${quotationId}`);
-        if (response.data.success) {
-          setQuotationData(response.data.data);
-        } else {
-          toast.error(`Failed to load quotation: ${response.data.message || 'Unknown error'}`);
-          navigate('/quotations');
-        }
-      } catch (error) {
-        console.error('Error fetching quotation:', error);
-        toast.error(`Failed to load quotation: ${error.response?.data?.message || error.message}`);
-        navigate('/quotations');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchQuotation();
-  }, [quotationId, navigate]);
+  }, [fetchQuotation]);
 
   const handleEdit = (context = {}) => {
     // Navigate to form page with edit context using URL parameters
@@ -80,9 +80,8 @@ const QuotationDownloadPage = () => {
     navigate('/quotations');
   };
 
-  const handleDownload = () => {
-    // Download is handled in QuotationPreview component
-    // After download, we can stay on preview or go back to details
+  const handleDownload = async () => {
+    await fetchQuotation();
   };
 
   if (loading || !quotationData) {

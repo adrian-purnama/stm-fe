@@ -21,7 +21,6 @@ import CustomDropdown from '../common/CustomDropdown';
 import BaseModal from '../modals/BaseModal';
 // Removed OfferItemAcceptance import - no longer needed
 import { QUOTATION_FORM_MODES } from './quotationModes';
-import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -137,6 +136,13 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
   const [editingProgressIndex, setEditingProgressIndex] = useState(null);
   const [editingProgressText, setEditingProgressText] = useState('');
 
+  // Get asset URL for notes images
+  const getNotesImageAssetUrl = (imageId, fileId) => {
+    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
+    const token = localStorage.getItem('asb-token');
+    return `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
+  };
+
   useEffect(() => {
     setHeaderState(header);
   }, [header]);
@@ -232,6 +238,8 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         }
     );
   };
+
+  const lineOfBusinessType = headerState.lineOfBusiness?.type || 'karoseri';
 
   const getStatusBadge = (status) => {
     const classes = statusClasses[status] || 'bg-gray-100 text-gray-800';
@@ -1101,141 +1109,277 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                       headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.includes(item._id)
                     )
                   : activeOffer.offerItems
-                ).map((item, index) => (
-                  <div key={item._id || index} className={`border rounded-lg p-4 ${
-                    headerState.status?.type === 'win' && headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.includes(item._id)
-                      ? 'border-green-200 bg-green-50'
-                      : 'border-gray-200'
-                  }`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-medium text-gray-900">Item {item.itemNumber || (index + 1)}</h4>
-                          {headerState.status?.type === 'win' && headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.includes(item._id) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                              Winner
-                            </span>
-                          )}
-                        </div>
-                        {/* Karoseri type */}
-                        {(!headerState.lineOfBusiness || headerState.lineOfBusiness.type === 'karoseri') && (
-                          <>
-                            <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</p>
-                            {item.drawingSpecification && (
-                              <p className="text-xs text-gray-500">Drawing: {item.drawingSpecification.drawingNumber || 'Selected'}</p>
+                ).map((item, index) => {
+                  const itemNumber = item.itemNumber || index + 1;
+                  const isWinner =
+                    headerState.status?.type === 'win' &&
+                    headerState.selectedOfferItemIds &&
+                    headerState.selectedOfferItemIds.includes(item._id);
+                  const isService = lineOfBusinessType === 'service';
+                  const isSparepart = lineOfBusinessType === 'sparepart';
+                  const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+                  const basePriceValue = Number(item.price) || 0;
+                  const discountRate = Number(item.discountValue) || 0;
+                  const discountPerQty =
+                    item.discountType === 'percentage'
+                      ? Math.max((basePriceValue * discountRate) / 100, 0)
+                      : Math.max(Number(item.discountValue) || 0, 0);
+                  const commissionPerQty = Math.max(Number(item.commission) || 0, 0);
+                  const nettoPerQty = Number(item.netto) || Math.max(basePriceValue - discountPerQty - commissionPerQty, 0);
+                  const baseTotal = basePriceValue * quantity;
+                  const discountTotal = discountPerQty * quantity;
+                  const commissionTotal = commissionPerQty * quantity;
+                  const nettoTotal = nettoPerQty * quantity;
+                  const discountDescriptor =
+                    item.discountType === 'percentage'
+                      ? `${discountRate}% (${formatPriceWithCurrency(discountPerQty)})`
+                      : formatPriceWithCurrency(discountPerQty);
+
+                  return (
+                    <div
+                      key={item._id || index}
+                      className={`border rounded-lg p-4 ${
+                        isWinner ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-medium text-gray-900">
+                              {isService
+                                ? `Service ${itemNumber}: ${item.serviceName || 'Untitled Service'}`
+                                : `Item ${itemNumber}`}
+                            </h4>
+                            {isWinner && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                Winner
+                              </span>
                             )}
-                          </>
-                        )}
-                        {/* Service type */}
-                        {headerState.lineOfBusiness?.type === 'service' && (
-                          <p className="text-sm text-gray-600">{item.serviceName}</p>
-                        )}
-                        {/* Sparepart type */}
-                        {headerState.lineOfBusiness?.type === 'sparepart' && (
-                          <p className="text-sm text-gray-600">{item.sparepartName}</p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatPriceWithCurrency(item.netto)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Netto Price
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Base Price:</span>
-                        <p className="font-medium">{formatPriceWithCurrency(item.price)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Discount:</span>
-                        <p className="font-medium">
-                          {item.discountType === 'percentage'
-                            ? `${item.discountValue || 0}%`
-                            : formatPriceWithCurrency(item.discountValue || 0)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Netto:</span>
-                        <p className="font-medium">{formatPriceWithCurrency(item.netto)}</p>
-                      </div>
-                    </div>
-
-                    {/* Service Details */}
-                    {headerState.lineOfBusiness?.type === 'service' && item.serviceDetails && item.serviceDetails.length > 0 && (
-                      <div className="mt-3">
-                        <span className="text-gray-600 text-sm">Service Details:</span>
-                        <ul className="list-disc list-inside mt-2 text-sm text-gray-700">
-                          {item.serviceDetails.map((detail, idx) => (
-                            <li key={idx}>{detail}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Sparepart Quantity and Price */}
-                    {headerState.lineOfBusiness?.type === 'sparepart' && (
-                      <div className="mt-3">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-600">Quantity:</span>
-                            <p className="font-medium">{item.quantity || 1}</p>
                           </div>
-                          {item.pricePerUnit && (
+                          {isService ? (
+                            <p className="text-sm text-gray-600">
+                              Qty:{' '}
+                              <span className="font-semibold text-gray-900">
+                                {quantity} {quantity > 1 ? 'units' : 'unit'}
+                              </span>
+                            </p>
+                          ) : (
                             <>
-                              <div>
-                                <span className="text-gray-600">Price Per Unit:</span>
-                                <p className="font-medium">{formatPriceWithCurrency(item.pricePerUnit)}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Total:</span>
-                                <p className="font-medium">{formatPriceWithCurrency((item.quantity || 1) * item.pricePerUnit)}</p>
-                              </div>
+                              {isSparepart ? (
+                                <p className="text-sm text-gray-600">
+                                  Sparepart: {item.sparepartName || `Item ${itemNumber}`}
+                                </p>
+                              ) : (
+                                <>
+                                  <p className="text-sm text-gray-600">
+                                    {item.karoseri} - {item.chassis}
+                                  </p>
+                                  {item.drawingSpecification && (
+                                    <p className="text-xs text-gray-500">
+                                      Drawing: {item.drawingSpecification.drawingNumber || 'Selected'}
+                                    </p>
+                                  )}
+                                </>
+                              )}
                             </>
                           )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Karoseri Specifications */}
-                    {(!headerState.lineOfBusiness || headerState.lineOfBusiness.type === 'karoseri') && item.specifications && item.specifications.length > 0 && (
-                      <div className="mt-3">
-                        <span className="text-gray-600 text-sm">Specifications:</span>
-                        <div className="mt-2 space-y-3">
-                          {item.specifications.map((spec, specIndex) => (
-                            <div key={specIndex} className="bg-gray-50 rounded-lg p-3">
-                              <h6 className="font-semibold text-gray-800 text-sm mb-2">
-                                {spec.category}
-                              </h6>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {spec.items && spec.items.map((specItem, itemIndex) => (
-                                  <div key={itemIndex} className="flex items-start space-x-2">
-                                    <span className="font-medium text-gray-600 text-sm min-w-0 flex-shrink-0">
-                                      {specItem.name}:
-                                    </span>
-                                    <span className="text-gray-700 text-sm break-words">
-                                      {specItem.specification}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                        <div className="text-right space-y-1">
+                          <div className="text-xs uppercase text-gray-500">Netto / Qty</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {formatPriceWithCurrency(nettoPerQty)}
+                          </div>
+                          {quantity > 1 && (
+                            <div className="text-xs text-gray-500">
+                              Total: {formatPriceWithCurrency(nettoTotal)}
                             </div>
-                          ))}
+                          )}
                         </div>
                       </div>
-                    )}
 
-                    {item.notes && (
-                      <div className="mt-3">
-                        <span className="text-gray-600 text-sm">Notes:</span>
-                        <p className="text-sm text-gray-700 mt-1">{item.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      {isService ? (
+                        <div className="mt-4 space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                              <p className="text-[11px] uppercase font-semibold text-blue-600 tracking-wide">
+                                Base Price / Qty
+                              </p>
+                              <p className="text-lg font-semibold text-blue-800">
+                                {formatPriceWithCurrency(basePriceValue)}
+                              </p>
+                              {quantity > 1 && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  Total: {formatPriceWithCurrency(baseTotal)}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+                              <p className="text-[11px] uppercase font-semibold text-amber-600 tracking-wide">
+                                Discount / Qty
+                              </p>
+                              <p className="text-lg font-semibold text-amber-700">
+                                {discountDescriptor}
+                              </p>
+                              {quantity > 1 && (
+                                <p className="text-xs text-amber-600 mt-1">
+                                  Total: {formatPriceWithCurrency(discountTotal)}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                              <p className="text-[11px] uppercase font-semibold text-emerald-600 tracking-wide">
+                                Commission / Qty
+                              </p>
+                              <p className="text-lg font-semibold text-emerald-700">
+                                {formatPriceWithCurrency(commissionPerQty)}
+                              </p>
+                              {quantity > 1 && (
+                                <p className="text-xs text-emerald-600 mt-1">
+                                  Total: {formatPriceWithCurrency(commissionTotal)}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+                              <p className="text-[11px] uppercase font-semibold text-purple-600 tracking-wide">
+                                Netto / Qty
+                              </p>
+                              <p className="text-lg font-semibold text-purple-700">
+                                {formatPriceWithCurrency(nettoPerQty)}
+                              </p>
+                              {quantity > 1 && (
+                                <p className="text-xs text-purple-600 mt-1">
+                                  Total: {formatPriceWithCurrency(nettoTotal)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-gray-200 bg-white p-4">
+                            <p className="text-xs uppercase font-semibold text-gray-500 tracking-wide mb-2">
+                              Price Breakdown
+                            </p>
+                            <div className="flex flex-wrap gap-2 text-sm text-gray-600">
+                              <span>{formatPriceWithCurrency(basePriceValue)}</span>
+                              {discountPerQty > 0 && (
+                                <span>
+                                  − {formatPriceWithCurrency(discountPerQty)}
+                                  {item.discountType === 'percentage' ? ` (${discountRate}%)` : ''}
+                                </span>
+                              )}
+                              {commissionPerQty > 0 && (
+                                <span>− {formatPriceWithCurrency(commissionPerQty)} (Komisi)</span>
+                              )}
+                              <span>= {formatPriceWithCurrency(nettoPerQty)} / qty</span>
+                              {quantity > 1 && (
+                                <span>→ {formatPriceWithCurrency(nettoTotal)} total</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {Array.isArray(item.serviceDetails) && item.serviceDetails.length > 0 && (
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                              <p className="text-xs uppercase font-semibold tracking-wide text-gray-500 mb-2">
+                                Service Details
+                              </p>
+                              <ul className="space-y-1 text-sm text-gray-700 list-disc list-inside">
+                                {item.serviceDetails.map((detail, detailIndex) => (
+                                  <li key={detailIndex}>{detail}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ) : isSparepart ? (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-600 block">Quantity</span>
+                            <p className="font-medium">{quantity}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 block">Base Price</span>
+                            <p className="font-medium">{formatPriceWithCurrency(basePriceValue)}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 block">Discount</span>
+                            <p className="font-medium">
+                              {item.discountType === 'percentage'
+                                ? `${discountRate || 0}%`
+                                : formatPriceWithCurrency(item.discountValue || 0)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 block">Commission / Qty</span>
+                            <p className="font-medium">{formatPriceWithCurrency(commissionPerQty)}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 block">Netto / Qty</span>
+                            <p className="font-medium">{formatPriceWithCurrency(nettoPerQty)}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 block">Netto Total</span>
+                            <p className="font-medium">{formatPriceWithCurrency(nettoTotal)}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-600">Base Price:</span>
+                            <p className="font-medium">{formatPriceWithCurrency(item.price)}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Discount:</span>
+                            <p className="font-medium">
+                              {item.discountType === 'percentage'
+                                ? `${item.discountValue || 0}%`
+                                : formatPriceWithCurrency(item.discountValue || 0)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Netto:</span>
+                            <p className="font-medium">{formatPriceWithCurrency(item.netto)}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isService && item.specifications && item.specifications.length > 0 && (
+                        <div className="mt-3">
+                          <span className="text-gray-600 text-sm">Specifications:</span>
+                          <div className="mt-2 space-y-3">
+                            {item.specifications.map((spec, specIndex) => (
+                              <div key={specIndex} className="bg-gray-50 rounded-lg p-3">
+                                <h6 className="font-semibold text-gray-800 text-sm mb-2">
+                                  {spec.category}
+                                </h6>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {spec.items && spec.items.map((specItem, itemIndex) => (
+                                    <div key={itemIndex} className="flex items-start space-x-2">
+                                      <span className="font-medium text-gray-600 text-sm min-w-0 flex-shrink-0">
+                                        {specItem.name}:
+                                      </span>
+                                      <span className="text-gray-700 text-sm break-words">
+                                        {specItem.specification}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {item.notes && (
+                        <div className="mt-3">
+                          <span className="text-gray-600 text-sm">Notes:</span>
+                          <p className="text-sm text-gray-700 mt-1">{item.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -1425,7 +1569,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                       />
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900">
-                          Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
+                          Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis}
                         </div>
                         <div className="text-xs text-gray-500">
                           {formatPriceWithCurrency(item.netto)}

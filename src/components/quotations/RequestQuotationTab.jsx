@@ -30,7 +30,7 @@ const RequestQuotationTab = () => {
   const [rfqToEdit, setRfqToEdit] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [rfqResults, setRfqResults] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const listRef = useRef(null);
   const [chips, setChips] = useState([]); // [{ type: 'app', value: 'budi' }, ...]
   const [infoOpen, setInfoOpen] = useState(false);
@@ -205,7 +205,7 @@ const RequestQuotationTab = () => {
     if (searchInput.trim()) search += ' ' + searchInput.trim();
     
     // Build query params
-    const params = { page, limit: 20, search };
+    const params = { page, limit: 20, search, viewScope: 'requester' };
     
     // Apply meeting filter if selected
     if (advancedFilters.lineOfBusiness?.length) {
@@ -546,29 +546,58 @@ const RequestQuotationTab = () => {
   };
 
   // Handle new RFQ creation
-  const handleCreateRFQ = async (rfqData) => {
+  const handleCreateRFQ = async ({ data: rfqData, newFiles = [] }) => {
     try {
-      await axiosInstance.post('/api/rfq', rfqData);
+      const response = await axiosInstance.post('/api/rfq', rfqData);
+      const createdRfq = response.data?.data?.rfq;
+
+      if (createdRfq && Array.isArray(newFiles) && newFiles.length > 0) {
+        for (const file of newFiles) {
+          const formData = new FormData();
+          formData.append('document', file);
+          await axiosInstance.post(`/api/rfq/${createdRfq._id}/documents`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+      }
+
       toast.success('RFQ submitted successfully');
       setShowModal(false);
       fetchRFQs(1, true);
     } catch (error) {
       console.error('Error creating RFQ:', error);
-      toast.error('Failed to submit RFQ');
+      toast.error(error.response?.data?.message || 'Failed to submit RFQ');
     }
   };
 
   // --- Edit handler for PATCH save only ---
-  const handleEditRFQ = async (rfqId, update) => {
+  const handleEditRFQ = async (rfqId, { data: update, newFiles = [], deleteDocumentIds = [] }) => {
     try {
       await axiosInstance.patch(`/api/rfq/${rfqId}`, update);
+
+      if (Array.isArray(deleteDocumentIds) && deleteDocumentIds.length > 0) {
+        for (const documentId of deleteDocumentIds) {
+          await axiosInstance.delete(`/api/rfq/${rfqId}/documents/${documentId}`);
+        }
+      }
+
+      if (Array.isArray(newFiles) && newFiles.length > 0) {
+        for (const file of newFiles) {
+          const formData = new FormData();
+          formData.append('document', file);
+          await axiosInstance.post(`/api/rfq/${rfqId}/documents`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+      }
+
       toast.success('RFQ saved');
       setShowModal(false);
       setRfqToEdit(null);
       fetchRFQs(1, true);
     } catch (error) {
       console.error('Error saving RFQ:', error);
-      toast.error('Failed to save RFQ');
+      toast.error(error.response?.data?.message || 'Failed to save RFQ');
     }
   };
 
@@ -1116,7 +1145,7 @@ const RequestQuotationTab = () => {
         <RequestRFQModal
           isOpen={showModal}
           onClose={() => { setShowModal(false); setRfqToEdit(null); }}
-          onSubmit={rfqToEdit ? (data) => handleEditRFQ(rfqToEdit._id, data) : handleCreateRFQ}
+          onSubmit={rfqToEdit ? (payload) => handleEditRFQ(rfqToEdit._id, payload) : handleCreateRFQ}
           approvers={approvers}
           quotationCreators={quotationCreators}
           engineers={engineers}

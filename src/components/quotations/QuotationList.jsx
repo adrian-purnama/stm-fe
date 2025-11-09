@@ -60,6 +60,44 @@ const statusClassMap = {
   close: 'bg-gray-100 text-gray-800'
 };
 
+const WIN_SUB_STATUS_OPTIONS = [
+  { value: 'order', label: 'Order' },
+  { value: 'proceed', label: 'Proceed' },
+  { value: 'delivery', label: 'Delivery' }
+];
+
+const ROMAN_MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const ROMAN_MONTH_OPTIONS = ROMAN_MONTHS.map((month) => ({ value: month, label: month }));
+
+const getCurrentRomanMonthMeta = () => {
+  const now = new Date();
+  return {
+    roman: ROMAN_MONTHS[now.getMonth()],
+    year: String(now.getFullYear())
+  };
+};
+
+const formatWinSubStatus = (value) => {
+  const option = WIN_SUB_STATUS_OPTIONS.find((opt) => opt.value === value);
+  return option ? option.label : value;
+};
+
+const buildOcPreview = (sequence, monthRoman, year) => {
+  if (!sequence) return 'Not set';
+  const roman = (monthRoman || getCurrentRomanMonthMeta().roman).toUpperCase();
+  const normalizedYear = year || getCurrentRomanMonthMeta().year;
+  return `${sequence}/${roman}/${normalizedYear}`;
+};
+
+const buildSpkPreview = (sequence, code, monthRoman, year) => {
+  if (!sequence) return 'Not set';
+  const safeCode = (code || '').toUpperCase();
+  if (!safeCode) return 'Incomplete (missing code)';
+  const roman = (monthRoman || getCurrentRomanMonthMeta().roman).toUpperCase();
+  const normalizedYear = year || getCurrentRomanMonthMeta().year;
+  return `${sequence}/${safeCode}/${roman}/${normalizedYear}`;
+};
+
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +125,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     reason: '',
     selectedOfferId: '',
     selectedItemIds: [],
-    customReason: ''
+    customReason: '',
+    winSubStatus: 'order',
+    ocSequence: '',
+    ocMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
+    ocYear: String(new Date().getFullYear()),
+    spkSequence: '',
+    spkCode: '',
+    spkMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
+    spkYear: String(new Date().getFullYear())
   });
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
   const [progressInputs, setProgressInputs] = useState({});
@@ -311,6 +357,66 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   };
 
   const openStatusModal = (header, offers) => {
+    const currentMeta = getCurrentRomanMonthMeta();
+    const ocParts = (header.ocNumber || '').split('/');
+    const spkParts = (header.spkNumber || '').split('/');
+
+    const ocSequence = ocParts[0] || '';
+    const ocRoman = (ocParts[1] || currentMeta.roman).toUpperCase();
+    const ocYearValue = ocParts[2] || currentMeta.year;
+
+    const spkSequence = spkParts[0] || '';
+    const spkCodeValue = (spkParts[1] || '').toUpperCase();
+    const spkRoman = spkParts.length >= 3 ? spkParts[2].toUpperCase() : currentMeta.roman;
+    const spkYearValue = spkParts.length >= 4 ? spkParts[3] : currentMeta.year;
+
+    const headerSelectedOfferId = header.selectedOfferId?.toString?.() || '';
+    const headerSelectedItemIds = (header.selectedOfferItemIds || []).map((id) => id?.toString?.() ?? id);
+
+    const acceptedSelection = (() => {
+      let foundOfferId = '';
+      let foundItemIds = [];
+
+      offers.forEach((offerGroup) => {
+        const inspectOffer = (offer) => {
+          if (!offer) return;
+          const acceptedItems = (offer.offerItems || []).filter((item) => item.isAccepted);
+          if (acceptedItems.length && !foundOfferId) {
+            foundOfferId = offer._id?.toString?.() ?? offer._id;
+            foundItemIds = acceptedItems.map((item) => item._id?.toString?.() ?? item._id);
+          }
+        };
+
+        if (offerGroup.original) {
+          inspectOffer(offerGroup.original);
+        } else {
+          inspectOffer(offerGroup);
+        }
+
+        (offerGroup.revisions || []).forEach(inspectOffer);
+      });
+
+      return {
+        offerId: foundOfferId,
+        itemIds: foundItemIds
+      };
+    })();
+
+    const defaultOfferId = (() => {
+      if (!offers.length) return '';
+      const first = offers[0];
+      if (first.original) {
+        return first.original._id?.toString?.() ?? first.original._id ?? '';
+      }
+      return first._id?.toString?.() ?? first._id ?? '';
+    })();
+
+    const effectiveSelectedOfferId =
+      headerSelectedOfferId || acceptedSelection.offerId || defaultOfferId;
+
+    const effectiveSelectedItemIds =
+      headerSelectedItemIds.length > 0 ? headerSelectedItemIds : acceptedSelection.itemIds;
+
     setStatusModal({
       isOpen: true,
       header,
@@ -319,18 +425,44 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     setStatusForm({
       status: header?.status?.type || 'open',
       reason: header?.status?.reason || '',
-      selectedOfferId: header?.selectedOfferId || (offers.length === 1 ? (offers[0].original?._id || offers[0]._id) : '')
+      selectedOfferId: effectiveSelectedOfferId,
+      selectedItemIds: effectiveSelectedItemIds,
+      customReason: '',
+      winSubStatus: header?.winSubStatus || 'order',
+      ocSequence,
+      ocMonthRoman: ocRoman,
+      ocYear: ocYearValue,
+      spkSequence,
+      spkCode: spkCodeValue,
+      spkMonthRoman: spkRoman,
+      spkYear: spkYearValue
     });
   };
 
   const closeStatusModal = () => {
     setStatusModal({ isOpen: false, header: null, offers: [] });
-    setStatusForm({ status: '', reason: '', selectedOfferId: '', customReason: '' });
+    const currentMeta = getCurrentRomanMonthMeta();
+    setStatusForm({
+      status: '',
+      reason: '',
+      selectedOfferId: '',
+      selectedItemIds: [],
+      customReason: '',
+      winSubStatus: 'order',
+      ocSequence: '',
+      ocMonthRoman: currentMeta.roman,
+      ocYear: currentMeta.year,
+      spkSequence: '',
+      spkCode: '',
+      spkMonthRoman: currentMeta.roman,
+      spkYear: currentMeta.year
+    });
   };
 
   const handleStatusChange = (newStatus) => {
     setStatusForm(prev => {
       const updated = { ...prev, status: newStatus };
+      const currentMeta = getCurrentRomanMonthMeta();
       
       // Clear reason and customReason when status changes to open
       if (newStatus === 'open') {
@@ -341,6 +473,59 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       // Clear selectedOfferId when status is not 'win'
       if (newStatus !== 'win') {
         updated.selectedOfferId = '';
+        updated.selectedItemIds = [];
+      }
+      
+      if (newStatus === 'win') {
+        if (!prev.winSubStatus) {
+          updated.winSubStatus = 'order';
+        }
+        if (!prev.ocSequence) {
+          updated.ocMonthRoman = currentMeta.roman;
+          updated.ocYear = currentMeta.year;
+        }
+        if (!prev.spkSequence) {
+          updated.spkMonthRoman = currentMeta.roman;
+          updated.spkYear = currentMeta.year;
+        }
+        if (!updated.selectedOfferId) {
+          const { header, offers } = statusModal;
+          const defaultOfferId = (() => {
+            if (!offers.length) return '';
+            const first = offers[0];
+            if (first.original) {
+              return first.original._id?.toString?.() ?? first.original._id ?? '';
+            }
+            return first._id?.toString?.() ?? first._id ?? '';
+          })();
+
+          const acceptedSelection = (() => {
+            let foundOfferId = '';
+            let foundItemIds = [];
+            offers.forEach((offerGroup) => {
+              const inspectOffer = (offer) => {
+                if (!offer) return;
+                const items = (offer.offerItems || []).filter((item) => item.isAccepted);
+                if (items.length && !foundOfferId) {
+                  foundOfferId = offer._id?.toString?.() ?? offer._id;
+                  foundItemIds = items.map((item) => item._id?.toString?.() ?? item._id);
+                }
+              };
+              if (offerGroup.original) {
+                inspectOffer(offerGroup.original);
+              } else {
+                inspectOffer(offerGroup);
+              }
+              (offerGroup.revisions || []).forEach(inspectOffer);
+            });
+            return { offerId: foundOfferId, itemIds: foundItemIds };
+          })();
+
+          updated.selectedOfferId = header?.selectedOfferId?.toString?.() || acceptedSelection.offerId || defaultOfferId;
+          if (!updated.selectedItemIds.length) {
+            updated.selectedItemIds = header?.selectedOfferItemIds?.map((id) => id?.toString?.() ?? id) || acceptedSelection.itemIds;
+          }
+        }
       }
       
       return updated;
@@ -367,7 +552,21 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const handleStatusUpdate = async () => {
     try {
       setStatusUpdateLoading(true);
-      const { status, reason, selectedOfferId, selectedItemIds, customReason } = statusForm;
+      const {
+        status,
+        reason,
+        selectedOfferId,
+        selectedItemIds,
+        customReason,
+        winSubStatus,
+        ocSequence,
+        ocMonthRoman,
+        ocYear,
+        spkSequence,
+        spkCode,
+        spkMonthRoman,
+        spkYear
+      } = statusForm;
       const { header, offers } = statusModal;
 
       if (!status) {
@@ -393,7 +592,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         return count + 1;
       }, 0);
 
-      const winningOfferId = selectedOfferId || (offers[0]?.original?._id || offers[0]?._id);
+      const winningOfferId =
+        selectedOfferId ||
+        offers[0]?.original?._id?.toString?.() ||
+        offers[0]?._id?.toString?.() ||
+        '';
       if (status === 'win' && totalOffers > 1 && !winningOfferId) {
         toast.error('Please pick the winning offer');
         return;
@@ -404,10 +607,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         // Find the selected offer and its items
         let selectedOfferItems = [];
         offers.forEach((offerGroup) => {
-          if (offerGroup.original && offerGroup.original._id === winningOfferId) {
+          if (offerGroup.original && (offerGroup.original._id?.toString?.() ?? offerGroup.original._id) === winningOfferId) {
             selectedOfferItems = offerGroup.original.offerItems || [];
           } else if (offerGroup.revisions) {
-            const revision = offerGroup.revisions.find(rev => rev._id === winningOfferId);
+            const revision = offerGroup.revisions.find(
+              (rev) => (rev._id?.toString?.() ?? rev._id) === winningOfferId
+            );
             if (revision) {
               selectedOfferItems = revision.offerItems || [];
             }
@@ -430,19 +635,96 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         status,
         reason: finalReason.trim() || undefined,
         selectedOfferId: status === 'win' ? winningOfferId : undefined,
-        selectedOfferItemIds: status === 'win' ? (selectedItemIds || []) : undefined
+        selectedOfferItemIds:
+          status === 'win'
+            ? (selectedItemIds || []).map((id) => id?.toString?.() ?? id)
+            : undefined
       };
 
-      await ApiHelper.patch(`/api/quotations/${encodeURIComponent(header.quotationNumber)}/status`, payload);
-      
-      // Clear progress if changing from 'win' to other status
-      if (header.status?.type === 'win' && status !== 'win') {
-        clearProgressForQuotation(header.quotationNumber);
+      if (status === 'win') {
+        const currentMeta = getCurrentRomanMonthMeta();
+        payload.winSubStatus = winSubStatus || 'order';
+
+        const ocSequenceTrimmed = (ocSequence || '').trim();
+        if (ocSequenceTrimmed) {
+          payload.ocSequenceNumber = ocSequenceTrimmed;
+          payload.ocMonthRoman = (ocMonthRoman || currentMeta.roman).trim().toUpperCase();
+          payload.ocYear = Number(ocYear || currentMeta.year);
+        } else {
+          payload.ocSequenceNumber = '';
+        }
+
+        const spkSequenceTrimmed = (spkSequence || '').trim();
+        const spkCodeTrimmed = (spkCode || '').trim().toUpperCase();
+        if (spkSequenceTrimmed) {
+          if (!spkCodeTrimmed) {
+            toast.error('SPK code is required when SPK number is provided');
+            return;
+          }
+          payload.spkSequenceNumber = spkSequenceTrimmed;
+          payload.spkLetterCode = spkCodeTrimmed;
+          payload.spkMonthRoman = (spkMonthRoman || currentMeta.roman).trim().toUpperCase();
+          payload.spkYear = Number(spkYear || currentMeta.year);
+        } else {
+          if (spkCodeTrimmed) {
+            toast.error('SPK number is required when SPK code is provided');
+            return;
+          }
+          payload.spkSequenceNumber = '';
+          payload.spkLetterCode = '';
+        }
       }
-      
-      toast.success('Status updated successfully');
+
+      await ApiHelper.patch(
+        `/api/quotations/${encodeURIComponent(header.quotationNumber)}/status`,
+        payload
+      );
+
+      // Update local state with new status
+      setQuotations(prev => 
+        prev.map(q => {
+          if (q.header.quotationNumber === header.quotationNumber) {
+            return {
+              ...q,
+              header: {
+                ...q.header,
+                status: {
+                  type: status,
+                  reason: finalReason,
+                  _id: q.header.status._id
+                }
+              }
+            };
+          }
+          return q;
+        })
+      );
+
+      // Update status form to reflect saved state
+      setStatusForm(prev => ({
+        ...prev,
+        status,
+        reason: finalReason,
+        selectedOfferId: payload.selectedOfferId || '',
+        selectedItemIds: payload.selectedOfferItemIds || [],
+        winSubStatus: status === 'win' ? (payload.winSubStatus || 'order') : prev.winSubStatus,
+        ocSequence: status === 'win' ? (payload.ocSequenceNumber || '') : prev.ocSequence,
+        ocMonthRoman:
+          status === 'win'
+            ? (payload.ocMonthRoman || prev.ocMonthRoman || getCurrentRomanMonthMeta().roman)
+            : prev.ocMonthRoman,
+        ocYear: status === 'win' ? String(payload.ocYear || prev.ocYear || getCurrentRomanMonthMeta().year) : prev.ocYear,
+        spkSequence: status === 'win' ? (payload.spkSequenceNumber || '') : prev.spkSequence,
+        spkCode: status === 'win' ? (payload.spkLetterCode || '') : prev.spkCode,
+        spkMonthRoman:
+          status === 'win'
+            ? (payload.spkMonthRoman || prev.spkMonthRoman || getCurrentRomanMonthMeta().roman)
+            : prev.spkMonthRoman,
+        spkYear: status === 'win' ? String(payload.spkYear || prev.spkYear || getCurrentRomanMonthMeta().year) : prev.spkYear
+      }));
+
+      toast.success('Quotation status updated successfully');
       closeStatusModal();
-      fetchQuotations();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to update status');
     } finally {
@@ -452,7 +734,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
   const handleFollowUpQuotation = async (header) => {
     try {
-      await ApiHelper.patch(`/api/quotations/${encodeURIComponent(header.quotationNumber)}/follow-up`);
+      await ApiHelper.patch(
+        `/api/quotations/${encodeURIComponent(header.quotationNumber)}/follow-up`
+      );
       toast.success('Follow-up date recorded');
       fetchQuotations();
     } catch (error) {
@@ -556,6 +840,13 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       return;
     }
 
+    const trimmedText = progressText.trim();
+    const existingQuotation = (quotations || []).find(
+      (q) => q.header.quotationNumber === quotationNumber
+    );
+    const originalEntry =
+      existingQuotation?.header?.progress?.[index] ?? '';
+
     // Optimistically update the UI
     setQuotations(prev => {
       const newQuotations = [...prev];
@@ -563,7 +854,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       if (quotationIndex !== -1) {
         const currentProgress = newQuotations[quotationIndex].header.progress || [];
         const newProgress = [...currentProgress];
-        newProgress[index] = progressText.trim();
+        newProgress[index] = trimmedText;
         newQuotations[quotationIndex] = {
           ...newQuotations[quotationIndex],
           header: {
@@ -575,18 +866,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       return newQuotations;
     });
 
-    // Clear editing state
-    setEditingProgress(prev => {
-      const newState = { ...prev };
-      delete newState[`${quotationNumber}-${index}`];
-      return newState;
-    });
-
     try {
-      // Note: The new API doesn't support updating individual progress entries
-      // We'll need to implement this differently or remove this functionality
-      toast.error('Progress editing not supported in new API structure');
+      await ApiHelper.put(
+        `/api/quotations/${encodeURIComponent(quotationNumber)}/progress/${index}`,
+        { progress: trimmedText }
+      );
       toast.success('Progress updated successfully');
+      setEditingProgress(prev => {
+        const newState = { ...prev };
+        delete newState[`${quotationNumber}-${index}`];
+        return newState;
+      });
     } catch (error) {
       // Revert optimistic update on error
       setQuotations(prev => {
@@ -595,7 +885,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         if (quotationIndex !== -1) {
           const currentProgress = newQuotations[quotationIndex].header.progress || [];
           const newProgress = [...currentProgress];
-          newProgress[index] = (quotations || []).find(q => q.header.quotationNumber === quotationNumber)?.header.progress?.[index] || '';
+          newProgress[index] = originalEntry;
           newQuotations[quotationIndex] = {
             ...newQuotations[quotationIndex],
             header: {
@@ -606,11 +896,6 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         }
         return newQuotations;
       });
-      // Restore editing state
-      setEditingProgress(prev => ({
-        ...prev,
-        [`${quotationNumber}-${index}`]: progressText
-      }));
       toast.error(error.response?.data?.message || 'Failed to update progress');
     }
   };
@@ -640,9 +925,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     });
 
     try {
-      // Note: The new API doesn't support deleting individual progress entries
-      // We'll need to implement this differently or remove this functionality
-      toast.error('Progress deletion not supported in new API structure');
+      await ApiHelper.delete(
+        `/api/quotations/${encodeURIComponent(quotationNumber)}/progress/${index}`
+      );
       toast.success('Progress deleted successfully');
     } catch (error) {
       // Revert optimistic update on error
@@ -1123,10 +1408,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     <div className="h-20 bg-gray-200 rounded-lg mb-2"></div>
                     <div className="h-20 bg-gray-200 rounded-lg"></div>
                   </div>
-                  <p className="text-xs text-gray-500 flex items-center">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                    Loading details...
-                  </p>
+                  <div className="text-xs text-gray-500 flex items-center">
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></span>
+                    <span>Loading details...</span>
+                  </div>
                 </div>
               ) : offers.length === 0 ? (
                 <p className="text-sm text-gray-500">No offers found for this quotation.</p>
@@ -1799,17 +2084,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                         <label key={item._id || index} className="flex items-center space-x-3 cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={statusForm.selectedItemIds?.includes(item._id) || false}
+                            checked={statusForm.selectedItemIds?.includes(item._id?.toString?.() ?? item._id) || false}
                             onChange={(e) => {
+                              const itemId = item._id?.toString?.() ?? item._id;
                               if (e.target.checked) {
                                 setStatusForm(prev => ({
                                   ...prev,
-                                  selectedItemIds: [...(prev.selectedItemIds || []), item._id]
+                                  selectedItemIds: [...(prev.selectedItemIds || []), itemId]
                                 }));
                               } else {
                                 setStatusForm(prev => ({
                                   ...prev,
-                                  selectedItemIds: (prev.selectedItemIds || []).filter(id => id !== item._id)
+                                  selectedItemIds: (prev.selectedItemIds || []).filter(id => id !== itemId)
                                 }));
                               }
                             }}
@@ -1833,6 +2119,167 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 );
               })()}
             </div>
+          {statusForm.status === 'win' && (
+            <div className="border border-green-200 bg-green-50/40 rounded-md p-4 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Win Sub Status
+                </label>
+                <CustomDropdown
+                  options={WIN_SUB_STATUS_OPTIONS}
+                  value={statusForm.winSubStatus}
+                  onChange={(value) =>
+                    setStatusForm((prev) => ({
+                      ...prev,
+                      winSubStatus: value || 'order'
+                    }))
+                  }
+                  placeholder="Select win sub status"
+                />
+              </div>
+
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Order Confirmation Number
+                    </label>
+                    <span className="text-xs text-gray-500">
+                      Format: number/ROMAN/year
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={statusForm.ocSequence}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          ocSequence: digitsOnly
+                        }));
+                      }}
+                      placeholder="Number"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <CustomDropdown
+                      options={ROMAN_MONTH_OPTIONS}
+                      value={statusForm.ocMonthRoman}
+                      onChange={(value) =>
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          ocMonthRoman: (value || prev.ocMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
+                        }))
+                      }
+                      placeholder="Month"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={statusForm.ocYear}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          ocYear: digitsOnly
+                        }));
+                      }}
+                      placeholder="Year"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Preview:{' '}
+                    <span className="font-semibold text-gray-700">
+                      {buildOcPreview(
+                        statusForm.ocSequence,
+                        statusForm.ocMonthRoman,
+                        statusForm.ocYear
+                      )}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                      SPK Number
+                    </label>
+                    <span className="text-xs text-gray-500">
+                      Format: number/CODE/ROMAN/year
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={statusForm.spkSequence}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          spkSequence: digitsOnly
+                        }));
+                      }}
+                      placeholder="Number"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="text"
+                      value={statusForm.spkCode}
+                      onChange={(e) => {
+                        const sanitized = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          spkCode: sanitized
+                        }));
+                      }}
+                      placeholder="Code (e.g., MKT)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <CustomDropdown
+                      options={ROMAN_MONTH_OPTIONS}
+                      value={statusForm.spkMonthRoman}
+                      onChange={(value) =>
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          spkMonthRoman: (value || prev.spkMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
+                        }))
+                      }
+                      placeholder="Month"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={statusForm.spkYear}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setStatusForm((prev) => ({
+                          ...prev,
+                          spkYear: digitsOnly
+                        }));
+                      }}
+                      placeholder="Year"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Preview:{' '}
+                    <span className="font-semibold text-gray-700">
+                      {buildSpkPreview(
+                        statusForm.spkSequence,
+                        statusForm.spkCode,
+                        statusForm.spkMonthRoman,
+                        statusForm.spkYear
+                      )}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={closeStatusModal}

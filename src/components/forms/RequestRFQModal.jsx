@@ -1,10 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Search } from 'lucide-react';
+import { Plus, X, Search, Paperclip, Download, Trash2 } from 'lucide-react';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
 import PriceInput from '../common/PriceInput';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/api/ApiHelper';
+
+const DEFAULT_PAYMENT_TERMS = 'Payment DP 50% sisa cash before delivery';
+const ALLOWED_DOCUMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+];
+const ALLOWED_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.xls,.xlsx';
+const ALLOWED_DOCUMENT_EXTENSION_LIST = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
+const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB
 
 const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreators, engineers, rfqToEdit }) => {
   const [formData, setFormData] = useState({
@@ -29,6 +41,15 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     lineOfBusiness: {
       type: 'karoseri'
     },
+    targetCloseDate: '',
+    deliveryTerms: '',
+    deliveryNotes: '',
+    paymentTermsOption: 'default',
+    paymentTermsCustom: '',
+    isTaxIncluded: false,
+    includePPN: true,
+    inclusionNotes: '',
+    exclusionNotes: '',
     items: []
   });
   const [loading, setLoading] = useState(false);
@@ -51,6 +72,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
   const [selectedSizeTypeFilter, setSelectedSizeTypeFilter] = useState('');
   const [filteredDrawings, setFilteredDrawings] = useState([]);
   const [sizeTypes, setSizeTypes] = useState([]);
+  const [documentFiles, setDocumentFiles] = useState([]);
+  const [existingDocuments, setExistingDocuments] = useState([]);
+  const [documentsToDelete, setDocumentsToDelete] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
   // Fetch master data when modal opens
   useEffect(() => {
@@ -73,6 +98,37 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       console.error('Error loading size types:', error);
     }
   };
+
+  const fetchRfqDocuments = async (rfqId) => {
+    setDocumentsLoading(true);
+    try {
+      const response = await axiosInstance.get(`/api/rfq/${rfqId}/documents`);
+      const docs = response.data?.data?.documents || [];
+      setExistingDocuments(docs);
+      setDocumentsToDelete([]);
+    } catch (error) {
+      console.error('Error loading RFQ documents:', error);
+      toast.error('Failed to load RFQ documents');
+      setExistingDocuments([]);
+      setDocumentsToDelete([]);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && rfqToEdit?._id) {
+      fetchRfqDocuments(rfqToEdit._id);
+    } else if (isOpen && !rfqToEdit) {
+      setExistingDocuments([]);
+      setDocumentsToDelete([]);
+    }
+
+    if (!isOpen) {
+      setDocumentFiles([]);
+      setDocumentsToDelete([]);
+    }
+  }, [isOpen, rfqToEdit]);
 
   // Filter drawings based on search and filters
   useEffect(() => {
@@ -145,6 +201,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
 
     const itemIndex = drawingSelectorItemIndex;
     updateItem(itemIndex, 'templateSourceId', drawing._id);
+    updateItem(itemIndex, 'templateSourceModel', 'DrawingSpecification');
     updateItem(itemIndex, 'drawingSpecification', drawing._id);
 
     // Populate fields from drawing
@@ -177,6 +234,77 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     setDrawingSelectorItemIndex(null);
   };
 
+  const formatFileSize = (bytes = 0) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleDocumentInputChange = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) {
+      return;
+    }
+
+    const acceptedFiles = [];
+
+    files.forEach((file) => {
+      if (file.size > MAX_DOCUMENT_SIZE) {
+        toast.error(`${file.name} is larger than ${MAX_DOCUMENT_SIZE / (1024 * 1024)}MB`);
+        return;
+      }
+
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const mimeAllowed = file.type ? ALLOWED_DOCUMENT_TYPES.includes(file.type) : false;
+      const extensionAllowed = ALLOWED_DOCUMENT_EXTENSION_LIST.includes(extension);
+
+      if (!mimeAllowed && !extensionAllowed) {
+        toast.error(`${file.name} is not an allowed file type`);
+        return;
+      }
+
+      const id = `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      acceptedFiles.push({ id, file });
+    });
+
+    if (acceptedFiles.length > 0) {
+      setDocumentFiles((prev) => [...prev, ...acceptedFiles]);
+    }
+
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const removeNewDocument = (id) => {
+    setDocumentFiles((prev) => prev.filter((doc) => doc.id !== id));
+  };
+
+  const markDocumentForDeletion = (documentId) => {
+    setDocumentsToDelete((prev) => (prev.includes(documentId) ? prev : [...prev, documentId]));
+    setExistingDocuments((prev) => prev.filter((doc) => doc._id !== documentId));
+  };
+
+  const handleDownloadDocument = async (docEntry) => {
+    try {
+      const response = await axiosInstance.get(`/api/rfq/documents/${docEntry._id}/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: docEntry.mimeType || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = docEntry.originalName || 'document';
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast.error('Failed to download document');
+    }
+  };
+
   useEffect(() => {
     if (isOpen && rfqToEdit) {
       // Get RFQ-level bodyTypeId and chassisTypeId (handle both populated objects and plain IDs)
@@ -195,14 +323,14 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         if (rfqToEdit.lineOfBusiness?.type === 'karoseri') {
           // Determine bodyTypeId - check existing fields first, then RFQ level
           let resolvedBodyTypeId = null;
-          if (item.bodyTypeId) {
-            resolvedBodyTypeId = typeof item.bodyTypeId === 'object' 
-              ? item.bodyTypeId._id || item.bodyTypeId 
+        if (item.bodyTypeId) {
+            resolvedBodyTypeId = typeof item.bodyTypeId === 'object' && item.bodyTypeId !== null
+              ? item.bodyTypeId._id || item.bodyTypeId.id || null
               : item.bodyTypeId;
           } else if (item.templateSourceId && item.templateSourceModel === 'BodyType') {
             // If templateSourceId exists and points to BodyType, use it
-            resolvedBodyTypeId = typeof item.templateSourceId === 'object' 
-              ? item.templateSourceId._id || item.templateSourceId 
+            resolvedBodyTypeId = typeof item.templateSourceId === 'object' && item.templateSourceId !== null
+              ? item.templateSourceId._id || item.templateSourceId.id || null
               : item.templateSourceId;
           } else if (rfqBodyTypeId) {
             // Otherwise, use RFQ-level bodyTypeId
@@ -214,9 +342,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
             item.bodyTypeId = resolvedBodyTypeId;
             // Also set templateSourceId (form uses this for dropdown)
             // Handle case where templateSourceId might be a populated object
-            const currentTemplateSourceId = typeof item.templateSourceId === 'object' 
-              ? item.templateSourceId._id || item.templateSourceId 
-              : item.templateSourceId;
+            const currentTemplateSourceId =
+              item.templateSourceId && typeof item.templateSourceId === 'object'
+                ? item.templateSourceId._id || item.templateSourceId.id || null
+                : item.templateSourceId || null;
             
             // Set templateSourceId if not already set or if it doesn't match bodyTypeId
             if (!currentTemplateSourceId || currentTemplateSourceId !== resolvedBodyTypeId) {
@@ -252,6 +381,14 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         return item;
       }) : [];
       
+      const existingIsTaxIncluded = !!rfqToEdit.isTaxIncluded;
+      let existingIncludePPN = typeof rfqToEdit.includePPN === 'boolean' ? rfqToEdit.includePPN : !existingIsTaxIncluded;
+      if (existingIsTaxIncluded) {
+        existingIncludePPN = false;
+      } else if (!existingIncludePPN) {
+        existingIncludePPN = true;
+      }
+
       setFormData({
         approverId: rfqToEdit.approverId?._id || '',
         quotationCreatorId: rfqToEdit.quotationCreatorId?._id || '',
@@ -269,6 +406,15 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         canMake: typeof rfqToEdit.canMake === 'boolean' ? rfqToEdit.canMake : false,
         projectOngoing: typeof rfqToEdit.projectOngoing === 'boolean' ? rfqToEdit.projectOngoing : false,
         lineOfBusiness: rfqToEdit.lineOfBusiness || { type: 'karoseri' },
+        targetCloseDate: rfqToEdit.targetCloseDate ? rfqToEdit.targetCloseDate.substr(0, 10) : '',
+        deliveryTerms: rfqToEdit.deliveryTerms || '',
+        deliveryNotes: rfqToEdit.deliveryNotes || '',
+        paymentTermsOption: rfqToEdit.paymentTerms && rfqToEdit.paymentTerms !== DEFAULT_PAYMENT_TERMS ? 'custom' : 'default',
+        paymentTermsCustom: rfqToEdit.paymentTerms && rfqToEdit.paymentTerms !== DEFAULT_PAYMENT_TERMS ? rfqToEdit.paymentTerms : '',
+        isTaxIncluded: existingIsTaxIncluded,
+        includePPN: existingIncludePPN,
+        inclusionNotes: rfqToEdit.inclusionNotes || '',
+        exclusionNotes: rfqToEdit.exclusionNotes || '',
         items: migratedItems
       });
     } else if (isOpen && !rfqToEdit) {
@@ -280,6 +426,15 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
+        targetCloseDate: '',
+        deliveryTerms: '',
+        deliveryNotes: '',
+        paymentTermsOption: 'default',
+        paymentTermsCustom: '',
+        isTaxIncluded: false,
+        includePPN: true,
+        inclusionNotes: '',
+        exclusionNotes: '',
         items: []
       });
     }
@@ -383,6 +538,16 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         [errorKey]: ''
       }));
     }
+  };
+
+  const taxSelection = formData.isTaxIncluded ? 'inclusive' : 'include_ppn';
+
+  const handleTaxSelectionChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      isTaxIncluded: value === 'inclusive',
+      includePPN: value === 'include_ppn'
+    }));
   };
 
   // Item management functions
@@ -657,6 +822,12 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     if (!formData.competitor.trim()) {
       newErrors.competitor = 'Competitor is required';
     }
+
+    if (formData.paymentTermsOption === 'custom') {
+      if (!formData.paymentTermsCustom || !formData.paymentTermsCustom.trim()) {
+        newErrors.paymentTermsCustom = 'Custom payment terms are required';
+      }
+    }
     
     if (formData.canMake === undefined || formData.canMake === null) {
       newErrors.canMake = 'Can Make flag is required';
@@ -685,7 +856,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         const estimatedRev = item.estimatedRevenue;
         if (estimatedRev === undefined || estimatedRev === null || estimatedRev === '' || 
             isNaN(estimatedRev) || (typeof estimatedRev === 'number' && estimatedRev < 0)) {
-          newErrors[`items.${index}.estimatedRevenue`] = 'Estimated revenue is required and must be >= 0';
+          newErrors[`items.${index}.estimatedRevenue`] = 'Estimated revenue per quantity is required and must be >= 0';
         }
         
         // Validate template mode
@@ -730,7 +901,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         }
         if (item.estimatedRevenue === undefined || item.estimatedRevenue === null || 
             isNaN(parseFloat(item.estimatedRevenue)) || parseFloat(item.estimatedRevenue) < 0) {
-          newErrors[`items.${index}.estimatedRevenue`] = 'Each service item must have an estimated revenue >= 0';
+          newErrors[`items.${index}.estimatedRevenue`] = 'Each service item must have an estimated revenue per quantity >= 0';
         }
       });
     } else if (lineOfBusinessType === 'sparepart') {
@@ -784,6 +955,26 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       
       // Remove estimatedRevenue from RFQ level (it's now only in items)
       delete submitData.estimatedRevenue;
+      submitData.paymentTerms = formData.paymentTermsOption === 'default'
+        ? DEFAULT_PAYMENT_TERMS
+        : (formData.paymentTermsCustom ? formData.paymentTermsCustom.trim() : '');
+      if (!submitData.paymentTerms) {
+        submitData.paymentTerms = DEFAULT_PAYMENT_TERMS;
+      }
+      submitData.deliveryTerms = formData.deliveryTerms ? formData.deliveryTerms.trim() : '';
+      submitData.deliveryNotes = formData.deliveryNotes ? formData.deliveryNotes.trim() : '';
+      submitData.inclusionNotes = formData.inclusionNotes ? formData.inclusionNotes.trim() : '';
+      submitData.exclusionNotes = formData.exclusionNotes ? formData.exclusionNotes.trim() : '';
+      submitData.isTaxIncluded = Boolean(formData.isTaxIncluded);
+      submitData.includePPN = Boolean(formData.includePPN);
+      if (formData.targetCloseDate) {
+        submitData.targetCloseDate = formData.targetCloseDate;
+      } else {
+        delete submitData.targetCloseDate;
+      }
+      delete submitData.paymentTermsOption;
+      delete submitData.paymentTermsCustom;
+      submitData.engineeringId = submitData.engineeringId || null;
       
       // Build lineOfBusiness object for submission
       submitData.lineOfBusiness = {
@@ -820,16 +1011,20 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         submitData.items = formData.items.map(item => {
           const cleanedItem = { ...item };
           
-          // For manual mode, backend doesn't need templateSourceId (it uses karoseri and chassis strings)
           if (item.templateMode === 'manual') {
-            // Remove templateSourceId and bodyTypeId from item data (they're only used at RFQ level)
             delete cleanedItem.templateSourceId;
             delete cleanedItem.bodyTypeId;
+            cleanedItem.templateSourceModel = null;
           } else {
-            // For bodyType and drawing modes, templateSourceId is the template reference
-            // Remove bodyTypeId as it's only needed for RFQ-level extraction
             delete cleanedItem.bodyTypeId;
+            cleanedItem.templateSourceModel = item.templateMode === 'bodyType' ? 'BodyType' : 'DrawingSpecification';
           }
+
+          if (cleanedItem.templateMode !== 'drawing') {
+            delete cleanedItem.drawingSpecification;
+          }
+
+          cleanedItem.estimatedRevenue = parseFloat(cleanedItem.estimatedRevenue) || 0;
           
           return cleanedItem;
         });
@@ -853,7 +1048,13 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         }));
       }
 
-      await onSubmit(submitData);
+      const payload = {
+        data: submitData,
+        newFiles: documentFiles.map((doc) => doc.file),
+        deleteDocumentIds: documentsToDelete
+      };
+
+      await onSubmit(payload);
       // Reset form
       setFormData({
         approverId: '', quotationCreatorId: '', engineeringId: '',
@@ -863,8 +1064,20 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
+        targetCloseDate: '',
+        deliveryTerms: '',
+        deliveryNotes: '',
+        paymentTermsOption: 'default',
+        paymentTermsCustom: '',
+        isTaxIncluded: false,
+        includePPN: true,
+        inclusionNotes: '',
+        exclusionNotes: '',
         items: []
       });
+      setDocumentFiles([]);
+      setExistingDocuments([]);
+      setDocumentsToDelete([]);
       setErrors({});
     } catch (error) {
       console.error('Error submitting RFQ:', error);
@@ -883,9 +1096,21 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         priority: 'medium', expectedDeliveryDate: '', confidenceRate: '', estimatedRevenue: '',
         deliveryLocation: '',
         competitor: '', canMake: false, projectOngoing: false, lineOfBusiness: { type: 'karoseri' },
+        targetCloseDate: '',
+        deliveryTerms: '',
+        deliveryNotes: '',
+        paymentTermsOption: 'default',
+        paymentTermsCustom: '',
+        isTaxIncluded: false,
+        includePPN: true,
+        inclusionNotes: '',
+        exclusionNotes: '',
         items: []
       });
       setErrors({});
+      setDocumentFiles([]);
+      setExistingDocuments([]);
+      setDocumentsToDelete([]);
       onClose();
     }
   };
@@ -1215,7 +1440,248 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           </div>
         </div>
 
-         {/* Section 4: Project Flags */}
+        {/* Section 4: Commercial Terms */}
+        <div className="border-b border-gray-200 pb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Commercial Terms</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="targetCloseDate" className="block text-sm font-medium text-gray-700 mb-2">
+                Target Close Date
+              </label>
+              <input
+                type="date"
+                id="targetCloseDate"
+                value={formData.targetCloseDate}
+                onChange={(e) => handleInputChange('targetCloseDate', e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label htmlFor="deliveryTerms" className="block text-sm font-medium text-gray-700 mb-2">
+                Delivery Terms
+              </label>
+              <input
+                type="text"
+                id="deliveryTerms"
+                value={formData.deliveryTerms}
+                onChange={(e) => handleInputChange('deliveryTerms', e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                placeholder="e.g., FOB Jakarta"
+                disabled={loading}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="deliveryNotes" className="block text-sm font-medium text-gray-700 mb-2">
+                Delivery Notes
+              </label>
+              <textarea
+                id="deliveryNotes"
+                value={formData.deliveryNotes}
+                onChange={(e) => handleInputChange('deliveryNotes', e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                placeholder="Additional delivery notes..."
+                disabled={loading}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Terms
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <CustomDropdown
+                  options={[
+                    { value: 'default', label: `Use Default (${DEFAULT_PAYMENT_TERMS})` },
+                    { value: 'custom', label: 'Custom Terms' }
+                  ]}
+                  value={formData.paymentTermsOption}
+                  onChange={(value) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      paymentTermsOption: value,
+                      paymentTermsCustom: value === 'default' ? '' : prev.paymentTermsCustom
+                    }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      paymentTermsCustom: ''
+                    }));
+                  }}
+                  disabled={loading}
+                  placeholder="Select payment terms"
+                />
+                {formData.paymentTermsOption === 'custom' && (
+                  <input
+                    type="text"
+                    value={formData.paymentTermsCustom}
+                    onChange={(e) => handleInputChange('paymentTermsCustom', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.paymentTermsCustom ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter custom payment terms"
+                    disabled={loading}
+                  />
+                )}
+              </div>
+              {errors.paymentTermsCustom && (
+                <p className="mt-1 text-sm text-red-600">{errors.paymentTermsCustom}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tax & PPN
+              </label>
+              <CustomDropdown
+                options={[
+                  { value: 'inclusive', label: 'Prices are tax inclusive' },
+                  { value: 'include_ppn', label: 'Include PPN (VAT)' }
+                ]}
+                value={taxSelection}
+                onChange={handleTaxSelectionChange}
+                disabled={loading}
+                placeholder="Select tax treatment"
+              />
+            </div>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="inclusionNotes" className="block text-sm font-medium text-gray-700 mb-2">
+                  Inclusion Notes
+                </label>
+                <textarea
+                  id="inclusionNotes"
+                  value={formData.inclusionNotes}
+                  onChange={(e) => handleInputChange('inclusionNotes', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                  placeholder="Items or services included..."
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label htmlFor="exclusionNotes" className="block text-sm font-medium text-gray-700 mb-2">
+                  Exclusion Notes
+                </label>
+                <textarea
+                  id="exclusionNotes"
+                  value={formData.exclusionNotes}
+                  onChange={(e) => handleInputChange('exclusionNotes', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                  placeholder="Items or services excluded..."
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Supporting Documents
+              </label>
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <label
+                    htmlFor="rfq-document-upload"
+                    className={`inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Paperclip size={16} />
+                    Upload Documents
+                  </label>
+                  <input
+                    id="rfq-document-upload"
+                    type="file"
+                    multiple
+                    accept={ALLOWED_DOCUMENT_EXTENSIONS}
+                    onChange={handleDocumentInputChange}
+                    disabled={loading}
+                    className="hidden"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Allowed: PDF, Word, Excel. Max size {MAX_DOCUMENT_SIZE / (1024 * 1024)}MB each.
+                  </p>
+                </div>
+
+                {documentsLoading ? (
+                  <div className="text-sm text-gray-500">Loading documents...</div>
+                ) : (
+                  <div className="space-y-3">
+                    {existingDocuments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Existing Documents</p>
+                        {existingDocuments.map((docEntry) => (
+                          <div
+                            key={docEntry._id}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{docEntry.originalName}</span>
+                              <span className="text-xs text-gray-500">
+                                {formatFileSize(docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadDocument(docEntry)}
+                                className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                              >
+                                <Download size={14} />
+                                Download
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => markDocumentForDeletion(docEntry._id)}
+                                className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} />
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {documentsToDelete.length > 0 && (
+                      <p className="text-xs text-amber-600">
+                        {documentsToDelete.length} document{documentsToDelete.length > 1 ? 's' : ''} will be removed when you save.
+                      </p>
+                    )}
+
+                    {documentFiles.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Pending Uploads</p>
+                        {documentFiles.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{doc.file.name}</span>
+                              <span className="text-xs text-gray-500">{formatFileSize(doc.file.size)}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeNewDocument(doc.id)}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 size={14} />
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {existingDocuments.length === 0 && documentFiles.length === 0 && (
+                      <p className="text-xs text-gray-500">No documents attached yet.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+         {/* Section 5: Project Flags */}
          <div className="border-b border-gray-200 pb-6">
            <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Information</h3>
            <div className="space-y-4">
@@ -1364,6 +1830,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                       const currentQuantity = item.quantity || 1;
                       
                       updateItem(itemIndex, 'templateMode', value);
+                      updateItem(itemIndex, 'templateSourceModel', value === 'bodyType' ? 'BodyType' : value === 'drawing' ? 'DrawingSpecification' : null);
                       updateItem(itemIndex, 'karoseri', '');
                       updateItem(itemIndex, 'chassis', '');
                       updateItem(itemIndex, 'chassisModel', '');
@@ -1418,7 +1885,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   {/* Estimated Revenue - always shown */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Estimated Revenue (IDR) <span className="text-red-500">*</span>
+                      Estimated Revenue per Quantity (IDR) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1452,7 +1919,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                         errors[`items.${itemIndex}.estimatedRevenue`] ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="Enter estimated revenue"
+                      placeholder="Enter estimated revenue per quantity"
                       disabled={loading}
                     />
                     {errors[`items.${itemIndex}.estimatedRevenue`] && (
@@ -1474,8 +1941,8 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                           })) : []}
                           value={item.templateSourceId || ''}
                           onChange={(value) => {
-                            updateItem(itemIndex, 'templateSourceId', value);
-                            updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                          updateItem(itemIndex, 'templateSourceId', value);
+                          updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
                             const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
                             if (selectedBodyType) {
                               updateItem(itemIndex, 'karoseri', selectedBodyType.name);
@@ -1554,6 +2021,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                         onChange={(value) => {
                           updateItem(itemIndex, 'templateSourceId', value);
                           updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                            updateItem(itemIndex, 'templateSourceModel', 'BodyType');
                           const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
                           if (selectedBodyType) {
                             updateItem(itemIndex, 'karoseri', selectedBodyType.name || '');
@@ -1905,13 +2373,13 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Estimated Revenue <span className="text-red-500">*</span>
+                      Estimated Revenue per Quantity <span className="text-red-500">*</span>
                     </label>
                     <div className={errors[`items.${itemIndex}.estimatedRevenue`] ? 'border-2 border-red-500 rounded-md' : ''}>
                       <PriceInput
                         value={item.estimatedRevenue || 0}
                         onChange={(price) => updateItem(itemIndex, 'estimatedRevenue', price)}
-                        placeholder="Enter estimated revenue"
+                        placeholder="Enter estimated revenue per quantity"
                         disabled={loading}
                       />
                     </div>

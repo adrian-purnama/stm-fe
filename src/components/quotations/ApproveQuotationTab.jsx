@@ -36,7 +36,8 @@ const ApproveQuotationTab = () => {
       const response = await axiosInstance.get('/api/rfq', {
         params: {
           stage: 'approver',
-          status: 'pending'
+          status: 'pending',
+          viewScope: 'approver'
         }
       });
       let rfqsArray = response.data.data?.rfqs || response.data.data?.rfq || [];
@@ -933,7 +934,7 @@ const ApproveQuotationTab = () => {
                   <h4 className="text-sm font-semibold text-blue-800 mb-2">Budget Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-blue-700">Total Estimated Revenue:</span>
+                      <span className="font-medium text-blue-700">Total Estimated Revenue per Quantity:</span>
                       <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
                         {(() => {
                           // Calculate total estimated revenue from all items
