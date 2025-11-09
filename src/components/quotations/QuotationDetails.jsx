@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Edit,
   Trash2,
@@ -11,7 +11,10 @@ import {
   FileText,
   Plus,
   X,
-  Save
+  Save,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
@@ -22,6 +25,9 @@ import BaseModal from '../modals/BaseModal';
 // Removed OfferItemAcceptance import - no longer needed
 import { QUOTATION_FORM_MODES } from './quotationModes';
 import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
+import RFQDetailsView from './RFQDetailsView';
+import RequestRFQModal from '../forms/RequestRFQModal';
+import { useNavigate } from 'react-router-dom';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -136,6 +142,17 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
   const [newProgressText, setNewProgressText] = useState('');
   const [editingProgressIndex, setEditingProgressIndex] = useState(null);
   const [editingProgressText, setEditingProgressText] = useState('');
+  const [rfqCollapsed, setRfqCollapsed] = useState(true);
+  const [rfqDetails, setRfqDetails] = useState(null);
+  const [rfqLoading, setRfqLoading] = useState(false);
+  const [rfqError, setRfqError] = useState(null);
+  const [showRfqEditModal, setShowRfqEditModal] = useState(false);
+  const [rfqSupportLoading, setRfqSupportLoading] = useState(false);
+  const [rfqSupportData, setRfqSupportData] = useState({
+    approvers: [],
+    quotationCreators: [],
+    engineers: []
+  });
 
   useEffect(() => {
     setHeaderState(header);
@@ -158,6 +175,116 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
       });
     }
   }, [showHeaderEditModal, headerState]);
+
+  const fetchRfqDetails = useCallback(async () => {
+    if (!headerState?.rfqId) return;
+    try {
+      setRfqLoading(true);
+      setRfqError(null);
+      const response = await ApiHelper.get(`/api/rfq/${headerState.rfqId}`);
+      const fetchedRfq =
+        response.data?.data?.rfq ||
+        response.data?.rfq ||
+        response.data?.data ||
+        null;
+      setRfqDetails(fetchedRfq);
+    } catch (error) {
+      console.error('Failed to fetch RFQ details:', error);
+      setRfqError(error.response?.data?.message || 'Failed to load RFQ details');
+    } finally {
+      setRfqLoading(false);
+    }
+  }, [headerState?.rfqId]);
+
+  useEffect(() => {
+    if (headerState?.rfq) {
+      setRfqDetails(headerState.rfq);
+    } else if (headerState?.rfqId) {
+      fetchRfqDetails();
+    } else {
+      setRfqDetails(null);
+    }
+  }, [headerState?.rfq, headerState?.rfqId, fetchRfqDetails]);
+
+  const fetchRfqSupportData = useCallback(async () => {
+    setRfqSupportLoading(true);
+    try {
+      const [approversRes, creatorsRes, engineersRes] = await Promise.all([
+        ApiHelper.get('/api/rfq/approvers'),
+        ApiHelper.get('/api/rfq/quotation-creators'),
+        ApiHelper.get('/api/rfq/engineers')
+      ]);
+      setRfqSupportData({
+        approvers: approversRes.data?.data?.approvers || [],
+        quotationCreators: creatorsRes.data?.data?.quotationCreators || [],
+        engineers: engineersRes.data?.data?.engineers || []
+      });
+    } catch (error) {
+      console.error('Failed to load RFQ references:', error);
+      toast.error('Failed to load RFQ references');
+    } finally {
+      setRfqSupportLoading(false);
+    }
+  }, []);
+
+  const handleToggleRfqCollapse = () => {
+    setRfqCollapsed(prev => !prev);
+  };
+
+  const handleRefreshRfq = async () => {
+    await fetchRfqDetails();
+    toast.success('RFQ details refreshed');
+  };
+
+  const navigate = useNavigate();
+
+  const handleOpenRfqLink = () => {
+    const rfqIdToOpen = rfqDetails?._id || headerState?.rfqId;
+    if (!rfqIdToOpen) {
+      toast.error('RFQ link is not available');
+      return;
+    }
+    navigate(`/quotations/rfq/${rfqIdToOpen}`);
+  };
+
+  const handleOpenRfqEditModal = async () => {
+    if (!rfqDetails && headerState?.rfqId) {
+      await fetchRfqDetails();
+    }
+    await fetchRfqSupportData();
+    setShowRfqEditModal(true);
+  };
+
+  const handleSubmitRfqEdit = async ({ data: update, newFiles = [], deleteDocumentIds = [] }) => {
+    if (!rfqDetails?._id) return;
+
+    try {
+      await ApiHelper.patch(`/api/rfq/${rfqDetails._id}`, update);
+
+      if (Array.isArray(deleteDocumentIds) && deleteDocumentIds.length > 0) {
+        for (const documentId of deleteDocumentIds) {
+          await ApiHelper.delete(`/api/rfq/${rfqDetails._id}/documents/${documentId}`);
+        }
+      }
+
+      if (Array.isArray(newFiles) && newFiles.length > 0) {
+        for (const file of newFiles) {
+          const formData = new FormData();
+          formData.append('document', file);
+          await ApiHelper.post(`/api/rfq/${rfqDetails._id}/documents`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+      }
+
+      toast.success('RFQ updated successfully');
+      setShowRfqEditModal(false);
+      await fetchRfqDetails();
+    } catch (error) {
+      console.error('Failed to update RFQ:', error);
+      toast.error(error.response?.data?.message || 'Failed to update RFQ');
+    }
+  };
 
   const activeOffer = useMemo(() => {
     console.log('Calculating activeOffer with:', { activeOfferId, offers });
@@ -693,6 +820,231 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
           </div>
         </div>
       </div>
+
+      {/* RFQ Reference */}
+      {(headerState.rfqId || rfqDetails) && (
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">RFQ Reference</h3>
+              <p className="text-xs text-gray-500">
+                {rfqDetails?.rfqNumber ? `RFQ #${rfqDetails.rfqNumber}` : 'Linked RFQ information'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleRfqCollapse}
+                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                {rfqCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                {rfqCollapsed ? 'Expand RFQ Details' : 'Collapse RFQ Details'}
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenRfqLink}
+                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Eye size={16} />
+                Open RFQ
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenRfqEditModal}
+                disabled={rfqSupportLoading}
+                className="inline-flex items-center gap-2 px-3 py-2 border border-emerald-200 rounded-md shadow-sm text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Edit size={16} />
+                {rfqSupportLoading ? 'Preparing…' : 'Edit RFQ'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefreshRfq}
+                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md shadow-sm text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+              >
+                <Clock size={16} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {rfqCollapsed && (
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+              {rfqLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                  Loading RFQ summary…
+                </div>
+              ) : rfqError ? (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+                  {rfqError}
+                </div>
+              ) : rfqDetails ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    {rfqDetails.status && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 capitalize">
+                        {rfqDetails.status.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                    {rfqDetails.priority && (
+                      <span className="inline-flex items-center gap-2 text-xs text-gray-500">
+                        Priority:{' '}
+                        <span className="font-medium text-gray-800 capitalize">{rfqDetails.priority}</span>
+                      </span>
+                    )}
+                    {rfqDetails.stage && (
+                      <span className="inline-flex items-center gap-2 text-xs text-gray-500">
+                        Stage:{' '}
+                        <span className="font-medium text-gray-800 capitalize">{rfqDetails.stage}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-700">
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Customer</span>
+                      <span className="font-semibold text-gray-900">{rfqDetails.customerName || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Contact Person</span>
+                      <span className="font-semibold text-gray-900">{rfqDetails.contactPerson?.name || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Requester</span>
+                      <span className="font-semibold text-gray-900">
+                        {rfqDetails.requesterId?.fullName || rfqDetails.requesterId?.email || '-'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Created</span>
+                      <span className="font-semibold text-gray-900">{formatDate(rfqDetails.createdAt)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Delivery Terms</span>
+                      <span className="font-semibold text-gray-900">{rfqDetails.deliveryTerms || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs uppercase tracking-wide">Payment Terms</span>
+                      <span className="font-semibold text-gray-900">{rfqDetails.paymentTerms || '-'}</span>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-gray-500">
+                    Expand the RFQ to review full engineering details or open it in a modal for a dedicated view.
+                  </p>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500">RFQ details are not available.</div>
+              )}
+            </div>
+          )}
+
+          {!rfqCollapsed && (
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+              {rfqLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                  Loading RFQ details…
+                </div>
+              ) : rfqError ? (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+                  {rfqError}
+                </div>
+              ) : rfqDetails ? (
+                <div className="space-y-6">
+                  <RFQDetailsView rfq={rfqDetails} loading={rfqLoading} />
+
+                  {/* RFQ Items */}
+                  {Array.isArray(rfqDetails.items) && rfqDetails.items.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">RFQ Items</h4>
+                      <div className="border border-gray-200 rounded-lg divide-y divide-gray-200">
+                        {rfqDetails.items.map((item, index) => (
+                          <div key={item._id || index} className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  Item {index + 1}: {item.karoseri || item.serviceName || item.sparepartName || 'Untitled'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Type: {item.templateMode || 'custom'}
+                                </p>
+                              </div>
+                              <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                                {item.quantity || 1}{' '}
+                                {(lineOfBusinessType === 'service' && 'unit(s)') ||
+                                  (lineOfBusinessType === 'sparepart' && 'pcs') ||
+                                  'pcs'}
+                              </span>
+                            </div>
+                            {item.notes && (
+                              <p className="mt-2 text-sm text-gray-600">
+                                Notes: {item.notes}
+                              </p>
+                            )}
+                            {item.specifications && item.specifications.length > 0 && (
+                              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-md p-3">
+                                <p className="text-xs font-semibold text-gray-700 mb-2">Specifications</p>
+                                <ul className="space-y-1 text-xs text-gray-600">
+                                  {item.specifications.map((spec, specIndex) => (
+                                    <li key={specIndex}>
+                                      <span className="font-medium text-gray-700">{spec.category}:</span>{' '}
+                                      {Array.isArray(spec.items)
+                                        ? spec.items
+                                            .map((entry) =>
+                                              [entry.name, entry.specification].filter(Boolean).join(' - ')
+                                            )
+                                            .join(', ')
+                                        : spec.description || '—'}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RFQ Timeline */}
+                  {Array.isArray(rfqDetails.timeline) && rfqDetails.timeline.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">RFQ Timeline</h4>
+                      <div className="space-y-3">
+                        {rfqDetails.timeline.map((entry, entryIndex) => (
+                          <div key={entry._id || entryIndex} className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 capitalize">
+                                  {entry.action?.replace(/_/g, ' ') || 'update'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {formatDate(entry.timestamp, true)}
+                                </p>
+                              </div>
+                              <span className="text-xs text-gray-600">
+                                {entry.user?.fullName || entry.user?.email || 'System'}
+                              </span>
+                            </div>
+                            {entry.notes && (
+                              <p className="mt-2 text-sm text-gray-700">
+                                {entry.notes}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">RFQ details are not available.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Offer Selector - Cascaded Structure */}
       {offers.length > 0 && (
@@ -1421,6 +1773,19 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         <div className="bg-white p-6 rounded-lg shadow">
           <p className="text-gray-500">No offers are available for this quotation.</p>
         </div>
+      )}
+
+      {/* RFQ Edit Modal */}
+      {showRfqEditModal && (
+        <RequestRFQModal
+          isOpen={showRfqEditModal}
+          onClose={() => setShowRfqEditModal(false)}
+          onSubmit={handleSubmitRfqEdit}
+          approvers={rfqSupportData.approvers}
+          quotationCreators={rfqSupportData.quotationCreators}
+          engineers={rfqSupportData.engineers}
+          rfqToEdit={rfqDetails}
+        />
       )}
 
       {/* Status Update Modal */}
