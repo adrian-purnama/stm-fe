@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Save, X, Edit3, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PriceInput from '../common/PriceInput';
@@ -370,6 +370,17 @@ const OfferItemForm = ({
   };
 
   const isSparepart = lineOfBusinessType === 'sparepart';
+
+  const renderBulkActions = useCallback(() => {
+    // Bulk actions currently apply only to sparepart mode.
+    // Guard to ensure other line-of-business types (karoseri/service) are not affected.
+    if (!isSparepart) {
+      return null;
+    }
+
+    // TODO: Implement sparepart bulk discount/commission UI when supporting data is wired up.
+    return null;
+  }, [isSparepart]);
 
   return (
     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6 shadow-lg">

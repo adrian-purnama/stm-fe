@@ -615,6 +615,15 @@ const renderEngineeringItemDetails = (item, lineOfBusinessType) => {
           console.log('QuotationForm: No offerItems found in any location');
         }
         
+        const lineOfBusinessType =
+          header.lineOfBusiness?.type ||
+          processedQuotation.lineOfBusiness?.type ||
+          'karoseri';
+        const normalizedOfferItems = normalizeOfferItemsForLineOfBusiness(
+          offerItems,
+          lineOfBusinessType
+        );
+
         const rfqFormData = {
           customerName: header.customerName || processedQuotation.customerName || '',
           contactPerson: header.contactPerson || processedQuotation.contactPerson || { name: '', gender: 'Male' },
@@ -632,7 +641,7 @@ const renderEngineeringItemDetails = (item, lineOfBusinessType) => {
           includePPN: typeof (header.includePPN ?? processedQuotation.includePPN) === 'boolean'
             ? (header.includePPN ?? processedQuotation.includePPN)
             : true,
-          offerItems: offerItems,
+          offerItems: normalizedOfferItems,
           excludePPN: typeof (header.includePPN ?? processedQuotation.includePPN) === 'boolean'
             ? !(header.includePPN ?? processedQuotation.includePPN)
             : false,
@@ -695,6 +704,12 @@ const renderEngineeringItemDetails = (item, lineOfBusinessType) => {
         const offerExcludePPN = Boolean(activeOffer.excludePPN);
         const headerIncludePPN = typeof header.includePPN === 'boolean' ? header.includePPN : !offerExcludePPN;
 
+        const lineOfBusinessType = header.lineOfBusiness?.type || 'karoseri';
+        const normalizedOfferItems = normalizeOfferItemsForLineOfBusiness(
+          activeOffer.offerItems || [],
+          lineOfBusinessType
+        );
+
         const editFormData = {
           customerName: header.customerName || '',
           contactPerson: header.contactPerson || { name: '', gender: 'Male' },
@@ -708,7 +723,7 @@ const renderEngineeringItemDetails = (item, lineOfBusinessType) => {
           exclusionNotes: header.exclusionNotes || '',
           isTaxIncluded: typeof header.isTaxIncluded === 'boolean' ? header.isTaxIncluded : false,
           includePPN: headerIncludePPN,
-          offerItems: activeOffer.offerItems || [],
+          offerItems: normalizedOfferItems,
           excludePPN: offerExcludePPN,
           notes: activeOffer.notes || '',
           notesImages: activeOffer.notesImages || []
@@ -1127,18 +1142,36 @@ const updateServiceItem = (itemIndex, updates) => {
 const computeSparepartFinancials = (item = {}) => {
   const rawQuantity = Number(item.quantity);
   const quantity = Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1;
+
   const rawBasePerUnit = Number(item.pricePerUnit);
-  const basePerUnit = Number.isFinite(rawBasePerUnit) && rawBasePerUnit >= 0 ? rawBasePerUnit : 0;
+  let basePerUnit =
+    Number.isFinite(rawBasePerUnit) && rawBasePerUnit >= 0 ? rawBasePerUnit : undefined;
+
+  if (basePerUnit === undefined) {
+    const rawBaseTotal = Number(item.price);
+    basePerUnit =
+      Number.isFinite(rawBaseTotal) && rawBaseTotal >= 0 ? rawBaseTotal / quantity : 0;
+  }
+
+  if (!Number.isFinite(basePerUnit) || basePerUnit < 0) {
+    basePerUnit = 0;
+  }
+
   const discountType = item.discountType === 'flat' ? 'flat' : 'percentage';
   const rawDiscountValue = Number(item.discountValue);
-  const discountValue = Number.isFinite(rawDiscountValue) && rawDiscountValue >= 0 ? rawDiscountValue : 0;
+  const discountValue =
+    Number.isFinite(rawDiscountValue) && rawDiscountValue >= 0 ? rawDiscountValue : 0;
+
   let discountPerUnit =
     discountType === 'percentage' ? (basePerUnit * discountValue) / 100 : discountValue;
   if (discountPerUnit > basePerUnit) {
     discountPerUnit = basePerUnit;
   }
+
   const rawCommission = Number(item.commission);
-  const commissionPerUnit = Number.isFinite(rawCommission) && rawCommission >= 0 ? rawCommission : 0;
+  const commissionPerUnit =
+    Number.isFinite(rawCommission) && rawCommission >= 0 ? rawCommission : 0;
+
   const clientNetPerUnit = Math.max(basePerUnit - discountPerUnit, 0);
   const internalNetPerUnit = Math.max(clientNetPerUnit - commissionPerUnit, 0);
 
@@ -1163,6 +1196,40 @@ const computeSparepartFinancials = (item = {}) => {
     clientNetTotal,
     internalNetTotal
   };
+};
+
+const normalizeSparepartItem = (rawItem = {}) => {
+  const baseItem = {
+    ...rawItem
+  };
+
+  if (!baseItem.quantity || Number(baseItem.quantity) <= 0) {
+    baseItem.quantity = 1;
+  }
+
+  baseItem.discountType = baseItem.discountType === 'flat' ? 'flat' : 'percentage';
+  baseItem.discountValue = Number(baseItem.discountValue) || 0;
+  baseItem.commission = Number(baseItem.commission) || 0;
+
+  const financial = computeSparepartFinancials(baseItem);
+
+  return {
+    ...baseItem,
+    quantity: financial.quantity,
+    pricePerUnit: financial.basePerUnit,
+    price: financial.basePerUnit,
+    netto: financial.internalNetPerUnit,
+    clientNetPerUnit: financial.clientNetPerUnit,
+    internalNetPerUnit: financial.internalNetPerUnit
+  };
+};
+
+const normalizeOfferItemsForLineOfBusiness = (items = [], lineOfBusinessType) => {
+  if (lineOfBusinessType !== 'sparepart') {
+    return items;
+  }
+
+  return items.map(item => normalizeSparepartItem(item));
 };
 
 const updateSparepartItem = (itemIndex, updates = {}) => {
@@ -1190,8 +1257,11 @@ const updateSparepartItem = (itemIndex, updates = {}) => {
     currentItem.commission = Number(currentItem.commission) || 0;
 
     const financial = computeSparepartFinancials(currentItem);
-    currentItem.price = financial.baseTotal;
-    currentItem.netto = financial.clientNetTotal;
+    currentItem.pricePerUnit = financial.basePerUnit;
+    currentItem.price = financial.basePerUnit;
+    currentItem.netto = financial.internalNetPerUnit;
+    currentItem.clientNetPerUnit = financial.clientNetPerUnit;
+    currentItem.internalNetPerUnit = financial.internalNetPerUnit;
 
     existingItems[itemIndex] = currentItem;
 
@@ -2885,18 +2955,32 @@ const handleSparepartBulkApply = () => {
                     return (
                       <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-1 text-sm text-gray-700">
                         <div>
-                          <span className="font-semibold text-gray-600">Netto / Qty:</span>{' '}
+                          <span className="font-semibold text-gray-600">Client Price / Qty:</span>{' '}
                           {formatPriceWithCurrency(financial.clientNetPerUnit)}
                         </div>
                         <div>
-                          <span className="font-semibold text-gray-600">Netto Total:</span>{' '}
+                          <span className="font-semibold text-gray-600">Client Price Total:</span>{' '}
                           {formatPriceWithCurrency(financial.clientNetTotal)}
                         </div>
+                        <div>
+                          <span className="font-semibold text-gray-600">Netto (Internal) / Qty:</span>{' '}
+                          {formatPriceWithCurrency(financial.internalNetPerUnit)}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-600">Netto (Internal) Total:</span>{' '}
+                          {formatPriceWithCurrency(financial.internalNetTotal)}
+                        </div>
                         <div className="text-xs text-gray-500">
-                          Perhitungan: {formatPriceWithCurrency(financial.basePerUnit)} −{' '}
+                          Perhitungan internal: {formatPriceWithCurrency(financial.basePerUnit)} −{' '}
                           {formatPriceWithCurrency(financial.discountPerUnit)}
                           {item.discountType === 'percentage' ? ` (${item.discountValue || 0}%)` : ''}{' '}
                           − {formatPriceWithCurrency(financial.commissionPerUnit)} (komisi) ={' '}
+                          {formatPriceWithCurrency(financial.internalNetPerUnit)} / qty
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Perhitungan client: {formatPriceWithCurrency(financial.basePerUnit)} −{' '}
+                          {formatPriceWithCurrency(financial.discountPerUnit)}
+                          {item.discountType === 'percentage' ? ` (${item.discountValue || 0}%)` : ''} ={' '}
                           {formatPriceWithCurrency(financial.clientNetPerUnit)} / qty
                         </div>
                       </div>
@@ -2997,16 +3081,27 @@ const handleSparepartBulkApply = () => {
                                 Total: {formatPriceWithCurrency(financial.commissionTotal)}
                               </p>
                             </div>
-                            <div className="bg-purple-50 border border-purple-200 rounded-md px-3 py-2">
+                            <div className="bg-purple-50 border border-purple-200 rounded-md px-3 py-2 space-y-1">
                               <p className="text-[11px] uppercase text-purple-600 font-semibold">
-                                Netto
+                                Client Price / Qty
                               </p>
                               <p className="font-medium text-purple-700">
                                 {formatPriceWithCurrency(financial.clientNetPerUnit)}
                               </p>
                               <p className="text-[11px] text-purple-600">
-                                Total: {formatPriceWithCurrency(financial.clientNetTotal)}
+                                Total Client: {formatPriceWithCurrency(financial.clientNetTotal)}
                               </p>
+                              <div className="border-t border-purple-200 pt-1 mt-2">
+                                <p className="text-[11px] uppercase text-purple-600 font-semibold">
+                                  Netto (Internal) / Qty
+                                </p>
+                                <p className="font-medium text-purple-700">
+                                  {formatPriceWithCurrency(financial.internalNetPerUnit)}
+                                </p>
+                                <p className="text-[11px] text-purple-600">
+                                  Total Internal: {formatPriceWithCurrency(financial.internalNetTotal)}
+                                </p>
+                              </div>
                             </div>
                           </div>
                           {item.notes && (

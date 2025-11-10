@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit, Trash2, Eye, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Loader2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
 import BaseModal from '../modals/BaseModal';
@@ -9,6 +9,13 @@ const FeatureTypeTab = () => {
   const [featureTypes, setFeatureTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0
+  });
+  const [reloadKey, setReloadKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -22,18 +29,47 @@ const FeatureTypeTab = () => {
   const loadFeatureTypes = useCallback(async () => {
     try {
       setLoading(true);
-      const params = {};
-      if (searchTerm) params.search = searchTerm;
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit
+      };
+      if (searchTerm) {
+        params.search = searchTerm.trim();
+      }
       
       const response = await ApiHelper.get('/api/feature-types', { params });
-      setFeatureTypes(response.data.data || []);
+      const payload = response.data || {};
+      const items = payload.data || [];
+      const paginationInfo = payload.pagination || {};
+
+      setFeatureTypes(items);
+      setPagination((prev) => {
+        const next = {
+          page: paginationInfo.page || prev.page,
+          limit: paginationInfo.limit || prev.limit,
+          total: paginationInfo.total ?? prev.total,
+          pages:
+            paginationInfo.pages ||
+            Math.ceil((paginationInfo.total ?? prev.total) / (paginationInfo.limit || prev.limit) || 1)
+        };
+
+        if (
+          next.page === prev.page &&
+          next.limit === prev.limit &&
+          next.total === prev.total &&
+          next.pages === prev.pages
+        ) {
+          return prev;
+        }
+        return next;
+      });
     } catch (error) {
       console.error('Error loading feature types:', error);
-      toast.error('Failed to load feature types');
+      toast.error(error.response?.data?.message || 'Failed to load feature types');
     } finally {
       setLoading(false);
     }
-  }, [searchTerm]);
+  }, [searchTerm, pagination.page, pagination.limit, reloadKey]);
 
   // Load data on mount
   useEffect(() => {
@@ -57,7 +93,8 @@ const FeatureTypeTab = () => {
       toast.success('Feature type created successfully');
       setShowCreateModal(false);
       setFormData({ name: '', shortName: '' });
-      loadFeatureTypes();
+      setPagination((prev) => ({ ...prev, page: 1 }));
+      setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error('Error creating feature type:', error);
       toast.error(error.response?.data?.message || 'Failed to create feature type');
@@ -82,7 +119,7 @@ const FeatureTypeTab = () => {
       setShowEditModal(false);
       setSelectedFeatureType(null);
       setFormData({ name: '', shortName: '' });
-      loadFeatureTypes();
+      setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error('Error updating feature type:', error);
       toast.error(error.response?.data?.message || 'Failed to update feature type');
@@ -98,7 +135,13 @@ const FeatureTypeTab = () => {
     try {
       await ApiHelper.delete(`/api/feature-types/${featureType._id}`);
       toast.success('Feature type deleted successfully');
-      loadFeatureTypes();
+      setPagination((prev) => {
+        const nextTotal = Math.max(prev.total - 1, 0);
+        const nextPages = Math.max(Math.ceil(nextTotal / prev.limit) || 1, 1);
+        const nextPage = prev.page > nextPages ? nextPages : prev.page;
+        return { ...prev, page: nextPage };
+      });
+      setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error('Error deleting feature type:', error);
       toast.error(error.response?.data?.message || 'Failed to delete feature type');
@@ -121,6 +164,19 @@ const FeatureTypeTab = () => {
     setShowViewModal(true);
   };
 
+  const handlePaginationChange = (direction) => {
+    setPagination((prev) => {
+      const nextPage = direction === 'next' ? prev.page + 1 : prev.page - 1;
+      if (nextPage < 1 || (prev.pages && nextPage > prev.pages)) {
+        return prev;
+      }
+      if (nextPage === prev.page) {
+        return prev;
+      }
+      return { ...prev, page: nextPage };
+    });
+  };
+
   return (
     <div className="p-6">
       {/* Filters and Actions */}
@@ -135,7 +191,10 @@ const FeatureTypeTab = () => {
                   type="text"
                   placeholder="Search feature types..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setPagination((prev) => ({ ...prev, page: 1 }));
+                  }}
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -223,6 +282,32 @@ const FeatureTypeTab = () => {
           </div>
         )}
       </div>
+
+    {featureTypes.length > 0 && pagination.pages > 1 && (
+      <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
+        <span>
+          Page {pagination.page} of {pagination.pages} · {pagination.total} items
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePaginationChange('prev')}
+            disabled={pagination.page <= 1}
+            className="inline-flex items-center gap-1 px-3 py-1 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Prev
+          </button>
+          <button
+            onClick={() => handlePaginationChange('next')}
+            disabled={pagination.page >= pagination.pages}
+            className="inline-flex items-center gap-1 px-3 py-1 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )}
 
       {/* Create Modal */}
       <BaseModal
