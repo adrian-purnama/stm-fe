@@ -1,11 +1,11 @@
 import React from 'react';
 import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, GitCompare, Download } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
+import useSmartBackNavigation from '../../hooks/useSmartBackNavigation';
 
 const RFQDetailsView = ({ rfq, loading }) => {
-  const navigate = useNavigate();
+  const goBack = useSmartBackNavigation('/quotations');
   const [expandedItems, setExpandedItems] = React.useState({});
   const [showSpecComparison, setShowSpecComparison] = React.useState(false);
 
@@ -97,7 +97,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate('/quotations')}
+          onClick={goBack}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft size={20} />

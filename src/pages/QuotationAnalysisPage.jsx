@@ -36,9 +36,11 @@ import {
   getSectionPreferences,
   PREFERENCE_SECTIONS 
 } from '../utils/helpers/UserPreferences';
+import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
 
 const QuotationAnalysisPage = () => {
   const navigate = useNavigate();
+  const handleBack = useSmartBackNavigation('/');
   const [loading, setLoading] = useState(true);
   const [analysisData, setAnalysisData] = useState({
     totalQuotations: 0,
@@ -324,7 +326,7 @@ const QuotationAnalysisPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/')}
+                onClick={handleBack}
                 className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft className="h-5 w-5" />

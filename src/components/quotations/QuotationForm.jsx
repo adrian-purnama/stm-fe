@@ -83,6 +83,124 @@ const FormSection = ({
   );
 };
 
+const BudgetStatCard = ({ label, value, note, emphasis = false }) => {
+  const containerClass = emphasis ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50';
+  const valueClass = emphasis ? 'text-blue-800' : 'text-gray-900';
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 ${containerClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </p>
+      <p className={`mt-1 text-base font-semibold ${valueClass}`}>
+        {value}
+      </p>
+      {note && (
+        <p className="mt-1 text-xs text-gray-500">
+          {note}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const ServiceBudgetSummary = ({
+  snapshot,
+  title = 'Budget & Pricing',
+  subtitle = 'All values are per quantity unless noted.',
+  variant = 'default'
+}) => {
+  if (!snapshot) return null;
+
+  const {
+    quantity,
+    basePrice,
+    discountType,
+    discountValue,
+    discountAmount,
+    commissionValue,
+    nettoEach,
+    totalNetto
+  } = snapshot;
+
+  const wrapperClass =
+    variant === 'compact'
+      ? 'rounded-lg border border-gray-200 bg-gray-50'
+      : 'rounded-xl border border-gray-200 bg-white shadow-sm';
+
+  const headerClass =
+    variant === 'compact'
+      ? 'px-4 pt-4 pb-2 flex items-center justify-between'
+      : 'px-4 py-3 flex items-center justify-between border-b border-gray-100';
+
+  const bodyClass = 'px-4 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3';
+
+  const footerClass =
+    variant === 'compact'
+      ? 'px-4 pb-4 pt-2 text-xs text-gray-500 space-y-1'
+      : 'px-4 py-3 border-t border-gray-100 text-xs text-gray-500 space-y-1';
+
+  const discountNote =
+    discountType === 'percentage'
+      ? `${discountValue || 0}%`
+      : formatPriceWithCurrency(discountValue || 0);
+
+  return (
+    <div className={wrapperClass}>
+      <div className={headerClass}>
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{title}</p>
+          <p className="text-xs text-gray-500">{subtitle}</p>
+        </div>
+        <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
+          Qty {quantity}
+        </span>
+      </div>
+
+      <div className={bodyClass}>
+        <BudgetStatCard
+          label="Base Price / Qty"
+          value={formatPriceWithCurrency(basePrice)}
+        />
+        <BudgetStatCard
+          label="Discount"
+          value={
+            discountAmount > 0
+              ? `- ${formatPriceWithCurrency(discountAmount)}`
+              : formatPriceWithCurrency(discountAmount)
+          }
+          note={discountAmount > 0 ? `Applied as ${discountType === 'percentage' ? 'percentage' : 'flat'} (${discountNote})` : 'No discount applied'}
+        />
+        <BudgetStatCard
+          label="Commission / Qty"
+          value={formatPriceWithCurrency(commissionValue)}
+          note={commissionValue > 0 ? 'Internal allocation' : 'No commission'}
+        />
+        <BudgetStatCard
+          label="Netto / Qty"
+          value={formatPriceWithCurrency(nettoEach)}
+          note="Client-facing price after adjustments"
+        />
+        <BudgetStatCard
+          label="Total Netto"
+          value={formatPriceWithCurrency(totalNetto)}
+          note={quantity > 1 ? `${formatPriceWithCurrency(nettoEach)} × ${quantity}` : undefined}
+          emphasis
+        />
+      </div>
+
+      <div className={footerClass}>
+        <p>
+          Formula: {formatPriceWithCurrency(basePrice)} − {formatPriceWithCurrency(discountAmount)} − {formatPriceWithCurrency(commissionValue)} = {formatPriceWithCurrency(Math.max(nettoEach, 0))}
+        </p>
+        <p className="text-[11px] text-gray-400">
+          Commission is treated as an internal cost and does not reduce the client-facing total.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
   const [formData, setFormData] = useState({
     customerName: '',
@@ -1067,6 +1185,31 @@ const computeServiceSuggestedNetto = (item) => {
 
   const suggested = basePrice - discountAmount - commissionValue;
   return suggested > 0 ? suggested : 0;
+};
+
+const buildServiceBudgetSnapshot = (item) => {
+  if (!item) return null;
+
+  const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+  const basePrice = Number(item.price) || 0;
+  const discountType = item.discountType === 'flat' ? 'flat' : 'percentage';
+  const discountValue = Number(item.discountValue) || 0;
+  const discountAmount =
+    discountType === 'percentage' ? (basePrice * discountValue) / 100 : discountValue;
+  const commissionValue = Number(item.commission) || 0;
+  const nettoEach = Number(item.netto) || computeServiceSuggestedNetto(item);
+  const totalNetto = nettoEach * quantity;
+
+  return {
+    quantity,
+    basePrice,
+    discountType,
+    discountValue,
+    discountAmount,
+    commissionValue,
+    nettoEach,
+    totalNetto
+  };
 };
 
 const updateServiceItem = (itemIndex, updates) => {
@@ -2225,399 +2368,309 @@ const handleSparepartBulkApply = () => {
             editingItemIndex === itemIndex ? (
               (() => {
                 const serviceItem = formData.offerItems[itemIndex] || {};
-                const quantity = Number(serviceItem.quantity) > 0 ? Number(serviceItem.quantity) : 1;
-                const discountType = serviceItem.discountType || 'percentage';
-                const rawDiscountValue = Number(serviceItem.discountValue) || 0;
-                const basePrice = Number(serviceItem.price) || 0;
-                const commissionValue = Number(serviceItem.commission) || 0;
-                const discountAmount =
-                  discountType === 'percentage'
-                    ? (basePrice * rawDiscountValue) / 100
-                    : rawDiscountValue;
-                const nettoPerQuantity =
-                  Number(serviceItem.netto) || computeServiceSuggestedNetto(serviceItem);
-                const totalNetto = nettoPerQuantity * quantity;
+                const snapshot = buildServiceBudgetSnapshot(serviceItem);
+                const quantity = snapshot?.quantity ?? 1;
+                const discountType = snapshot?.discountType ?? 'percentage';
+                const rawDiscountValue = snapshot?.discountValue ?? 0;
+                const basePrice = snapshot?.basePrice ?? 0;
+                const commissionValue = snapshot?.commissionValue ?? 0;
+                const nettoPerQuantity = snapshot?.nettoEach ?? 0;
 
                 return (
-              <div key={itemIndex} className="border-2 border-blue-500 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Name *</label>
-                    <input
-                      type="text"
-                          value={serviceItem.serviceName || ''}
-                          onChange={(e) => updateServiceItem(itemIndex, { serviceName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter service name"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Details</label>
-                    <div className="space-y-2">
-                          {(serviceItem.serviceDetails || []).map((detail, detailIndex) => (
-                        <div key={detailIndex} className="flex gap-2">
+                  <div key={itemIndex} className="border-2 border-blue-500 rounded-lg p-4">
+                    <div className="space-y-5">
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Service Name *
+                          </label>
                           <input
                             type="text"
-                            value={detail}
-                            onChange={(e) => {
-                                  const details = [...(serviceItem.serviceDetails || [])];
-                                  details[detailIndex] = e.target.value;
-                                  updateServiceItem(itemIndex, { serviceDetails: details });
-                            }}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter service detail"
+                            value={serviceItem.serviceName || ''}
+                            onChange={(e) => updateServiceItem(itemIndex, { serviceName: e.target.value })}
+                            className="mt-2 w-full rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter service name"
                           />
-                          <button
-                            type="button"
-                            onClick={() => {
-                                  const details = (serviceItem.serviceDetails || []).filter((_, i) => i !== detailIndex);
-                                  updateServiceItem(itemIndex, { serviceDetails: details });
-                            }}
-                            className="px-3 py-2 text-red-600 hover:text-red-800"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                              const details = [...(serviceItem.serviceDetails || []), ''];
-                              updateServiceItem(itemIndex, { serviceDetails: details });
-                        }}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        + Add Detail
-                      </button>
-                    </div>
-                  </div>
 
-                      <div className="md:col-span-2 space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Quantity *
-                            </label>
-                            <div className="relative rounded-lg border border-gray-200 bg-white shadow-sm">
-                              <input
-                                type="number"
-                                value={quantity}
-                                onChange={(e) => {
-                                  const parsed = parseInt(e.target.value, 10);
-                                  const safeValue = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-                                  updateServiceItem(itemIndex, { quantity: safeValue });
-                                }}
-                                className="w-full px-4 py-3 pr-16 text-lg font-semibold text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-none"
-                                placeholder="1"
-                                min="1"
-                                step="1"
-                                required
-                              />
-                              <span className="absolute inset-y-0 right-0 flex items-center px-3 text-sm text-gray-400 border-l border-gray-100">
-                                units
-                              </span>
-                            </div>
+                        <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Service Details
+                          </label>
+                          <div className="mt-3 space-y-2">
+                            {(serviceItem.serviceDetails || []).map((detail, detailIndex) => (
+                              <div key={detailIndex} className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={detail}
+                                  onChange={(e) => {
+                                    const details = [...(serviceItem.serviceDetails || [])];
+                                    details[detailIndex] = e.target.value;
+                                    updateServiceItem(itemIndex, { serviceDetails: details });
+                                  }}
+                                  className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter service detail"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const details = (serviceItem.serviceDetails || []).filter((_, i) => i !== detailIndex);
+                                    updateServiceItem(itemIndex, { serviceDetails: details });
+                                  }}
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-gray-400 hover:text-red-600"
+                                  aria-label="Remove detail"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const details = [...(serviceItem.serviceDetails || []), ''];
+                                updateServiceItem(itemIndex, { serviceDetails: details });
+                              }}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                            >
+                              + Add Detail
+                            </button>
                           </div>
+                        </div>
+                      </div>
 
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Base Price per Quantity *
-                            </label>
-                            <div className="rounded-lg border border-blue-200 bg-blue-50 shadow-sm px-3 py-2">
-                              <p className="text-[11px] text-blue-600 font-semibold uppercase tracking-wide">Gross Price</p>
-                    <PriceInput
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                        <div className="space-y-4 lg:col-span-7">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                Quantity *
+                              </label>
+                              <div className="mt-2 flex items-center gap-3">
+                                <input
+                                  type="number"
+                                  value={quantity}
+                                  onChange={(e) => {
+                                    const parsed = parseInt(e.target.value, 10);
+                                    const safeValue = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+                                    updateServiceItem(itemIndex, { quantity: safeValue });
+                                  }}
+                                  min="1"
+                                  step="1"
+                                  className="h-11 w-full rounded-md border border-gray-200 px-3 text-base font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="1"
+                                  required
+                                />
+                                <span className="text-sm text-gray-400">units</span>
+                              </div>
+                            </div>
+
+                            <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                Base Price per Quantity *
+                              </label>
+                              <PriceInput
                                 value={basePrice}
                                 onChange={(value) => updateServiceItem(itemIndex, { price: value || 0 })}
                                 placeholder="0"
                                 required
-                                className="bg-transparent border-none shadow-none px-0 text-lg font-semibold text-blue-900"
+                                className="mt-2 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
-                              <p className="text-[10px] text-blue-500 mt-1">
-                                Enter the service price per quantity before discounts.
+                              <p className="mt-2 text-xs text-gray-500">
+                                Enter the gross service price per quantity before discounts.
                               </p>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Discount per Quantity
-                            </label>
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 shadow-sm px-4 py-3 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide">
-                                  Discount Type
-                                </span>
-                                <select
-                                  value={discountType}
-                                  onChange={(e) => updateServiceItem(itemIndex, { discountType: e.target.value, discountValue: 0 })}
-                                  className="text-sm font-medium text-amber-800 bg-white border border-amber-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                                >
-                                  <option value="percentage">Percent (%)</option>
-                                  <option value="flat">Flat (Rp)</option>
-                                </select>
-                              </div>
-                              <div>
-                                {discountType === 'flat' ? (
-                                  <PriceInput
+                          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                Discount per Quantity
+                              </label>
+                              <select
+                                value={discountType}
+                                onChange={(e) => updateServiceItem(itemIndex, { discountType: e.target.value, discountValue: 0 })}
+                                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="percentage">Percent (%)</option>
+                                <option value="flat">Flat (Rp)</option>
+                              </select>
+                            </div>
+                            <div>
+                              {discountType === 'flat' ? (
+                                <PriceInput
+                                  value={rawDiscountValue}
+                                  onChange={(value) => updateServiceItem(itemIndex, { discountValue: value || 0 })}
+                                  placeholder="0"
+                                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    type="number"
                                     value={rawDiscountValue}
-                                    onChange={(value) => updateServiceItem(itemIndex, { discountValue: value || 0 })}
+                                    onChange={(e) => {
+                                      const parsed = parseFloat(e.target.value);
+                                      const safeValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+                                      updateServiceItem(itemIndex, { discountValue: safeValue });
+                                    }}
+                                    className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
                                     placeholder="0"
-                                    className="bg-white border border-amber-200 rounded-md text-sm font-semibold text-amber-900"
                                   />
-                                ) : (
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={rawDiscountValue}
-                                      onChange={(e) => {
-                                        const parsed = parseFloat(e.target.value);
-                                        const safeValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-                                        updateServiceItem(itemIndex, { discountValue: safeValue });
-                                      }}
-                                      className="w-full pl-3 pr-8 py-2 border border-amber-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm font-semibold text-amber-900"
-                      placeholder="0"
-                    />
-                                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-amber-500 font-semibold">%</span>
-                  </div>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-amber-600">
-                                {discountType === 'percentage'
-                                  ? 'Percentage discount applied to the base price per quantity.'
-                                  : 'Flat discount amount deducted from the base price.'}
-                              </p>
+                                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                                    %
+                                  </span>
+                                </div>
+                              )}
                             </div>
+                            <p className="text-xs text-gray-500">
+                              {discountType === 'percentage'
+                                ? 'Percentage discount applied to the base price per quantity.'
+                                : 'Flat discount amount deducted from the base price.'}
+                            </p>
                           </div>
 
-                  <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600">
                               Commission per Quantity (Optional)
                             </label>
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 shadow-sm px-3 py-2">
-                              <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">
-                                Sales Commission
-                              </p>
-                              <PriceInput
-                                value={commissionValue}
-                                onChange={(value) => updateServiceItem(itemIndex, { commission: value || 0 })}
-                                placeholder="0"
-                                className="bg-transparent border-none shadow-none px-0 text-lg font-semibold text-emerald-900"
-                              />
-                              <p className="text-[10px] text-emerald-500 mt-1">
-                                Amount reserved as commission per quantity (does not change client-facing totals).
-                              </p>
+                            <PriceInput
+                              value={commissionValue}
+                              onChange={(value) => updateServiceItem(itemIndex, { commission: value || 0 })}
+                              placeholder="0"
+                              className="mt-2 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="mt-2 text-xs text-gray-500">
+                              Amount reserved as commission per quantity (does not change client-facing totals).
+                            </p>
+                          </div>
+
+                          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                                Netto per Quantity *
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => updateServiceItem(itemIndex, { netto: computeServiceSuggestedNetto(serviceItem) })}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                              >
+                                Use {formatPriceWithCurrency(computeServiceSuggestedNetto(serviceItem))}
+                              </button>
                             </div>
+                            <PriceInput
+                              value={nettoPerQuantity}
+                              onChange={(value) => updateServiceItem(itemIndex, { netto: value || 0 })}
+                              placeholder="0"
+                              required
+                              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Final client-facing price per quantity after discounts and commission.
+                            </p>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Netto per Quantity *
-                            </label>
-                            <div className="rounded-lg border border-purple-200 bg-purple-50 shadow-sm px-4 py-3 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-purple-600 uppercase tracking-wide">
-                                  Final Netto
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => updateServiceItem(itemIndex, { netto: computeServiceSuggestedNetto(serviceItem) })}
-                                  className="text-[11px] bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 transition"
-                                >
-                                  Use {formatPriceWithCurrency(computeServiceSuggestedNetto(serviceItem))}
-                                </button>
-                              </div>
-                              <PriceInput
-                                value={nettoPerQuantity}
-                                onChange={(value) => updateServiceItem(itemIndex, { netto: value || 0 })}
-                                placeholder="0"
-                                required
-                                className="bg-white border border-purple-200 rounded-md text-lg font-semibold text-purple-900"
-                              />
-                              <p className="text-[10px] text-purple-500">
-                                Final price per quantity after discount and commission.
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-gray-600">Price Summary</span>
-                                <span className="text-xs text-gray-500">per item</span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-gray-600">
-                                <span>Base Price</span>
-                                <span className="font-medium text-gray-800">
-                                  {formatPriceWithCurrency(basePrice)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-amber-600">
-                                <span>Discount {discountType === 'percentage' ? `(${rawDiscountValue || 0}%)` : ''}</span>
-                                <span className="font-medium">
-                                  {formatPriceWithCurrency(discountAmount)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-emerald-600">
-                                <span>Commission</span>
-                                <span className="font-medium">
-                                  {formatPriceWithCurrency(commissionValue)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-purple-600">
-                                <span>Netto / Qty</span>
-                                <span className="font-semibold">
-                                  {formatPriceWithCurrency(nettoPerQuantity)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm text-blue-700 border-t border-gray-200 pt-2">
-                                <span className="font-semibold">Total Netto</span>
-                                <span className="font-semibold">
-                                  {formatPriceWithCurrency(totalNetto)}
-                                </span>
-                              </div>
-                              {quantity > 1 && (
-                                <p className="text-[11px] text-gray-500 italic">
-                                  Calculation: {formatPriceWithCurrency(nettoPerQuantity)} × {quantity}
-                                </p>
-                              )}
-                              <p className="text-[11px] text-gray-500">
-                                Suggestion uses: Base ({formatPriceWithCurrency(basePrice)}) − Discount ({formatPriceWithCurrency(discountAmount)}) − Commission ({formatPriceWithCurrency(commissionValue)}).
-                              </p>
-                            </div>
-                          </div>
+                        <div className="lg:col-span-5">
+                          <ServiceBudgetSummary
+                            snapshot={snapshot}
+                            title="Budget Overview"
+                            subtitle="Live preview of quantity, discounts, and commission."
+                          />
                         </div>
                       </div>
 
-                      <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <textarea
+                      <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Notes
+                        </label>
+                        <textarea
                           value={serviceItem.notes || ''}
                           onChange={(e) => updateServiceItem(itemIndex, { notes: e.target.value })}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Optional notes"
-                    />
-                  </div>
+                          rows={2}
+                          className="mt-2 w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Optional notes"
+                        />
+                      </div>
 
-                  <div className="md:col-span-2 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingItemIndex(-1)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingItemIndex(-1);
-                        toast.success('Service item saved');
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Save
-                    </button>
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditingItemIndex(-1)}
+                          className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingItemIndex(-1);
+                            toast.success('Service item saved');
+                          }}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
                 );
               })()
             ) : (
-              <div key={itemIndex} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{item.serviceName || 'Untitled Service'}</h4>
-                    {item.serviceDetails && item.serviceDetails.length > 0 && (
-                      <ul className="list-disc list-inside text-sm text-gray-600 mt-1">
-                        {item.serviceDetails.map((detail, idx) => (
-                          <li key={idx}>{detail}</li>
-                        ))}
-                      </ul>
-                    )}
-                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 space-y-2 text-sm">
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span>Quantity</span>
-                        <span className="font-semibold text-gray-800">
-                          {Number(item.quantity) > 0 ? Number(item.quantity) : 1}
-                        </span>
-                  </div>
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span>Base Price / Qty</span>
-                        <span className="font-semibold text-gray-800">
-                          {formatPriceWithCurrency(Number(item.price) || 0)}
-                        </span>
-                    </div>
-                      <div className="flex items-center justify-between text-amber-600">
-                        <span>
-                          Discount{' '}
-                          {item.discountType === 'percentage'
-                            ? `(${Number(item.discountValue) || 0}%)`
-                            : ''}
-                        </span>
-                        <span className="font-semibold">
-                          {formatPriceWithCurrency(
-                            (item.discountType || 'percentage') === 'percentage'
-                              ? (Number(item.price) || 0) * (Number(item.discountValue) || 0) / 100
-                              : Number(item.discountValue) || 0
+              (() => {
+                const snapshot = buildServiceBudgetSnapshot(item);
+
+                return (
+                  <div key={itemIndex} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="flex-1 space-y-4">
+                        <div>
+                          <h4 className="text-base font-semibold text-gray-900">
+                            {item.serviceName || 'Untitled Service'}
+                          </h4>
+                          {item.serviceDetails && item.serviceDetails.length > 0 && (
+                            <ul className="mt-2 list-disc list-inside text-sm text-gray-600">
+                              {item.serviceDetails.map((detail, idx) => (
+                                <li key={idx}>{detail}</li>
+                              ))}
+                            </ul>
                           )}
-                        </span>
+                        </div>
+
+                        <ServiceBudgetSummary
+                          snapshot={snapshot}
+                          title="Budget Summary"
+                          subtitle="Read-only view of the configured pricing."
+                          variant="compact"
+                        />
+
+                        {item.notes && (
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                            <span className="font-medium text-gray-700">Notes:</span> {item.notes}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between text-emerald-600">
-                        <span>Commission / Qty</span>
-                        <span className="font-semibold">
-                          {formatPriceWithCurrency(Number(item.commission) || 0)}
-                        </span>
+
+                      <div className="flex items-center gap-3 self-end md:self-start">
+                        <button
+                          type="button"
+                          onClick={() => editOfferItem(itemIndex)}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteOfferItem(itemIndex)}
+                          className="text-red-600 hover:text-red-700"
+                          aria-label="Delete service item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="flex items-center justify-between text-purple-600">
-                        <span>Netto / Qty</span>
-                        <span className="font-semibold">
-                          {formatPriceWithCurrency(Number(item.netto) || computeServiceSuggestedNetto(item))}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-blue-700 border-t border-gray-200 pt-2">
-                        <span className="font-semibold">Total Netto</span>
-                        <span className="font-semibold">
-                          {formatPriceWithCurrency(
-                            (Number(item.netto) || computeServiceSuggestedNetto(item)) *
-                              (Number(item.quantity) > 0 ? Number(item.quantity) : 1)
-                          )}
-                        </span>
-                      </div>
-                      {Number(item.quantity) > 1 && (
-                        <p className="text-[11px] text-gray-500 italic">
-                          Calculation: {formatPriceWithCurrency(Number(item.netto) || computeServiceSuggestedNetto(item))} ×{' '}
-                          {Number(item.quantity) > 0 ? Number(item.quantity) : 1}
-                        </p>
-                      )}
                     </div>
-                    {item.notes && (
-                      <p className="text-sm text-gray-500 mt-2">
-                        Notes: {item.notes}
-                      </p>
-                    )}
                   </div>
-                  <div className="flex items-center gap-3 self-end md:self-start">
-                    <button
-                      type="button"
-                      onClick={() => editOfferItem(itemIndex)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteOfferItem(itemIndex)}
-                      className="text-red-600 hover:text-red-800 text-sm"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+                );
+              })()
             )
           ))}
           

@@ -21,9 +21,11 @@ import CustomDropdown from '../components/common/CustomDropdown';
 import BaseModal from '../components/modals/BaseModal';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
 
 const DynamicAnalyticsPage = () => {
   const navigate = useNavigate();
+  const handleBack = useSmartBackNavigation('/');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
@@ -1188,7 +1190,7 @@ const DynamicAnalyticsPage = () => {
         {/* Back Button */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/')}
+            onClick={handleBack}
             className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />

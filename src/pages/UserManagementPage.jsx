@@ -10,10 +10,12 @@ import CustomDropdown from '../components/common/CustomDropdown';
 import AddUserModal from '../components/modals/AddUserModal';
 import EditUserModal from '../components/modals/EditUserModal';
 import BaseModal from '../components/modals/BaseModal';
+import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
 
 
 const UserManagementPage = () => {
   const navigate = useNavigate();
+  const handleBack = useSmartBackNavigation('/');
   
   const [users, setUsers] = useState([]);
   const [permissions, setPermissions] = useState([]);
@@ -248,7 +250,7 @@ const UserManagementPage = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/')}
+                onClick={handleBack}
                 className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft className="h-5 w-5" />

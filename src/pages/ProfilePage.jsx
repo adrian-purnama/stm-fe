@@ -6,9 +6,11 @@ import { UserContext } from '../utils/contexts/UserContext';
 import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const goBack = useSmartBackNavigation('/dashboard');
   const { user } = useContext(UserContext);
   
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -147,7 +149,7 @@ const ProfilePage = () => {
         {/* Back Button */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={goBack}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft size={20} />

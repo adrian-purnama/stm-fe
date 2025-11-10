@@ -6,9 +6,11 @@ import LazyTabs from '../../components/common/LazyTabs';
 import RFQDetailsView from '../../components/quotations/RFQDetailsView';
 import axiosInstance from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
+import useSmartBackNavigation from '../../hooks/useSmartBackNavigation';
 
 const QuotationPage = () => {
   const navigate = useNavigate();
+  const handleBack = useSmartBackNavigation('/dashboard');
   const { rfqId } = useParams();
   const [rfqDetails, setRfqDetails] = useState(null);
   const [rfqLoading, setRfqLoading] = useState(false);
@@ -287,7 +289,7 @@ const QuotationPage = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => navigate('/dashboard')}
+                    onClick={handleBack}
                     className="flex items-center px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />

@@ -6,9 +6,11 @@ import QuotationForm from '../../components/quotations/QuotationForm';
 import { QUOTATION_FORM_MODES } from '../../components/quotations/quotationModes';
 import ApiHelper from '../../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
+import useSmartBackNavigation from '../../hooks/useSmartBackNavigation';
 
 const QuotationFormPage = () => {
   const navigate = useNavigate();
+  const handleBack = useSmartBackNavigation('/quotations');
   const { quotationId } = useParams();
   const [searchParams] = useSearchParams();
   
@@ -301,7 +303,7 @@ const QuotationFormPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/')}
+                onClick={handleBack}
                 className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
               >
                 <ArrowLeft className="h-5 w-5" />
