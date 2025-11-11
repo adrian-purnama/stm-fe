@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Trash2, Copy, Settings, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Copy, Settings, ArrowLeft, Send } from 'lucide-react';
 import Navigation from '../components/common/Navigation';
 import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
@@ -108,6 +108,18 @@ const UserManagementPage = () => {
     setShowConfirmModal(true);
   };
 
+  const handleSendResetPrompt = async (user) => {
+    const toastId = toast.loading('Sending reset instructions...');
+    try {
+      await axiosInstance.post('/api/auth/forgot-password', { email: user.email });
+      toast.success('Reset instructions sent to user email', { id: toastId });
+      const targetUrl = `/login?mode=forgot&email=${encodeURIComponent(user.email)}`;
+      window.open(targetUrl, '_blank', 'noopener');
+    } catch (error) {
+      console.error('Error sending reset prompt:', error);
+      toast.error(error.response?.data?.message || 'Failed to send reset instructions', { id: toastId });
+    }
+  };
 
 
   const confirmAction = async () => {
@@ -371,6 +383,13 @@ const UserManagementPage = () => {
                             title="Copy User"
                           >
                             <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleSendResetPrompt(user)}
+                            className="text-orange-500 hover:text-orange-700"
+                            title="Send Reset Password Prompt"
+                          >
+                            <Send className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleEditUser(user)}

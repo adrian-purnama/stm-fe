@@ -1,5 +1,5 @@
-import { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useContext, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import axiosInstance from '../../utils/api/ApiHelper';
 import { UserContext } from '../../utils/contexts/UserContext';
 import toast from 'react-hot-toast';
@@ -15,6 +15,22 @@ const Login = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const navigate = useNavigate();
   const { loginUser } = useContext(UserContext);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const mode = searchParams.get('mode') || searchParams.get('view');
+    const forgotFlag = searchParams.get('forgot');
+    const emailParam = searchParams.get('email') || searchParams.get('resetEmail');
+
+    if (mode === 'forgot' || forgotFlag === '1') {
+      setShowForgot(true);
+      if (emailParam) {
+        setForgotEmail(emailParam);
+      }
+    } else if (emailParam) {
+      setForgotEmail(emailParam);
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     setFormData({
