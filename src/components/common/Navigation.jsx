@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { UserContext } from '../../utils/contexts/UserContext';
 import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
+import ApiHelper from '../../utils/api/ApiHelper';
 
 const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null }) => {
   const { user, logoutUser } = useContext(UserContext);
@@ -25,6 +26,7 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
   const toggleMobileNav = () => setShowMobileNav((prev) => !prev);
   const closeMobileNav = () => setShowMobileNav(false);
   const navigate = useNavigate();
+
 
   const handleLogout = () => {
     closeMobileNav();
