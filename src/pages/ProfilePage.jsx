@@ -11,7 +11,7 @@ import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
 const ProfilePage = () => {
   const navigate = useNavigate();
   const goBack = useSmartBackNavigation('/dashboard');
-  const { user } = useContext(UserContext);
+  const { user, setUser } = useContext(UserContext);
   
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -40,6 +40,16 @@ const ProfilePage = () => {
             fullName: userData.fullName || '',
             phoneNumbers: userData.phoneNumbers || []
           });
+
+          const updatedUser = {
+            id: userData._id || userData.id || user.id,
+            email: userData.email || user.email,
+            fullName: userData.fullName || '',
+            phoneNumbers: userData.phoneNumbers || [],
+            permissions: user.permissions || [],
+            isLoggedIn: true
+          };
+          setUser(updatedUser);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -108,6 +118,15 @@ const ProfilePage = () => {
         setProfileData({
           fullName: updatedUser.fullName || '',
           phoneNumbers: updatedUser.phoneNumbers || []
+        });
+
+        setUser({
+          id: updatedUser._id || updatedUser.id || user.id,
+          email: updatedUser.email || user.email,
+          fullName: updatedUser.fullName || '',
+          phoneNumbers: updatedUser.phoneNumbers || [],
+          permissions: user.permissions || [],
+          isLoggedIn: true
         });
       }
     } catch (error) {

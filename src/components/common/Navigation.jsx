@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -17,15 +17,28 @@ import { UserContext } from '../../utils/contexts/UserContext';
 import { NotificationsContext } from '../../utils/contexts/NotificationsContext';
 import ApiHelper from '../../utils/api/ApiHelper';
 
-const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null }) => {
+const Navigation = ({ subtitle = null, children = null }) => {
   const { user, logoutUser } = useContext(UserContext);
-  const { connected, notifications, unreadCount, loadMore, hasMore, markAsRead, refresh } = useContext(NotificationsContext);
+  const { connected, notifications, unreadCount, loadMore, hasMore, markAsRead } = useContext(NotificationsContext);
   const [open, setOpen] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const toggleOpen = () => setOpen(o => !o);
   const toggleMobileNav = () => setShowMobileNav((prev) => !prev);
   const closeMobileNav = () => setShowMobileNav(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileViewport(window.innerWidth < 768);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
 
   const handleLogout = () => {
@@ -41,8 +54,9 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
   };
 
   const renderActionButtons = (isMobile = false) => {
+    const isMobilePanel = isMobile || isMobileViewport;
     const containerClass = isMobile
-      ? 'flex flex-col gap-3 pt-4 border-t border-gray-100'
+      ? 'flex flex-col gap-3 pt-4 border-t border-gray-100 w-full'
       : 'hidden md:flex items-center gap-4';
 
     return (
@@ -77,68 +91,60 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
               </span>
             )}
             {open && (
-              <div className="absolute right-0 mt-2 w-full max-w-[calc(100vw-2rem)] sm:max-w-sm md:w-96 max-h-[500px] overflow-hidden bg-white border border-gray-200 rounded-xl shadow-xl z-50">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <div className="flex items-center gap-2">
-                    <Bell size={18} className="text-blue-600" />
-                    <h3 className="font-semibold text-gray-900">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium text-white bg-red-500 rounded-full">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <button onClick={toggleOpen} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
-                    <X size={16} className="text-gray-500" />
-                  </button>
-                </div>
-
-                {/* Notifications List */}
-                <div className="max-h-[400px] overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 px-4">
-                      <Bell size={48} className="text-gray-300 mb-3" />
-                      <p className="text-gray-500 font-medium">No notifications yet</p>
-                      <p className="text-sm text-gray-400 mt-1">You'll see updates here when they arrive</p>
+              isMobilePanel ? (
+                <div className="fixed inset-0 z-[60] flex flex-col bg-black/40 backdrop-blur-sm">
+                  <div className="mt-auto w-full rounded-t-3xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
+                    <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white rounded-t-3xl">
+                      <div className="flex items-center gap-2">
+                        <Bell size={18} className="text-blue-600" />
+                        <h3 className="font-semibold text-gray-900">Notifications</h3>
+                        {unreadCount > 0 && (
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium text-white bg-red-500 rounded-full">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={toggleOpen} className="p-2 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200">
+                        <X size={18} />
+                      </button>
                     </div>
-                  ) : (
-                    <div className="divide-y divide-gray-100">
-                      {notifications.map((n) => (
-                        <div key={n._id || n.id} className={`p-4 hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-blue-50/30 border-l-4 border-l-blue-500' : ''}`}>
-                          <div className="flex items-start gap-3">
-                            {/* Notification Icon */}
-                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${!n.isRead ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                              <Bell size={16} />
-                            </div>
 
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
+                    <div className="flex-1 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-4">
+                          <Bell size={48} className="text-gray-300 mb-3" />
+                          <p className="text-gray-500 font-medium">No notifications yet</p>
+                          <p className="text-sm text-gray-400 mt-1 text-center">You'll see updates here when they arrive</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {notifications.map((n) => (
+                            <div key={n._id || n.id} className={`p-4 hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-blue-50/30 border-l-4 border-l-blue-500' : ''}`}>
+                              <div className="flex items-start gap-3">
+                                <div className={`flex-shrink-0 w-10 h-10 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${!n.isRead ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                  <Bell size={16} />
+                                </div>
+                                <div className="flex-1 min-w-0">
                                   <h4 className={`text-sm font-medium ${!n.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
                                     {n.title}
                                   </h4>
                                   {n.description && (
-                                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                    <p className="text-sm text-gray-600 mt-1">
                                       {n.description}
                                     </p>
                                   )}
-
-                                  {/* Time and Actions */}
-                                  <div className="flex items-center justify-between mt-2">
-                                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1">
                                       <Clock size={12} />
-                                      <span>{new Date(n.createdAt || Date.now()).toLocaleDateString()} at {new Date(n.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
+                                      {new Date(n.createdAt || Date.now()).toLocaleDateString()} {new Date(n.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    <div className="flex items-center gap-3">
                                       {n.link && (
                                         <a
                                           href={n.link}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline"
                                         >
                                           <ExternalLink size={12} />
                                           Open
@@ -147,7 +153,7 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
                                       {!n.isRead && (
                                         <button
                                           onClick={() => markAsRead(n._id || n.id)}
-                                          className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700 hover:underline"
+                                          className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 hover:underline"
                                         >
                                           <Check size={12} />
                                           Mark read
@@ -158,31 +164,128 @@ const Navigation = ({ title = "ASB Dashboard", subtitle = null, children = null 
                                 </div>
                               </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Footer */}
-                {notifications.length > 0 && (
-                  <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
-                    {hasMore ? (
-                      <button
-                        onClick={loadMore}
-                        className="w-full text-sm font-medium text-gray-700 hover:text-gray-900 py-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        Load more notifications
-                      </button>
-                    ) : (
-                      <div className="text-xs text-gray-500 text-center py-1">
-                        You've reached the end
+                    {notifications.length > 0 && (
+                      <div className="border-t border-gray-100 bg-white px-4 py-3 rounded-b-3xl">
+                        {hasMore ? (
+                          <button
+                            onClick={loadMore}
+                            className="w-full text-sm font-medium text-gray-700 hover:text-gray-900 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            Load more notifications
+                          </button>
+                        ) : (
+                          <div className="text-xs text-gray-500 text-center py-1">
+                            You've reached the end
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="absolute right-0 mt-2 w-full max-w-[calc(100vw-2rem)] sm:max-w-sm md:w-96 max-h-[500px] overflow-hidden bg-white border border-gray-200 rounded-xl shadow-xl z-50">
+                  <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+                    <div className="flex items-center gap-2">
+                      <Bell size={18} className="text-blue-600" />
+                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                      {unreadCount > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium text-white bg-red-500 rounded-full">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={toggleOpen} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
+                      <X size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+
+                  <div className="max-h-[400px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 px-4">
+                        <Bell size={48} className="text-gray-300 mb-3" />
+                        <p className="text-gray-500 font-medium">No notifications yet</p>
+                        <p className="text-sm text-gray-400 mt-1">You'll see updates here when they arrive</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {notifications.map((n) => (
+                          <div key={n._id || n.id} className={`p-4 hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-blue-50/30 border-l-4 border-l-blue-500' : ''}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${!n.isRead ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                <Bell size={16} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h4 className={`text-sm font-medium ${!n.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
+                                      {n.title}
+                                    </h4>
+                                    {n.description && (
+                                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                        {n.description}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center justify-between mt-2">
+                                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                                        <Clock size={12} />
+                                        <span>{new Date(n.createdAt || Date.now()).toLocaleDateString()} at {new Date(n.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {n.link && (
+                                          <a
+                                            href={n.link}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                                          >
+                                            <ExternalLink size={12} />
+                                            Open
+                                          </a>
+                                        )}
+                                        {!n.isRead && (
+                                          <button
+                                            onClick={() => markAsRead(n._id || n.id)}
+                                            className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700 hover:underline"
+                                          >
+                                            <Check size={12} />
+                                            Mark read
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {notifications.length > 0 && (
+                    <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+                      {hasMore ? (
+                        <button
+                          onClick={loadMore}
+                          className="w-full text-sm font-medium text-gray-700 hover:text-gray-900 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          Load more notifications
+                        </button>
+                      ) : (
+                        <div className="text-xs text-gray-500 text-center py-1">
+                          You've reached the end
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
             )}
           </div>
 

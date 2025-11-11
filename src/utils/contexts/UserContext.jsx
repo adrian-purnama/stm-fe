@@ -3,12 +3,17 @@ import { isTokenExpired } from "../helpers/tokenUtils";
 
 const UserContext = createContext();
 
+const defaultUserState = {
+  id: null,
+  email: null,
+  fullName: '',
+  phoneNumbers: [],
+  permissions: [],
+  isLoggedIn: false
+};
+
 const UserContextProvider = (props) => {
-  const [user, setUser] = useState({
-    email: null,
-    role: null,
-    isLoggedIn: false
-  });
+  const [user, setUser] = useState(defaultUserState);
 
   // Initialize user state from localStorage on app start
   useEffect(() => {
@@ -27,8 +32,11 @@ const UserContextProvider = (props) => {
         
         const parsedUser = JSON.parse(userData);
         setUser({
-          email: parsedUser.email,
-          role: parsedUser.role,
+          id: parsedUser.id || parsedUser._id || null,
+          email: parsedUser.email || null,
+          fullName: parsedUser.fullName || '',
+          phoneNumbers: parsedUser.phoneNumbers || [],
+          permissions: parsedUser.permissions || [],
           isLoggedIn: true
         });
       } catch (error) {
@@ -40,24 +48,29 @@ const UserContextProvider = (props) => {
     }
   }, []);
 
-  const loginUser = (userData, token) => {
-    localStorage.setItem('asb-token', token);
+  const persistUser = (userData) => {
     localStorage.setItem('asb-user', JSON.stringify(userData));
-    setUser({
-      email: userData.email,
-      role: userData.role,
+    setUser(userData);
+  };
+
+  const loginUser = (userData, token) => {
+    const normalizedUser = {
+      id: userData.id || userData._id || null,
+      email: userData.email || null,
+      fullName: userData.fullName || '',
+      phoneNumbers: userData.phoneNumbers || [],
+      permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
       isLoggedIn: true
-    });
+    };
+
+    localStorage.setItem('asb-token', token);
+    persistUser(normalizedUser);
   };
 
   const logoutUser = () => {
     localStorage.removeItem('asb-token');
     localStorage.removeItem('asb-user');
-    setUser({
-      email: null,
-      role: null,
-      isLoggedIn: false
-    });
+    setUser(defaultUserState);
   };
 
   return (
@@ -66,7 +79,7 @@ const UserContextProvider = (props) => {
         user,
         loginUser,
         logoutUser,
-        setUser
+        setUser: persistUser
       }}
     >
       {props.children}

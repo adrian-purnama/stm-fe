@@ -14,6 +14,74 @@ export const NotificationsProvider = ({ children }) => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const wsRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const shouldReconnectRef = useRef(false);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  };
+
+  const scheduleReconnect = () => {
+    if (!shouldReconnectRef.current) return;
+
+    clearReconnectTimer();
+    reconnectAttemptsRef.current += 1;
+    const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttemptsRef.current));
+
+    reconnectTimerRef.current = setTimeout(() => {
+      connectWebSocket();
+    }, delay);
+  };
+
+  const connectWebSocket = () => {
+    if (!user.isLoggedIn) {
+      return;
+    }
+
+    const env = import.meta.env.VITE_NODE_ENV || import.meta.env.VITE_NODE_ENV_BUILD || 'development';
+    const wsProtocol = (env === 'preprod' || env === 'production') ? 'wss://' : 'ws://';
+    const wsHost = import.meta.env.VITE_BACKEND_URL;
+    const wsUrl = `${wsProtocol}${wsHost}/notification`;
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+        reconnectAttemptsRef.current = 0;
+        clearReconnectTimer();
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setMessages((prev) => [...prev, data]);
+          if (data.type === 'notification' && data.payload) {
+            setNotifications((prev) => [data.payload, ...prev].slice(0, 50));
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      };
+    } catch (error) {
+      setConnected(false);
+      scheduleReconnect();
+    }
+  };
 
   const refresh = async () => {
     try {
@@ -31,36 +99,24 @@ export const NotificationsProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Only connect when logged in
-    if (!user.isLoggedIn) return;
+    shouldReconnectRef.current = user.isLoggedIn;
 
-    const env = import.meta.env.VITE_NODE_ENV || import.meta.env.VITE_NODE_ENV_BUILD || "development";
-    const wsProtocol = (env === "preprod" || env === "production") ? "wss://" : "ws://";
-    const wsHost = import.meta.env.VITE_BACKEND_URL;
-    const wsUrl = `${wsProtocol}${wsHost}/notification`;
-
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnected(true);
-    };
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setMessages((prev) => [...prev, data]);
-        if (data.type === 'notification' && data.payload) {
-          setNotifications((prev) => [data.payload, ...prev].slice(0, 50));
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
+    if (user.isLoggedIn) {
+      connectWebSocket();
+    }
 
     return () => {
-      ws.close();
+      shouldReconnectRef.current = false;
+      clearReconnectTimer();
+      reconnectAttemptsRef.current = 0;
+      if (wsRef.current) {
+        wsRef.current.onopen = null;
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, [user.isLoggedIn]);
 

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import Login from './components/auth/Login'
 import Register from './components/auth/Register'
+import ResetPassword from './components/auth/ResetPassword'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import HomePage from './pages/HomePage'
 import QuotationPage from './pages/quotation/QuotationPage'
@@ -27,6 +28,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route 
           path="/dashboard" 
           element={
