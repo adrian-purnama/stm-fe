@@ -95,10 +95,10 @@ const RFQDetailsView = ({ rfq, loading }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={goBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
         >
           <ArrowLeft size={20} />
           Back to Quotations
@@ -106,13 +106,13 @@ const RFQDetailsView = ({ rfq, loading }) => {
       </div>
 
       {/* RFQ Header */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+      <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <h1 className="text-2xl font-bold text-gray-900">
               RFQ #{rfq.rfqNumber}
             </h1>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(rfq.status)}`}>
                 {getStatusIcon(rfq.status)}
                 {rfq.status}
@@ -130,7 +130,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
         </div>
 
         {/* Customer Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-3">Customer Information</h3>
             <div className="space-y-2">
@@ -169,10 +169,10 @@ const RFQDetailsView = ({ rfq, loading }) => {
         </div>
 
         {/* Key Information - Highlighted */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
           <h3 className="text-lg font-semibold text-yellow-800 mb-3">Key Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center justify-between">
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-yellow-700">Competitor:</span>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                 rfq.competitor && rfq.competitor.trim() !== '' 
@@ -182,7 +182,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
                 {rfq.competitor && rfq.competitor.trim() !== '' ? rfq.competitor : 'None'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-yellow-700">Can Make:</span>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                 rfq.canMake ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -190,7 +190,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
                 {rfq.canMake ? 'Yes' : 'No'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-yellow-700">Project Ongoing:</span>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                 rfq.projectOngoing ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
@@ -198,7 +198,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
                 {rfq.projectOngoing ? 'Yes' : 'No'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-yellow-700">Confidence Rate:</span>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                 rfq.confidenceRate >= 70 ? 'bg-green-100 text-green-800' :
@@ -269,10 +269,10 @@ const RFQDetailsView = ({ rfq, loading }) => {
         </div>
 
         {/* Budget Information */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <h3 className="text-lg font-semibold text-blue-800 mb-3">Budget Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center justify-between">
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium text-blue-700">Total Estimated Revenue per Quantity:</span>
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                 {(() => {
@@ -289,7 +289,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
               </span>
             </div>
             {rfq.items && rfq.items.length > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium text-blue-700">Items:</span>
                 <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                   {rfq.items.length} item{(rfq.items.length !== 1 ? 's' : '')} • Total Qty: {rfq.items.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0)}
@@ -362,15 +362,15 @@ const RFQDetailsView = ({ rfq, loading }) => {
         {/* Specification Comparison Section */}
         {rfq.engineeringTransit && rfq.engineeringTransit.specsOriginal && rfq.engineeringTransit.specsModified && 
          rfq.engineeringTransit.specsModified.length > 0 && rfq.lineOfBusiness?.type === 'karoseri' && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
                 <GitCompare size={20} className="text-blue-600" />
                 <h3 className="text-lg font-semibold text-gray-900">Specification Comparison</h3>
               </div>
               <button
                 onClick={() => setShowSpecComparison(!showSpecComparison)}
-                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="flex items-center gap-2 text-sm font-medium text-blue-600 transition-colors hover:text-blue-800"
               >
                 {showSpecComparison ? (
                   <>
@@ -568,7 +568,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
               {rfq.documents.map((docEntry) => (
                 <div
                   key={docEntry._id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
                 >
                     <div className="flex flex-col">
                       <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
@@ -612,7 +612,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
             <div className="space-y-4">
               {rfq.items.map((item, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-md font-medium text-gray-900">Item {item.itemNumber}</h4>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       <span>Quantity: {item.quantity || 1}</span>

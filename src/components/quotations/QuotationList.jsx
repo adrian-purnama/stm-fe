@@ -1058,7 +1058,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     }
 
     return (
-      <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => handlePageChange((pagination.current || 1) - 1)}
           disabled={(pagination.current || 1) === 1}
@@ -1101,14 +1101,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Quotations</h2>
         {showCreateButton && (
           <button
             onClick={onCreate}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 sm:w-auto"
           >
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4" />
             New Quotation
           </button>
         )}
@@ -1117,11 +1117,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       {/* Filter Header with Favorites */}
       <div className="bg-white rounded-lg shadow border border-gray-200">
         {/* Filter Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={handleToggleFilterCollapse}
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-200 hover:text-gray-900"
             >
               <Filter className="h-5 w-5" />
               <span className="font-medium">Filters</span>
@@ -1135,8 +1135,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           
           {/* Favorite Status Quick Filters - Only show favorited statuses */}
           {favoriteStatuses.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500 mr-2">Quick Filter:</span>
+            <div className="flex w-full items-center gap-2 overflow-x-auto text-sm text-gray-500 sm:justify-end">
+              <span className="ml-1 mr-1 flex-shrink-0 font-medium text-gray-500">Quick Filter:</span>
               {favoriteStatuses.map((statusValue) => {
                 const status = statusOptions.find(s => s.value === statusValue);
                 if (!status) return null;
@@ -1145,7 +1145,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   <button
                     key={status.value}
                     onClick={() => handleQuickFilterByStatus(status.value)}
-                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                       filters.status === status.value
                         ? 'bg-blue-100 text-blue-800 border border-blue-200'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1157,7 +1157,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               })}
               <button
                 onClick={() => handleQuickFilterByStatus('')}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                   filters.status === ''
                     ? 'bg-gray-200 text-gray-800'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1250,7 +1250,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 });
                 setPagination((prev) => ({ ...prev, current: 1 }));
               }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
               Clear Filters
             </button>
@@ -1264,14 +1264,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       {(quotations || []).map((quotationData) => {
         const { header, offers } = quotationData;
         return (
-          <div key={header._id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div key={header._id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
             {/* Header Section */}
-            <div className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 px-6 py-4">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white px-4 py-4 sm:px-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-3">
-                <div className="flex items-center flex-wrap gap-3">
-                    <h3 className="text-xl font-bold text-gray-900">{header.quotationNumber}</h3>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-lg font-semibold text-gray-900 sm:text-xl">{header.quotationNumber}</h3>
+                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold sm:text-sm ${
                     header.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
                     header.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
                     header.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
@@ -1279,94 +1279,94 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   }`}>
                     {header.lineOfBusiness?.type?.charAt(0).toUpperCase() + header.lineOfBusiness?.type?.slice(1) || 'Karoseri'}
                   </span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold sm:text-sm ${
                     statusClassMap[header.status?.type] || 'bg-gray-100 text-gray-800'
                   }`}>
                     {header.status?.type ? header.status.type.charAt(0).toUpperCase() + header.status.type.slice(1) : 'Open'}
                   </span>
                   {header.status?.reason && (
-                      <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                      Reason: {header.status.reason}
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 sm:text-sm">
+                        Reason: {header.status.reason}
                     </span>
                   )}
-                </div>
+                  </div>
                   
                   {/* Customer Info */}
-                  <div className="flex items-center space-x-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                     {header.customerName ? (
-                      <div className="flex items-center space-x-2 text-gray-700">
+                      <div className="flex items-center gap-2 text-gray-700">
                         <Building className="h-4 w-4 text-gray-500" />
                         <span className="font-medium">{header.customerName}</span>
                       </div>
                     ) : (
-                      <div className="flex items-center space-x-2 text-gray-400">
+                      <div className="flex items-center gap-2 text-gray-400">
                         <Building className="h-4 w-4 text-gray-300" />
-                        <span className="font-medium animate-pulse bg-gray-200 rounded h-4 w-24"></span>
+                        <span className="h-4 w-24 animate-pulse rounded bg-gray-200 font-medium"></span>
                       </div>
                     )}
                     {header.contactPerson?.name ? (
-                      <div className="flex items-center space-x-2 text-gray-600">
+                      <div className="flex items-center gap-2 text-gray-600">
                         <User className="h-4 w-4 text-gray-500" />
                         <span>{header.contactPerson.name} ({header.contactPerson.gender})</span>
                       </div>
                     ) : header.contactPerson === undefined ? (
-                      <div className="flex items-center space-x-2 text-gray-400">
+                      <div className="flex items-center gap-2 text-gray-400">
                         <User className="h-4 w-4 text-gray-300" />
-                        <span className="animate-pulse bg-gray-200 rounded h-4 w-32"></span>
+                        <span className="h-4 w-32 animate-pulse rounded bg-gray-200"></span>
                       </div>
                     ) : null}
                     {header.requesterId ? (
                       typeof header.requesterId === 'object' && header.requesterId.fullName ? (
-                        <div className="flex items-center space-x-2 text-gray-600">
+                        <div className="flex items-center gap-2 text-gray-600">
                           <User className="h-4 w-4 text-gray-500" />
                           <span>Requester: {header.requesterId.fullName || header.requesterId.email}</span>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2 text-gray-400">
+                        <div className="flex items-center gap-2 text-gray-400">
                           <User className="h-4 w-4 text-gray-300" />
-                          <span className="animate-pulse bg-gray-200 rounded h-4 w-32">Loading requester...</span>
+                          <span className="h-4 w-32 animate-pulse rounded bg-gray-200">Loading requester...</span>
                         </div>
                       )
                     ) : null}
                     {header.creatorId ? (
                       typeof header.creatorId === 'object' && header.creatorId.fullName ? (
-                        <div className="flex items-center space-x-2 text-gray-600">
+                        <div className="flex items-center gap-2 text-gray-600">
                           <User className="h-4 w-4 text-gray-500" />
                           <span>Creator: {header.creatorId.fullName || header.creatorId.email}</span>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2 text-gray-400">
+                        <div className="flex items-center gap-2 text-gray-400">
                           <User className="h-4 w-4 text-gray-300" />
-                          <span className="animate-pulse bg-gray-200 rounded h-4 w-28">Loading creator...</span>
+                          <span className="h-4 w-28 animate-pulse rounded bg-gray-200">Loading creator...</span>
                         </div>
                       )
                     ) : null}
                     {header.approverId ? (
                       typeof header.approverId === 'object' && header.approverId.fullName ? (
-                        <div className="flex items-center space-x-2 text-gray-600">
+                        <div className="flex items-center gap-2 text-gray-600">
                           <User className="h-4 w-4 text-gray-500" />
                           <span>Approver: {header.approverId.fullName || header.approverId.email}</span>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2 text-gray-400">
+                        <div className="flex items-center gap-2 text-gray-400">
                           <User className="h-4 w-4 text-gray-300" />
-                          <span className="animate-pulse bg-gray-200 rounded h-4 w-32">Loading approver...</span>
+                          <span className="h-4 w-32 animate-pulse rounded bg-gray-200">Loading approver...</span>
                         </div>
                       )
                     ) : null}
                   </div>
 
                   {/* Dates and Follow-up Status */}
-                  <div className="flex items-center flex-wrap gap-4 text-sm text-gray-600">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-500" />
                     <span>Created: {formatDate(header.createdAt)}</span>
                   </div>
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-gray-500" />
                     <span>Last Follow-up: {formatDate(header.lastFollowUpDate)}</span>
                       {header.followUpStatus ? (
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                           header.followUpStatus.color === 'green' ? 'bg-green-100 text-green-800' :
                           header.followUpStatus.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-red-100 text-red-800'
@@ -1374,12 +1374,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                           {header.followUpStatus.label}
                         </span>
                       ) : header.lastFollowUpDate === undefined ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400 animate-pulse">
-                          <span className="bg-gray-200 rounded h-3 w-16"></span>
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400 animate-pulse">
+                          <span className="h-3 w-16 rounded bg-gray-200"></span>
                         </span>
                       ) : null}
                   </div>
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-500" />
                     <span>Updated: {formatDate(header.updatedAt)}</span>
                   </div>
@@ -1387,25 +1387,25 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center space-x-1">
-                <button
-                  onClick={() => {
-                    // Ensure _id is converted to string
-                    const processedQuotationData = {
-                      ...quotationData,
-                      header: {
-                        ...header,
-                        _id: header._id?.toString() || header._id
-                      }
-                    };
-                    onView && onView(processedQuotationData);
-                  }}
-                  data-tooltip-id={`view-header-${header._id}`}
-                  data-tooltip-content="View quotation details"
-                    className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
-                >
-                    <Eye className="h-5 w-5" />
-                </button>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    onClick={() => {
+                      const processedQuotationData = {
+                        ...quotationData,
+                        header: {
+                          ...header,
+                          _id: header._id?.toString() || header._id
+                        }
+                      };
+                      onView && onView(processedQuotationData);
+                    }}
+                    data-tooltip-id={`view-header-${header._id}`}
+                    data-tooltip-content="View quotation details"
+                    className="flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                  >
+                    <Eye className="h-4 w-4" />
+                    <span className="hidden text-xs sm:inline">Preview</span>
+                  </button>
                 {/* Action buttons - conditional based on actionMode */}
                 {actionMode === 'full' && (
                   <>
@@ -1413,33 +1413,37 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                       onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.NEW_OFFER, header })}
                       data-tooltip-id={`new-offer-${header._id}`}
                       data-tooltip-content="Create additional offer"
-                        className="text-green-600 hover:text-green-900 p-2 transition-colors"
+                      className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-sm font-medium text-green-600 transition-colors hover:bg-green-100"
                     >
-                        <Plus className="h-5 w-5" />
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden text-xs sm:inline">New Offer</span>
                     </button>
                     <button
                       onClick={() => openStatusModal(header, offers)}
                       data-tooltip-id={`status-${header._id}`}
                       data-tooltip-content="Update quotation status"
-                        className="text-indigo-600 hover:text-indigo-900 p-2 transition-colors"
+                      className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-100"
                     >
-                        <CheckCircle className="h-5 w-5" />
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="hidden text-xs sm:inline">Status</span>
                     </button>
                     <button
                       onClick={() => handleFollowUpQuotation(header)}
                       data-tooltip-id={`followup-${header._id}`}
                       data-tooltip-content="Record follow-up for this quotation"
-                        className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
+                      className="flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-sky-100"
                       >
-                        <Clock className="h-5 w-5" />
+                      <Clock className="h-4 w-4" />
+                      <span className="hidden text-xs sm:inline">Follow-up</span>
                       </button>
                       <button
                         onClick={() => handleDeleteQuotation(header)}
                         data-tooltip-id={`delete-quotation-${header._id}`}
                         data-tooltip-content="Delete entire quotation"
-                        className="text-red-600 hover:text-red-900 p-2 transition-colors"
+                        className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-4 w-4" />
+                        <span className="hidden text-xs sm:inline">Delete</span>
                     </button>
                   </>
                 )}
@@ -1447,7 +1451,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               </div>
             </div>
 
-            <div className="px-6 py-4">
+            <div className="px-4 py-4 sm:px-6">
               {isQuotationLoadingDetails(header.quotationNumber || header._id) && offers.length === 0 ? (
                 <div className="space-y-4">
                   <div className="animate-pulse">

@@ -74,15 +74,21 @@ const RequestQuotationListTab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Request Quotation List</h2>
-          <p className="text-sm text-gray-600 mt-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+            Approved RFQs
+          </span>
+          <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Request Quotation List</h2>
+          <p className="text-sm text-gray-600 sm:text-base">
             View approved RFQ requests ready for quotation creation
           </p>
         </div>
-        <div className="text-sm text-gray-500">
-          {approvedRFQs.length} RFQ{approvedRFQs.length !== 1 ? 's' : ''} available
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-500 shadow-sm">
+          <FileText className="h-4 w-4 text-blue-500" />
+          <span>
+            {approvedRFQs.length} RFQ{approvedRFQs.length !== 1 ? 's' : ''} available
+          </span>
         </div>
       </div>
 
@@ -98,51 +104,60 @@ const RequestQuotationListTab = () => {
           </p>
         </div>
       ) : (
-        <div className="grid gap-6">
+        <div className="space-y-4">
           {approvedRFQs.map((rfq) => (
-            <div key={rfq._id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+            <div
+              key={rfq._id}
+              className="overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex-1 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-lg font-semibold text-gray-900">{rfq.title}</h3>
                     {getStatusBadge(rfq.status)}
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-gray-600">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>
                         <span className="font-medium">RFQ Number:</span> {rfq.rfqNumber}
                       </p>
-                      <p className="text-sm text-gray-600">
+                      <p>
                         <span className="font-medium">Customer:</span> {rfq.customerName}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Contact:</span> {rfq.contactPerson?.name}
+                      <p>
+                        <span className="font-medium">Contact:</span> {rfq.contactPerson?.name || '-'}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Requester:</span> {rfq.requesterId?.fullName}
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>
+                        <span className="font-medium">Requester:</span> {rfq.requesterId?.fullName || '-'}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Approved:</span> {new Date(rfq.approvedAt).toLocaleDateString()}
+                      <p>
+                        <span className="font-medium">Approved:</span>{' '}
+                        {rfq.approvedAt ? new Date(rfq.approvedAt).toLocaleDateString() : '-'}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Priority:</span> 
-                        <span className={`ml-1 capitalize px-2 py-1 rounded-full text-xs ${
-                          rfq.priority === 'urgent' ? 'bg-red-100 text-red-800' :
-                          rfq.priority === 'high' ? 'bg-orange-100 text-orange-800' :
-                          rfq.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {rfq.priority}
+                      <p className="flex items-center gap-2">
+                        <span className="font-medium">Priority:</span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs capitalize ${
+                            rfq.priority === 'urgent'
+                              ? 'bg-red-100 text-red-800'
+                              : rfq.priority === 'high'
+                              ? 'bg-orange-100 text-orange-800'
+                              : rfq.priority === 'medium'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}
+                        >
+                          {rfq.priority || 'normal'}
                         </span>
                       </p>
                     </div>
                   </div>
 
                   {rfq.description && (
-                    <p className="text-sm text-gray-600 mb-4">
+                    <p className="text-sm text-gray-600">
                       <span className="font-medium">Description:</span> {rfq.description}
                     </p>
                   )}
@@ -164,23 +179,23 @@ const RequestQuotationListTab = () => {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 ml-4">
+                <div className="flex flex-col gap-2 sm:min-w-[200px] sm:items-end">
+                  <button
+                    onClick={() => handleViewRFQ(rfq)}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-100 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-800"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Details
+                  </button>
                   {rfq.status === 'approved' && (
                     <button
                       onClick={() => handleCreateQuotation(rfq)}
-                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
                     >
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4" />
                       Create Quotation
                     </button>
                   )}
-                  <button
-                    onClick={() => handleViewRFQ(rfq)}
-                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </button>
                 </div>
               </div>
             </div>

@@ -669,22 +669,22 @@ const RequestQuotationTab = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
           <h2 className="text-xl font-semibold text-gray-900">Request Quotation</h2>
-          <p className="text-sm text-gray-600 mt-1">Create and manage your quotation requests</p>
+          <p className="text-sm text-gray-600">Create and manage your quotation requests</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <button
             onClick={() => setShowUploadModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 sm:w-auto"
           >
             <Upload size={16} />
             Upload RFQ CSV
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 sm:w-auto"
           >
             <Plus size={16} />
             Request Quotation
@@ -693,25 +693,26 @@ const RequestQuotationTab = () => {
       </div>
 
       {/* WebSocket Connection Status */}
-      <div className="flex items-center gap-2 text-sm">
-        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm sm:inline-flex sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+        <div className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
         <span className="text-gray-600">
           {connected ? 'Real-time updates connected' : 'Real-time updates disconnected'}
         </span>
       </div>
 
       {/* Folder Management Bar */}
-      <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Folders:</span>
+      <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Folders:</span>
           {folders.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   setSelectedFolderFilter('');
                   fetchRFQs(1, true);
                 }}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
                   selectedFolderFilter === '' 
                     ? 'bg-blue-600 text-white' 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -755,49 +756,51 @@ const RequestQuotationTab = () => {
           )}
           <button
             onClick={() => setShowFolderModal(true)}
-            className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-purple-700"
           >
             <FolderPlus size={14} />
             New Folder
           </button>
         </div>
-        <div className="flex-1"></div>
-        <button
-          onClick={() => {
-            setIsSelectMode(!isSelectMode);
-            setSelectedRFQIds([]);
-          }}
-          className={`inline-flex items-center gap-1 px-3 py-1 text-sm rounded-md transition-colors ${
-            isSelectMode 
-              ? 'bg-green-600 text-white hover:bg-green-700' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <CheckSquare size={14} />
-          {isSelectMode ? 'Cancel Select' : 'Select RFQs'}
-        </button>
-        {isSelectMode && selectedRFQIds.length > 0 && folders.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">{selectedRFQIds.length} selected</span>
-            <CustomDropdown
-              options={[
-                { value: '', label: 'Remove from folder' },
-                ...folders.map(f => ({ value: f._id, label: f.name }))
-              ]}
-              value=""
-              onChange={(folderId) => handleMoveToFolder(folderId)}
-              placeholder="Move to folder..."
-            />
-          </div>
-        )}
+        </div>
+        <div className="flex flex-col gap-3 sm:items-end">
+          <button
+            onClick={() => {
+              setIsSelectMode(!isSelectMode);
+              setSelectedRFQIds([]);
+            }}
+            className={`inline-flex items-center justify-center gap-1 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+              isSelectMode 
+                ? 'bg-green-600 text-white hover:bg-green-700' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <CheckSquare size={14} />
+            {isSelectMode ? 'Cancel Select' : 'Select RFQs'}
+          </button>
+          {isSelectMode && selectedRFQIds.length > 0 && folders.length > 0 && (
+            <div className="flex flex-col gap-1 text-sm text-gray-600 sm:flex-row sm:items-center sm:gap-2">
+              <span>{selectedRFQIds.length} selected</span>
+              <CustomDropdown
+                options={[
+                  { value: '', label: 'Remove from folder' },
+                  ...folders.map(f => ({ value: f._id, label: f.name }))
+                ]}
+                value=""
+                onChange={(folderId) => handleMoveToFolder(folderId)}
+                placeholder="Move to folder..."
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* UI: Search bar and filters */}
       <div className="space-y-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1 w-full">
             <input
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Search by RFQ number, customer, description, or use filters: app:name status:pending stage:sales customer:ABC..."
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
@@ -806,17 +809,17 @@ const RequestQuotationTab = () => {
           </div>
           <button 
             onClick={() => setInfoOpen(true)}
-            className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="inline-flex items-center justify-center rounded-lg p-2.5 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
             title="Search help"
           >
             <Info className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowAdvancedFilters((prev) => !prev)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
           >
             <SlidersHorizontal className="w-4 h-4" />
             {showAdvancedFilters ? 'Hide advanced filters' : 'Show advanced filters'}
@@ -829,23 +832,23 @@ const RequestQuotationTab = () => {
         </div>
 
         {showAdvancedFilters && (
-          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+          <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
                 <SlidersHorizontal className="w-4 h-4 text-blue-500" />
                 Advanced Filters
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowAdvancedFilters(false)}
-                  className="text-xs font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 hover:bg-gray-200 rounded-md transition-colors"
+                  className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900"
                 >
                   Close
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Line of Business</p>
                 <div className="flex flex-wrap gap-2">
@@ -974,20 +977,30 @@ const RequestQuotationTab = () => {
       </div>
 
       {/* chips UI */}
-      <div className="flex flex-wrap gap-2 mb-2">
+      <div className="mb-2 flex flex-wrap gap-2">
         {chips.map((chip, i) => (
-          <span key={i} className="bg-blue-100 rounded text-blue-800 px-2 py-1 text-xs inline-flex items-center">
-            {chip.type}:{chip.value} <button className="ml-1" onClick={() => onRemoveChip(i)}><XCircle className="w-3 h-3" /></button>
+          <span key={i} className="inline-flex items-center rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+            {chip.type}:{chip.value}
+            <button className="ml-1" onClick={() => onRemoveChip(i)}>
+              <XCircle className="h-3 w-3" />
+            </button>
           </span>
         ))}
-        {chips.length > 0 && <button onClick={() => setChips([])} className="ml-2 px-2 py-1 bg-gray-100 text-xs rounded">Clear Filters</button>}
+        {chips.length > 0 && (
+          <button
+            onClick={() => setChips([])}
+            className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-200"
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
       {advancedFilterChips.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div className="mb-2 flex flex-wrap gap-2">
           {advancedFilterChips.map((chip) => (
             <span
               key={chip.key}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-purple-100 text-purple-700 rounded-full"
+              className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs text-purple-700"
             >
               {chip.label}
               <button
@@ -1011,82 +1024,84 @@ const RequestQuotationTab = () => {
       <div ref={listRef} style={{ maxHeight: '70vh', overflowY: 'auto' }}>
         {(!Array.isArray(rfqResults) || rfqResults.length === 0) && !loading && <div className="text-center text-gray-400 py-8">No RFQs found.</div>}
         {Array.isArray(rfqResults) && rfqResults.map(rfq => (
-          <div key={rfq._id} className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${rfq.status === 'rejected' ? 'bg-red-50 border-red-300' : ''}`}>
-            <div className="flex items-start justify-between">
-              {isSelectMode && (
-                <button
-                  onClick={() => {
-                    if (selectedRFQIds.includes(rfq._id)) {
-                      setSelectedRFQIds(selectedRFQIds.filter(id => id !== rfq._id));
-                    } else {
-                      setSelectedRFQIds([...selectedRFQIds, rfq._id]);
-                    }
-                  }}
-                  className="mr-3 mt-1"
-                >
-                  {selectedRFQIds.includes(rfq._id) ? (
-                    <CheckSquare size={20} className="text-blue-600" />
-                  ) : (
-                    <Square size={20} className="text-gray-400" />
-                  )}
-                </button>
-              )}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <h3 className="text-lg font-medium text-gray-900">{rfq.rfqNumber || rfq.title}</h3>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
-                    rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
-                    rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
-                    rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {rfq.lineOfBusiness?.type?.charAt(0).toUpperCase() + rfq.lineOfBusiness?.type?.slice(1) || 'N/A'}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(rfq.status)}`}>
-                    {getStatusIcon(rfq.status)}
-                    {rfq.status}
-                  </span>
-                </div>
-                {/* Customer Name Row */}
-                {rfq.customerName && (
-                  <div className="text-sm text-gray-700 mb-1">
-                    <span className="font-medium">Customer:</span> {rfq.customerName}
+          <div
+            key={rfq._id}
+            className={`mb-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md ${rfq.status === 'rejected' ? 'border-red-300 bg-red-50/60' : ''}`}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-1 gap-3">
+                {isSelectMode && (
+                  <button
+                    onClick={() => {
+                      if (selectedRFQIds.includes(rfq._id)) {
+                        setSelectedRFQIds(selectedRFQIds.filter(id => id !== rfq._id));
+                      } else {
+                        setSelectedRFQIds([...selectedRFQIds, rfq._id]);
+                      }
+                    }}
+                    className="mt-1"
+                  >
+                    {selectedRFQIds.includes(rfq._id) ? (
+                      <CheckSquare size={20} className="text-blue-600" />
+                    ) : (
+                      <Square size={20} className="text-gray-400" />
+                    )}
+                  </button>
+                )}
+                <div className="flex-1 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900">{rfq.rfqNumber || rfq.title}</h3>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                      rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
+                      rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {rfq.lineOfBusiness?.type?.charAt(0).toUpperCase() + rfq.lineOfBusiness?.type?.slice(1) || 'N/A'}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(rfq.status)}`}>
+                      {getStatusIcon(rfq.status)}
+                      {rfq.status}
+                    </span>
                   </div>
-                )}
-                {rfq.status === 'rejected' && rfq.approvalNotes && (
-                  <div className="mt-2 mb-2 text-sm text-red-700 font-semibold">
-                    <span className="font-bold">Rejected:</span> {rfq.approvalNotes}
+                  {rfq.customerName && (
+                    <div className="text-sm text-gray-700">
+                      <span className="font-medium">Customer:</span> {rfq.customerName}
+                    </div>
+                  )}
+                  {rfq.status === 'rejected' && rfq.approvalNotes && (
+                    <div className="text-sm font-semibold text-red-700">
+                      <span className="font-bold">Rejected:</span> {rfq.approvalNotes}
+                    </div>
+                  )}
+                  {rfq.description && (
+                    <p className="text-gray-600">{rfq.description}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                    <span>Approver: {rfq.approverId?.fullName || rfq.approverId?.email}</span>
+                    <span>Created: {new Date(rfq.createdAt).toLocaleDateString()}</span>
+                    {rfq.stage && (
+                      <span className="rounded bg-gray-100 px-2 py-1 text-xs">Stage: {rfq.stage}</span>
+                    )}
+                    {rfq.engineeringTransit?.status && (
+                      <span className="rounded bg-blue-100 px-2 py-1 text-xs">Engineering: {rfq.engineeringTransit.status}</span>
+                    )}
                   </div>
-                )}
-                {rfq.description && (
-                  <p className="text-gray-600 mb-2">{rfq.description}</p>
-                )}
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <span>Approver: {rfq.approverId?.fullName || rfq.approverId?.email}</span>
-                  <span>Created: {new Date(rfq.createdAt).toLocaleDateString()}</span>
-                  {rfq.stage && (
-                    <span className="px-2 py-1 bg-gray-100 rounded text-xs">Stage: {rfq.stage}</span>
-                  )}
-                  {rfq.engineeringTransit?.status && (
-                    <span className="px-2 py-1 bg-blue-100 rounded text-xs">Engineering: {rfq.engineeringTransit.status}</span>
-                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3 lg:flex-col lg:items-end">
                 <button
                   onClick={() => window.location = `/quotations/rfq/${rfq._id}`}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 bg-white rounded-md border border-blue-100"
+                  className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-blue-100 bg-white px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-900 sm:w-auto"
                   title="View Details"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                   View
                 </button>
-                {/* Edit button - available for all RFQs in sales stage (including rejected ones) */}
                 {(rfq.stage === 'sales' || rfq.status === 'rejected') && (
                   <button
                     onClick={async () => {
                       try {
-                        // Fetch full RFQ details with items
                         const response = await axiosInstance.get(`/api/rfq/${rfq._id}`);
                         if (response.data.success) {
                           setRfqToEdit(response.data.data.rfq);
@@ -1099,34 +1114,32 @@ const RequestQuotationTab = () => {
                         toast.error('Failed to load RFQ details');
                       }
                     }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-md hover:bg-yellow-600 transition-colors"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-yellow-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-yellow-600 sm:w-auto"
                     title="Edit RFQ"
                   >
                     Edit
                   </button>
                 )}
-                {/* Resubmit button - only for rejected RFQs */}
                 {rfq.status === 'rejected' && (
                   <button
                     onClick={() => {
                       setSelectedRFQ(rfq);
                       setShowSubmitModal(true);
                     }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 sm:w-auto"
                     title="Resubmit to Engineering after rejection"
                   >
                     <ArrowRight size={14}/>
                     Resubmit
                   </button>
                 )}
-                {/* Submit to Engineering button - for pending RFQs in sales stage */}
                 {rfq.stage === 'sales' && rfq.status !== 'rejected' && (
                   <button
                     onClick={() => {
                       setSelectedRFQ(rfq);
                       setShowSubmitModal(true);
                     }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                    className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 sm:w-auto"
                     title="Submit to Engineering"
                   >
                     <ArrowRight size={14}/>

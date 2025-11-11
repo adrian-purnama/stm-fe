@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy, useMemo, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 
 /**
@@ -36,6 +36,7 @@ const LazyTabs = ({
   const [internalActiveTab, setInternalActiveTab] = useState(null);
   const [loadedTabs, setLoadedTabs] = useState(new Set());
   const [lazyComponents, setLazyComponents] = useState({});
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(true);
   
   // Use refs to avoid dependency issues in callbacks
   const loadedTabsRef = useRef(new Set());
@@ -74,6 +75,9 @@ const LazyTabs = ({
 
   // Determine active tab
   const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
+  const activeTabMeta = useMemo(() => {
+    return visibleTabs.find(t => t.key === activeTab);
+  }, [visibleTabs, activeTab]);
 
   // Initialize active tab
   useEffect(() => {
@@ -200,7 +204,7 @@ const LazyTabs = ({
 
   // Render tab button styles based on variant
   const getTabButtonClass = (isActive) => {
-    const baseClass = "px-4 py-2 font-medium text-sm transition-colors flex items-center gap-2 whitespace-nowrap";
+    const baseClass = "flex flex-1 min-w-[160px] sm:min-w-0 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap sm:flex-none";
     
     switch (variant) {
       case 'underline':
@@ -247,8 +251,21 @@ const LazyTabs = ({
   return (
     <div className={`${className}`}>
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className={`flex ${variant === 'pills' ? 'gap-2' : 'space-x-8'} overflow-x-auto scrollbar-hide px-1`}>
+      <div className="mb-6 border-b border-gray-200">
+        <button
+          type="button"
+          onClick={() => setIsMobileNavOpen(prev => !prev)}
+          className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 sm:hidden"
+          aria-expanded={isMobileNavOpen}
+          aria-controls="lazy-tabs-navigation"
+        >
+          <span>{activeTabMeta?.label ? `Active: ${activeTabMeta.label}` : 'Tabs'}</span>
+          {isMobileNavOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        <nav
+          id="lazy-tabs-navigation"
+          className={`${isMobileNavOpen ? 'mt-3 flex' : 'hidden'} -mx-1 flex-wrap items-center ${variant === 'pills' ? 'gap-2 sm:gap-3 md:gap-4' : 'gap-2 sm:gap-4 md:gap-6'} overflow-x-auto px-1 py-1 scrollbar-hide sm:mt-0 sm:flex`}
+        >
           {visibleTabs.map((tab) => {
             const isActive = activeTab === tab.key;
             const Icon = tab.icon;

@@ -521,15 +521,21 @@ const EngineeringReviewTab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Engineering Review</h2>
-          <p className="text-sm text-gray-600 mt-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+            Engineering Queue
+          </span>
+          <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Engineering Review</h2>
+          <p className="text-sm text-gray-600 sm:text-base">
             Review RFQs in engineering stage and provide technical feedback
           </p>
         </div>
-        <div className="text-sm text-gray-500">
-          {rfqs.length} RFQ{rfqs.length !== 1 ? 's' : ''} pending review
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-500 shadow-sm sm:px-4">
+          <Wrench className="h-4 w-4 text-blue-500" />
+          <span>
+            {rfqs.length} RFQ{rfqs.length !== 1 ? 's' : ''} pending review
+          </span>
         </div>
       </div>
 
@@ -544,13 +550,16 @@ const EngineeringReviewTab = () => {
       ) : (
         <div className="space-y-4">
           {rfqs.map((rfq) => (
-            <div key={rfq._id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <div
+              key={rfq._id}
+              className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+            >
+              <div className="px-4 py-4 sm:px-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <h3 className="text-lg font-semibold text-gray-900">{rfq.rfqNumber}</h3>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
+                      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
                         rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
                         rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
                         rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
@@ -560,37 +569,52 @@ const EngineeringReviewTab = () => {
                       </span>
                       {getStatusBadge(rfq)}
                     </div>
-                    
-                    <div className="space-y-1 mb-2">
-                      <p className="text-sm font-medium text-gray-700">Customer: {rfq.customerName}</p>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-700">
+                        Customer: {rfq.customerName}
+                      </p>
                       {rfq.contactPerson && (
-                        <p className="text-sm text-gray-600">Contact: {rfq.contactPerson.name}</p>
+                        <p className="text-sm text-gray-600">
+                          Contact: {rfq.contactPerson.name}
+                        </p>
                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-gray-500 mt-2">
-                      <span>Requester: {rfq.requesterId?.fullName || rfq.requesterId?.email || 'N/A'}</span>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                      <span>
+                        Requester: {rfq.requesterId?.fullName || rfq.requesterId?.email || 'N/A'}
+                      </span>
                       {rfq.engineeringTransit?.assignedTo && (
-                        <span>Assigned to: {rfq.engineeringTransit.assignedTo?.fullName || rfq.engineeringTransit.assignedTo?.email || 'N/A'}</span>
+                        <span>
+                          Assigned to:{' '}
+                          {rfq.engineeringTransit.assignedTo?.fullName ||
+                            rfq.engineeringTransit.assignedTo?.email ||
+                            'N/A'}
+                        </span>
                       )}
                       <span>Created: {new Date(rfq.createdAt).toLocaleDateString()}</span>
                       {rfq.engineeringTransit?.assignedAt && (
-                        <span>Assigned: {new Date(rfq.engineeringTransit.assignedAt).toLocaleDateString()}</span>
+                        <span>
+                          Assigned: {new Date(rfq.engineeringTransit.assignedAt).toLocaleDateString()}
+                        </span>
                       )}
                     </div>
-
                     {rfq.description && (
-                      <p className="text-sm text-gray-600 mt-2">{rfq.description}</p>
+                      <p className="text-sm text-gray-600">{rfq.description}</p>
                     )}
-
                     {rfq.engineeringTransit?.comments && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                        <p className="text-sm font-medium text-gray-700 mb-1">Previous Review Comments:</p>
+                      <div className="rounded-md bg-gray-50 p-3">
+                        <p className="mb-1 text-sm font-medium text-gray-700">
+                          Previous Review Comments:
+                        </p>
                         <p className="text-sm text-gray-600">{rfq.engineeringTransit.comments}</p>
                         {rfq.engineeringTransit.canDo !== null && (
-                          <p className="text-sm mt-2">
+                          <p className="mt-2 text-sm">
                             <span className="font-medium">Decision: </span>
-                            <span className={rfq.engineeringTransit.canDo ? 'text-green-600' : 'text-red-600'}>
+                            <span
+                              className={
+                                rfq.engineeringTransit.canDo ? 'text-green-600' : 'text-red-600'
+                              }
+                            >
                               {rfq.engineeringTransit.canDo ? 'Can Do' : 'Cannot Do'}
                             </span>
                           </p>
@@ -598,38 +622,43 @@ const EngineeringReviewTab = () => {
                       </div>
                     )}
                   </div>
-
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                     <button
                       onClick={() => toggleExpand(rfq._id)}
-                      className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+                      className="flex items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                     >
                       {expandedRFQ === rfq._id ? (
-                        <ChevronUp className="h-5 w-5" />
+                        <>
+                          <ChevronUp className="h-4 w-4" />
+                          <span className="ml-1 hidden text-xs sm:inline">Collapse</span>
+                        </>
                       ) : (
-                        <ChevronDown className="h-5 w-5" />
+                        <>
+                          <ChevronDown className="h-4 w-4" />
+                          <span className="ml-1 hidden text-xs sm:inline">Details</span>
+                        </>
                       )}
                     </button>
                     <button
                       onClick={() => navigate(`/quotations/rfq/${rfq._id}`)}
-                      className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-md"
+                      className="flex items-center justify-center gap-2 rounded-md border border-blue-100 bg-white px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-900"
                     >
-                      <Eye className="h-5 w-5" />
+                      <Eye className="h-4 w-4" />
+                      <span className="hidden text-xs sm:inline">Open</span>
                     </button>
                     {rfq.engineeringTransit?.status !== 'reviewed' && (
                       <button
                         onClick={() => showReview(rfq)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
                       >
-                        <Wrench className="h-4 w-4 inline mr-1" />
+                        <Wrench className="h-4 w-4" />
                         Review
                       </button>
                     )}
                   </div>
                 </div>
-
                 {expandedRFQ === rfq._id && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="mt-4 border-t border-gray-200 pt-4">
                     <div className="space-y-4">
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Line of Business: {rfq.lineOfBusiness?.type || 'karoseri'}</h4>
@@ -787,12 +816,24 @@ const EngineeringReviewTab = () => {
           size="xl"
         >
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{selectedRFQ.rfqNumber}</h3>
-              <p className="text-sm text-gray-600">Customer: {selectedRFQ.customerName}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Line of Business: <span className="font-medium">{selectedRFQ.lineOfBusiness?.type || 'karoseri'}</span>
-              </p>
+            <div className="flex flex-col gap-3 rounded-xl bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 sm:text-xl">{selectedRFQ.rfqNumber}</h3>
+                <p className="text-sm text-gray-600">Customer: {selectedRFQ.customerName}</p>
+                <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+                  Line of Business: <span className="font-medium">{selectedRFQ.lineOfBusiness?.type || 'karoseri'}</span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 sm:text-sm">
+                <span className="rounded-full bg-white px-3 py-1 shadow-sm">
+                  Requester: {selectedRFQ.requesterId?.fullName || selectedRFQ.requesterId?.email || 'N/A'}
+                </span>
+                {selectedRFQ.engineeringTransit?.assignedTo && (
+                  <span className="rounded-full bg-white px-3 py-1 shadow-sm">
+                    Assigned to: {selectedRFQ.engineeringTransit.assignedTo.fullName || selectedRFQ.engineeringTransit.assignedTo.email}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-2">
@@ -844,34 +885,34 @@ const EngineeringReviewTab = () => {
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
                 Can this be done? <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setReviewData({ ...reviewData, canDo: true })}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
+                  className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-semibold transition-colors ${
                     reviewData.canDo === true
-                      ? 'border-green-500 bg-green-50 text-green-700'
+                      ? 'border-green-500 bg-green-50 text-green-700 shadow-sm'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'
                   }`}
                 >
-                  <CheckCircle className="h-5 w-5 mx-auto mb-1" />
-                  <span className="font-medium">Can Do</span>
+                  <CheckCircle className="h-5 w-5" />
+                  <span>Can Do</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setReviewData({ ...reviewData, canDo: false })}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
+                  className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-semibold transition-colors ${
                     reviewData.canDo === false
-                      ? 'border-red-500 bg-red-50 text-red-700'
+                      ? 'border-red-500 bg-red-50 text-red-700 shadow-sm'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'
                   }`}
                 >
-                  <XCircle className="h-5 w-5 mx-auto mb-1" />
-                  <span className="font-medium">Cannot Do</span>
+                  <XCircle className="h-5 w-5" />
+                  <span>Cannot Do</span>
                 </button>
               </div>
             </div>
@@ -891,17 +932,17 @@ const EngineeringReviewTab = () => {
 
             {/* Karoseri Specifications Editor */}
             {selectedRFQ.lineOfBusiness?.type === 'karoseri' && (
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="block text-sm font-medium text-gray-700">
+              <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="text-sm font-medium text-gray-700">
                     Modified Specifications
                   </label>
                   <button
                     type="button"
                     onClick={addItem}
-                    className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
                   >
-                    <Plus className="h-4 w-4 mr-1" />
+                    <Plus className="h-4 w-4" />
                     Add Item
                   </button>
                 </div>
@@ -931,89 +972,100 @@ const EngineeringReviewTab = () => {
                       originalItem && item.chassis !== originalItem.chassis;
 
                     return (
-                    <div key={itemIndex} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
+                    <div
+                      key={itemIndex}
+                      className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          Item {item.itemNumber}
+                        </h4>
                         <button
                           type="button"
                           onClick={() => removeItem(itemIndex)}
-                          className="text-red-600 hover:text-red-800"
+                          className="inline-flex items-center gap-2 text-sm text-red-600 hover:text-red-700"
                         >
                           <X className="h-4 w-4" />
+                          Remove
                         </button>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="p-4 bg-gray-50">
-                          <div className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                             Original (Read Only)
                           </div>
-                          
-                            {originalItem ? (
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-1">Karoseri</label>
-                                  <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
-                                    {originalItem.karoseri || '-'}
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-1">Chassis</label>
-                                  <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
-                                    {originalItem.chassis || '-'}
-                                  </div>
-                                </div>
-                                {originalItem.chassisModel && (
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Chassis Model</label>
-                                    <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900">
-                                      {originalItem.chassisModel || '-'}
-                                    </div>
-                                  </div>
-                                )}
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                                  <div className="px-2 py-1 text-sm bg-white border border-gray-200 rounded text-gray-900 min-h-[3rem]">
-                                    {originalItem.notes || '-'}
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-600 mb-2">Specifications</label>
-                                  <div className="space-y-2">
-                                    {originalItem.specifications && originalItem.specifications.length > 0 ? (
-                                      originalItem.specifications.map((spec, specIdx) => (
-                                        <div key={specIdx} className="border border-gray-200 rounded p-2 bg-white">
-                                          <div className="text-xs font-medium text-gray-700 mb-1">
-                                            {spec.category || 'Unnamed Category'}
-                                          </div>
-                                          {spec.items && spec.items.length > 0 && (
-                                            <div className="space-y-1 ml-2">
-                                              {spec.items.map((si, siIdx) => (
-                                                <div key={siIdx} className="text-xs text-gray-600">
-                                                  <span className="font-medium">{si.name || ''}</span>
-                                                  {si.name && si.specification && ':'} {si.specification || ''}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-xs text-gray-400 px-2 py-1">No specifications</div>
-                                    )}
-                                  </div>
+                          {originalItem ? (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600">Karoseri</label>
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-900">
+                                  {originalItem.karoseri || '-'}
                                 </div>
                               </div>
-                            ) : (
-                              <div className="text-xs text-gray-400">Original item not found</div>
-                            )}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600">Chassis</label>
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-900">
+                                  {originalItem.chassis || '-'}
+                                </div>
+                              </div>
+                              {originalItem.chassisModel && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600">
+                                    Chassis Model
+                                  </label>
+                                  <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-900">
+                                    {originalItem.chassisModel || '-'}
+                                  </div>
+                                </div>
+                              )}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600">Notes</label>
+                                <div className="min-h-[3rem] rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm text-gray-900">
+                                  {originalItem.notes || '-'}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-xs font-medium text-gray-600">
+                                  Specifications
+                                </label>
+                                {originalItem.specifications && originalItem.specifications.length > 0 ? (
+                                  originalItem.specifications.map((spec, specIdx) => (
+                                    <div key={specIdx} className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-700">
+                                      <div className="font-semibold text-gray-800">
+                                        {spec.category || 'Unnamed Category'}
+                                      </div>
+                                      {spec.items && spec.items.length > 0 && (
+                                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                                          {spec.items.map((si, siIdx) => (
+                                            <li key={siIdx}>
+                                              <span className="font-medium">{si.name || ''}</span>
+                                              {si.name && si.specification && ':'}{' '}
+                                              {si.specification || ''}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded border border-dashed border-gray-300 bg-white px-3 py-2 text-xs text-gray-400">
+                                    No specifications
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded border border-dashed border-gray-300 bg-white px-3 py-2 text-xs text-gray-400">
+                              Original item not found
+                            </div>
+                          )}
                         </div>
-                        
-                        <div className="p-4 bg-white">
-                          <div className="text-xs font-semibold text-blue-600 mb-3 uppercase tracking-wide">
+
+                        <div className="space-y-3 rounded-lg border border-indigo-100 bg-white p-4 shadow-sm">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
                             Modified (Editable)
                           </div>
-                          
                           <div className="space-y-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Karoseri</label>
@@ -1089,12 +1141,12 @@ const EngineeringReviewTab = () => {
                                   return (
                                     <div 
                                       key={specIndex} 
-                                      className="border border-gray-200 rounded p-2"
+                                      className="rounded border border-gray-200 p-2"
                                       style={{
                                         backgroundColor: isDifferent ? '#fef3c7' : 'white'
                                       }}
                                     >
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <input
                                           type="text"
                                           value={spec.category || ''}

@@ -18,19 +18,8 @@ const QuotationPage = () => {
   const fetchRFQDetails = useCallback(async () => {
     try {
       setRfqLoading(true);
-      const [rfqResponse, documentsResponse] = await Promise.all([
-        axiosInstance.get(`/api/rfq/${rfqId}`),
-        axiosInstance.get(`/api/rfq/${rfqId}/documents`)
-      ]);
-
-      const rfqData = rfqResponse.data?.data?.rfq || null;
-      const documents = documentsResponse.data?.data?.documents || [];
-
-      const enrichedRFQ = rfqData
-        ? { ...rfqData, documents }
-        : null;
-
-      setRfqDetails(enrichedRFQ);
+      const response = await axiosInstance.get(`/api/rfq/${rfqId}`);
+      setRfqDetails(response.data.data.rfq);
     } catch (error) {
       console.error('Error fetching RFQ details:', error);
       toast.error('Failed to fetch RFQ details');
@@ -284,35 +273,43 @@ const QuotationPage = () => {
         ) : (
           <>
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">Quotation Management</h1>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+              <div className="flex flex-col gap-4 rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-gray-100 backdrop-blur sm:p-6">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Quotation Workspace
+                    </span>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+                        Quotation Management
+                      </h1>
+                    </div>
+                  </div>
+                  <p className="text-sm leading-6 text-gray-500 sm:text-base">
+                    {activeTab ? getTabDescription(activeTab) : 'Kelola dan lacak seluruh proses quotation sesuai peran Anda.'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
                   <button
                     onClick={handleBack}
-                    className="flex items-center px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 sm:w-auto"
                   >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    <ArrowLeft className="h-4 w-4" />
                     Back to Dashboard
                   </button>
                   <button
                     onClick={() => navigate('/quotations/analysis')}
-                    className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700 sm:w-auto"
                   >
-                    <BarChart3 className="h-4 w-4 mr-2" />
+                    <BarChart3 className="h-4 w-4" />
                     View Analysis
                   </button>
                 </div>
-                {activeTab && (
-                  <div className="text-sm text-gray-500">
-                    {getTabDescription(activeTab)}
-                  </div>
-                )}
               </div>
             </div>
             
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-6">
+            <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+              <div className="p-4 sm:p-6">
                 <LazyTabs
                   tabs={tabs}
                   defaultActiveTab={getDefaultActiveTab()}
