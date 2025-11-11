@@ -25,3 +25,4 @@ const useSmartBackNavigation = (fallbackPath = '/') => {
 
 export default useSmartBackNavigation;
 
+

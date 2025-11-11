@@ -69,6 +69,12 @@ const WIN_SUB_STATUS_OPTIONS = [
 const ROMAN_MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const ROMAN_MONTH_OPTIONS = ROMAN_MONTHS.map((month) => ({ value: month, label: month }));
 
+const SPK_TAX_OPTIONS = [
+  { value: 'P', label: 'P', description: 'P is pajak' },
+  { value: '-', label: '""', description: 'Empty is non pajak' },
+  { value: 'KBS', label: 'KBS', description: 'KBS is non pajak khusus non CV KBS' }
+];
+
 const getCurrentRomanMonthMeta = () => {
   const now = new Date();
   return {
@@ -89,13 +95,31 @@ const buildOcPreview = (sequence, monthRoman, year) => {
   return `${sequence}/${roman}/${normalizedYear}`;
 };
 
-const buildSpkPreview = (sequence, code, monthRoman, year) => {
+const resolveSpkCodeValue = (type) => {
+  const normalized = (type || '').toString().trim().toUpperCase();
+  if (normalized === '-' || normalized === '""' || normalized === '') return '-';
+  if (normalized === 'P') return 'P';
+  if (normalized === 'KBS') return 'KBS';
+  return '-';
+};
+
+const buildSpkPreview = (sequence, monthRoman, type, year) => {
   if (!sequence) return 'Not set';
-  const safeCode = (code || '').toUpperCase();
-  if (!safeCode) return 'Incomplete (missing code)';
   const roman = (monthRoman || getCurrentRomanMonthMeta().roman).toUpperCase();
   const normalizedYear = year || getCurrentRomanMonthMeta().year;
-  return `${sequence}/${safeCode}/${roman}/${normalizedYear}`;
+  const codeValue = resolveSpkCodeValue(type);
+  const displayCode = codeValue === '-' ? '' : codeValue;
+  return `${sequence}/${roman}/${displayCode}/${normalizedYear}`;
+};
+
+const isRomanMonth = (value) => ROMAN_MONTHS.includes((value || '').toUpperCase());
+
+const deriveSpkTypeFromCode = (code) => {
+  const upper = (code || '').toString().trim().toUpperCase();
+  if (upper === 'P') return 'P';
+  if (upper === 'KBS') return 'KBS';
+  if (upper === '-' || upper === '""' || !upper) return '-';
+  return '-';
 };
 
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
@@ -131,7 +155,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     ocMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
     ocYear: String(new Date().getFullYear()),
     spkSequence: '',
-    spkCode: '',
+    spkType: '-',
     spkMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
     spkYear: String(new Date().getFullYear())
   });
@@ -365,10 +389,33 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     const ocRoman = (ocParts[1] || currentMeta.roman).toUpperCase();
     const ocYearValue = ocParts[2] || currentMeta.year;
 
-    const spkSequence = spkParts[0] || '';
-    const spkCodeValue = (spkParts[1] || '').toUpperCase();
-    const spkRoman = spkParts.length >= 3 ? spkParts[2].toUpperCase() : currentMeta.roman;
-    const spkYearValue = spkParts.length >= 4 ? spkParts[3] : currentMeta.year;
+    const currentSpkMeta = getCurrentRomanMonthMeta();
+    const inferredSequence = header.spkSequenceNumber || (spkParts[0] || '').trim();
+    let inferredMonth = (header.spkMonthRoman || '').toUpperCase();
+    let inferredType = deriveSpkTypeFromCode(header.spkLetterCode || header.spkCode);
+    let inferredYear = header.spkYear || currentSpkMeta.year;
+
+    if (!inferredMonth || !isRomanMonth(inferredMonth)) {
+      if (spkParts.length >= 4 && isRomanMonth(spkParts[1])) {
+        inferredMonth = spkParts[1].toUpperCase();
+        inferredType = deriveSpkTypeFromCode(spkParts[2]);
+        inferredYear = spkParts[3] || currentSpkMeta.year;
+      } else if (spkParts.length >= 4 && isRomanMonth(spkParts[2])) {
+        inferredMonth = spkParts[2].toUpperCase();
+        inferredType = deriveSpkTypeFromCode(spkParts[1]);
+        inferredYear = spkParts[3] || currentSpkMeta.year;
+      } else {
+        inferredMonth = currentSpkMeta.roman;
+      }
+    }
+
+    if (!inferredType) {
+      inferredType = '-';
+    }
+
+    if (!inferredYear) {
+      inferredYear = currentSpkMeta.year;
+    }
 
     const headerSelectedOfferId = header.selectedOfferId?.toString?.() || '';
     const headerSelectedItemIds = (header.selectedOfferItemIds || []).map((id) => id?.toString?.() ?? id);
@@ -432,10 +479,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       ocSequence,
       ocMonthRoman: ocRoman,
       ocYear: ocYearValue,
-      spkSequence,
-      spkCode: spkCodeValue,
-      spkMonthRoman: spkRoman,
-      spkYear: spkYearValue
+      spkSequence: inferredSequence,
+      spkType: inferredType,
+      spkMonthRoman: inferredMonth,
+      spkYear: inferredYear
     });
   };
 
@@ -453,7 +500,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       ocMonthRoman: currentMeta.roman,
       ocYear: currentMeta.year,
       spkSequence: '',
-      spkCode: '',
+      spkType: '-',
       spkMonthRoman: currentMeta.roman,
       spkYear: currentMeta.year
     });
@@ -474,6 +521,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       if (newStatus !== 'win') {
         updated.selectedOfferId = '';
         updated.selectedItemIds = [];
+        updated.spkSequence = '';
+        updated.spkType = '-';
+        updated.spkMonthRoman = currentMeta.roman;
+        updated.spkYear = currentMeta.year;
       }
       
       if (newStatus === 'win') {
@@ -563,7 +614,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         ocMonthRoman,
         ocYear,
         spkSequence,
-        spkCode,
+        spkType,
         spkMonthRoman,
         spkYear
       } = statusForm;
@@ -655,21 +706,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         }
 
         const spkSequenceTrimmed = (spkSequence || '').trim();
-        const spkCodeTrimmed = (spkCode || '').trim().toUpperCase();
         if (spkSequenceTrimmed) {
-          if (!spkCodeTrimmed) {
-            toast.error('SPK code is required when SPK number is provided');
-            return;
-          }
           payload.spkSequenceNumber = spkSequenceTrimmed;
-          payload.spkLetterCode = spkCodeTrimmed;
+          payload.spkLetterCode = resolveSpkCodeValue(spkType);
           payload.spkMonthRoman = (spkMonthRoman || currentMeta.roman).trim().toUpperCase();
           payload.spkYear = Number(spkYear || currentMeta.year);
         } else {
-          if (spkCodeTrimmed) {
-            toast.error('SPK number is required when SPK code is provided');
-            return;
-          }
           payload.spkSequenceNumber = '';
           payload.spkLetterCode = '';
         }
@@ -715,7 +757,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             : prev.ocMonthRoman,
         ocYear: status === 'win' ? String(payload.ocYear || prev.ocYear || getCurrentRomanMonthMeta().year) : prev.ocYear,
         spkSequence: status === 'win' ? (payload.spkSequenceNumber || '') : prev.spkSequence,
-        spkCode: status === 'win' ? (payload.spkLetterCode || '') : prev.spkCode,
+        spkType:
+          status === 'win'
+            ? deriveSpkTypeFromCode(payload.spkLetterCode)
+            : prev.spkType,
         spkMonthRoman:
           status === 'win'
             ? (payload.spkMonthRoman || prev.spkMonthRoman || getCurrentRomanMonthMeta().roman)
@@ -724,6 +769,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       }));
 
       toast.success('Quotation status updated successfully');
+      await fetchQuotations();
       closeStatusModal();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to update status');
@@ -2201,16 +2247,16 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700">
                       SPK Number
                     </label>
                     <span className="text-xs text-gray-500">
-                      Format: number/CODE/ROMAN/year
+                      Format: number/ROMAN/(P | "" | KBS)/year
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <input
                       type="text"
                       inputMode="numeric"
@@ -2223,19 +2269,6 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                         }));
                       }}
                       placeholder="Number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      value={statusForm.spkCode}
-                      onChange={(e) => {
-                        const sanitized = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          spkCode: sanitized
-                        }));
-                      }}
-                      placeholder="Code (e.g., MKT)"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <CustomDropdown
@@ -2264,16 +2297,62 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                      SPK Classification
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {SPK_TAX_OPTIONS.map((option) => (
+                        <label
+                          key={option.value}
+                          className={`flex flex-col rounded-lg border px-3 py-2 text-sm transition ${
+                            statusForm.spkType === option.value
+                              ? 'border-blue-400 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="spkType"
+                              value={option.value}
+                              checked={statusForm.spkType === option.value}
+                              onChange={() =>
+                                setStatusForm((prev) => ({
+                                  ...prev,
+                                  spkType: option.value
+                                }))
+                              }
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="font-semibold">{option.label}</span>
+                          </span>
+                          <span className="mt-1 text-xs text-gray-500">
+                            {option.description}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <p className="text-xs text-gray-500">
                     Preview:{' '}
                     <span className="font-semibold text-gray-700">
                       {buildSpkPreview(
                         statusForm.spkSequence,
-                        statusForm.spkCode,
                         statusForm.spkMonthRoman,
+                        statusForm.spkType,
                         statusForm.spkYear
                       )}
                     </span>
+                    {statusForm.spkType === 'P' && (
+                      <span className="ml-2 text-xs text-blue-600">Pajak</span>
+                    )}
+                    {statusForm.spkType === '-' && (
+                      <span className="ml-2 text-xs text-amber-600">Non pajak</span>
+                    )}
+                    {statusForm.spkType === 'KBS' && (
+                      <span className="ml-2 text-xs text-emerald-600">Non pajak khusus non CV KBS</span>
+                    )}
                   </p>
                 </div>
               </div>

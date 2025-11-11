@@ -14,7 +14,10 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  Eye
+  Eye,
+  Download,
+  Users,
+  UserCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
@@ -66,6 +69,12 @@ const WIN_SUB_STATUS_OPTIONS = [
 const ROMAN_MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const ROMAN_MONTH_OPTIONS = ROMAN_MONTHS.map((month) => ({ value: month, label: month }));
 
+const SPK_TAX_OPTIONS = [
+  { value: 'P', label: 'P', description: 'P is pajak' },
+  { value: '-', label: '""', description: 'Empty is non pajak' },
+  { value: 'KBS', label: 'KBS', description: 'KBS is non pajak khusus non CV KBS' }
+];
+
 const getCurrentRomanMonthMeta = () => {
   const now = new Date();
   return {
@@ -82,14 +91,32 @@ const buildOcPreview = (sequence, monthRoman, year) => {
   return `${sequence}/${roman}/${normalizedYear}`;
 };
 
-const buildSpkPreview = (sequence, code, monthRoman, year) => {
+const resolveSpkCodeValue = (type) => {
+  const normalized = (type || '').toString().trim().toUpperCase();
+  if (normalized === '-' || normalized === '""' || normalized === '') return '-';
+  if (normalized === 'P') return 'P';
+  if (normalized === 'KBS') return 'KBS';
+  return '-';
+};
+
+const deriveSpkTypeFromCode = (code) => {
+  const upper = (code || '').toString().trim().toUpperCase();
+  if (upper === 'P') return 'P';
+  if (upper === 'KBS') return 'KBS';
+  if (upper === '-' || upper === '""' || !upper) return '-';
+  return '-';
+};
+
+const isRomanMonth = (value) => ROMAN_MONTHS.includes((value || '').toUpperCase());
+
+const buildSpkPreview = (sequence, monthRoman, type, year) => {
   if (!sequence) return 'Not set';
-  const safeCode = (code || '').toUpperCase();
-  if (!safeCode) return 'Incomplete (missing code)';
   const meta = getCurrentRomanMonthMeta();
   const roman = (monthRoman || meta.roman).toUpperCase();
   const normalizedYear = year || meta.year;
-  return `${sequence}/${safeCode}/${roman}/${normalizedYear}`;
+  const codeValue = resolveSpkCodeValue(type);
+  const displayCode = codeValue === '-' ? '' : codeValue;
+  return `${sequence}/${roman}/${displayCode}/${normalizedYear}`;
 };
 
 const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) => {
@@ -170,7 +197,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
     ocMonthRoman: currentRomanMeta.roman,
     ocYear: currentRomanMeta.year,
     spkSequence: '',
-    spkCode: '',
+    spkType: '-',
     spkMonthRoman: currentRomanMeta.roman,
     spkYear: currentRomanMeta.year
   });
@@ -197,6 +224,53 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
     quotationCreators: [],
     engineers: []
   });
+
+  const downloadActivity = useMemo(() => {
+    const rawLogs = Array.isArray(headerState?.downloads) ? [...headerState.downloads] : [];
+    const logs = rawLogs
+      .map((entry, index) => ({
+        ...entry,
+        downloadedAt: entry.downloadedAt ? entry.downloadedAt : null,
+        userId: entry.userId || null,
+        _key: `${entry.userId?._id || entry.userId || 'unknown'}-${index}`
+      }))
+      .sort((a, b) => {
+        const dateA = a.downloadedAt ? new Date(a.downloadedAt).getTime() : 0;
+        const dateB = b.downloadedAt ? new Date(b.downloadedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+
+    const uniqueMap = new Map();
+    logs.forEach((entry, idx) => {
+      const user = entry.userId;
+      const userId = user?._id || user || `anonymous-${idx}`;
+      const displayName = user?.fullName || user?.name || 'Unknown User';
+      const email = user?.email || user?.username || '';
+      const downloadedAt = entry.downloadedAt ? new Date(entry.downloadedAt) : null;
+
+      if (!uniqueMap.has(userId)) {
+        uniqueMap.set(userId, {
+          id: userId,
+          name: displayName,
+          email,
+          count: 0,
+          lastDownloadedAt: downloadedAt
+        });
+      }
+
+      const record = uniqueMap.get(userId);
+      record.count += 1;
+      if (downloadedAt && (!record.lastDownloadedAt || downloadedAt > record.lastDownloadedAt)) {
+        record.lastDownloadedAt = downloadedAt;
+      }
+    });
+
+    return {
+      logs,
+      totalDownloads: logs.length,
+      uniqueDownloaders: Array.from(uniqueMap.values())
+    };
+  }, [headerState?.downloads]);
 
   useEffect(() => {
     setHeaderState(header);
@@ -436,15 +510,36 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
 
     const spkNumber = headerState.spkNumber || '';
     const spkParts = spkNumber ? spkNumber.split('/') : [];
+    const currentSpkMeta = getCurrentRomanMonthMeta();
     const spkSequence =
       headerState.spkSequenceNumber ||
       (spkParts[0] || '').trim();
-    const spkCode =
-      headerState.spkCode ||
-      (spkParts[1] || '').trim().toUpperCase();
-    const spkMonthRoman =
-      (spkParts.length >= 3 ? spkParts[2] : currentMeta.roman).toUpperCase();
-    const spkYear = spkParts.length >= 4 ? spkParts[3] : currentMeta.year;
+    let spkMonthRoman =
+      (headerState.spkMonthRoman || '').toUpperCase();
+    let spkType = deriveSpkTypeFromCode(headerState.spkLetterCode || headerState.spkCode);
+    let spkYear = headerState.spkYear || currentSpkMeta.year;
+
+    if (!spkMonthRoman || !isRomanMonth(spkMonthRoman)) {
+      if (spkParts.length >= 4 && isRomanMonth(spkParts[1])) {
+        spkMonthRoman = spkParts[1].toUpperCase();
+        spkType = deriveSpkTypeFromCode(spkParts[2]);
+        spkYear = spkParts[3] || currentSpkMeta.year;
+      } else if (spkParts.length >= 4 && isRomanMonth(spkParts[2])) {
+        spkMonthRoman = spkParts[2].toUpperCase();
+        spkType = deriveSpkTypeFromCode(spkParts[1]);
+        spkYear = spkParts[3] || currentSpkMeta.year;
+      } else {
+        spkMonthRoman = currentSpkMeta.roman;
+      }
+    }
+
+    if (!spkType) {
+      spkType = '-';
+    }
+
+    if (!spkYear) {
+      spkYear = currentSpkMeta.year;
+    }
 
     const headerSelectedOfferId = headerState.selectedOfferId?.toString?.() || '';
     const headerSelectedItemIds =
@@ -503,7 +598,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
       ocMonthRoman,
       ocYear: String(ocYear),
       spkSequence: spkSequence,
-      spkCode,
+      spkType,
       spkMonthRoman,
       spkYear: String(spkYear)
     });
@@ -528,7 +623,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         updated.ocMonthRoman = currentMeta.roman;
         updated.ocYear = currentMeta.year;
         updated.spkSequence = '';
-        updated.spkCode = '';
+        updated.spkType = '-';
         updated.spkMonthRoman = currentMeta.roman;
         updated.spkYear = currentMeta.year;
       }
@@ -544,7 +639,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         }
         if (!prev.spkSequence) {
           updated.spkSequence = '';
-          updated.spkCode = '';
+          updated.spkType = prev.spkType || '-';
           updated.spkMonthRoman = currentMeta.roman;
           updated.spkYear = currentMeta.year;
         }
@@ -620,7 +715,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         ocMonthRoman,
         ocYear,
         spkSequence,
-        spkCode,
+        spkType,
         spkMonthRoman,
         spkYear
       } = statusForm;
@@ -711,21 +806,12 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
         }
 
         const spkSequenceTrimmed = (spkSequence || '').trim();
-        const spkCodeTrimmed = (spkCode || '').trim().toUpperCase();
         if (spkSequenceTrimmed) {
-          if (!spkCodeTrimmed) {
-            toast.error('SPK code is required when SPK number is provided');
-            return;
-          }
           payload.spkSequenceNumber = spkSequenceTrimmed;
-          payload.spkLetterCode = spkCodeTrimmed;
+          payload.spkLetterCode = resolveSpkCodeValue(spkType);
           payload.spkMonthRoman = (spkMonthRoman || meta.roman).toUpperCase();
           payload.spkYear = Number(spkYear || meta.year);
         } else {
-          if (spkCodeTrimmed) {
-            toast.error('SPK number is required when SPK code is provided');
-            return;
-          }
           payload.spkSequenceNumber = '';
           payload.spkLetterCode = '';
         }
@@ -1066,6 +1152,95 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Download Activity */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Download className="h-5 w-5 text-blue-600" />
+              Download Activity
+            </h3>
+            <p className="text-sm text-gray-500">
+              {downloadActivity.totalDownloads > 0
+                ? `${downloadActivity.totalDownloads} download${downloadActivity.totalDownloads > 1 ? 's' : ''} • ${downloadActivity.uniqueDownloaders.length} unique user${downloadActivity.uniqueDownloaders.length === 1 ? '' : 's'}`
+                : 'No downloads have been recorded for this quotation yet.'}
+            </p>
+          </div>
+          {downloadActivity.totalDownloads > 0 && (
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+              <span className="inline-flex items-center gap-2">
+                <Download className="h-4 w-4 text-blue-500" />
+                <span>Total: {downloadActivity.totalDownloads}</span>
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Users className="h-4 w-4 text-emerald-500" />
+                <span>Unique: {downloadActivity.uniqueDownloaders.length}</span>
+              </span>
+            </div>
+          )}
+        </div>
+
+        {downloadActivity.totalDownloads > 0 ? (
+          <>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {downloadActivity.uniqueDownloaders.map((user) => (
+                <div
+                  key={user.id}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <UserCircle className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{user.name}</p>
+                      {user.email && (
+                        <p className="text-xs text-gray-500">{user.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-600">
+                    <div>Downloads: {user.count}</div>
+                    {user.lastDownloadedAt && (
+                      <div>
+                        Last: {formatDate(user.lastDownloadedAt, true)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Latest Downloads</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {downloadActivity.logs.slice(0, 10).map((entry) => {
+                  const user = entry.userId || {};
+                  const name = user.fullName || user.name || 'Unknown User';
+                  const email = user.email || '';
+                  return (
+                    <div
+                      key={entry._key}
+                      className="flex items-center justify-between rounded-md border border-gray-100 bg-white px-3 py-2 text-sm"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-800">{name}</span>
+                        {email && <span className="text-xs text-gray-500">{email}</span>}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {entry.downloadedAt ? formatDate(entry.downloadedAt, true) : '—'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 text-sm text-gray-500">
+            Invite your teammates to download the quotation and the activity will appear here.
+          </div>
+        )}
       </div>
 
       {/* RFQ Reference */}
@@ -2273,16 +2448,16 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                   </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700">
                       SPK Number
                     </label>
                     <span className="text-xs text-gray-500">
-                      Format: number/CODE/ROMAN/year
+                      Format: number/ROMAN/(P | "" | KBS)/year
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <input
                       type="text"
                       inputMode="numeric"
@@ -2295,19 +2470,6 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                         }));
                       }}
                       placeholder="Number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      value={statusForm.spkCode}
-                      onChange={(e) => {
-                        const sanitized = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          spkCode: sanitized
-                        }));
-                      }}
-                      placeholder="Code (e.g., MKT)"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <CustomDropdown
@@ -2336,16 +2498,62 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                      SPK Classification
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {SPK_TAX_OPTIONS.map((option) => (
+                        <label
+                          key={option.value}
+                          className={`flex flex-col rounded-lg border px-3 py-2 text-sm transition ${
+                            statusForm.spkType === option.value
+                              ? 'border-blue-400 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="status-spk-type"
+                              value={option.value}
+                              checked={statusForm.spkType === option.value}
+                              onChange={() =>
+                                setStatusForm((prev) => ({
+                                  ...prev,
+                                  spkType: option.value
+                                }))
+                              }
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="font-semibold">{option.label}</span>
+                          </span>
+                          <span className="mt-1 text-xs text-gray-500">
+                            {option.description}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <p className="text-xs text-gray-500">
                     Preview:{' '}
                     <span className="font-semibold text-gray-700">
                       {buildSpkPreview(
                         statusForm.spkSequence,
-                        statusForm.spkCode,
                         statusForm.spkMonthRoman,
+                        statusForm.spkType,
                         statusForm.spkYear
                       )}
                     </span>
+                    {statusForm.spkType === 'P' && (
+                      <span className="ml-2 text-xs text-blue-600">Pajak</span>
+                    )}
+                    {statusForm.spkType === '-' && (
+                      <span className="ml-2 text-xs text-amber-600">Non pajak</span>
+                    )}
+                    {statusForm.spkType === 'KBS' && (
+                      <span className="ml-2 text-xs text-emerald-600">Non pajak khusus non CV KBS</span>
+                    )}
                   </p>
                 </div>
               </div>
