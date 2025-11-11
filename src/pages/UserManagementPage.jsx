@@ -45,11 +45,17 @@ const UserManagementPage = () => {
       // Ensure we always have an array
       const usersData = response.data?.data || response.data || [];
       setUsers(Array.isArray(usersData) ? usersData : []);
-      setPagination(response.data?.pagination || { current: 1, pages: 1, total: 0 });
+      const paginationData = response.data?.pagination || response.data?.meta;
+      setPagination({
+        current: paginationData?.page || page,
+        pages: paginationData?.pages || paginationData?.totalPages || 1,
+        total: paginationData?.total || paginationData?.totalItems || usersData.length || 0
+      });
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to fetch users');
       setUsers([]); // Set empty array on error
+      setPagination({ current: 1, pages: 1, total: 0 });
     } finally {
       setLoading(false);
     }
@@ -450,7 +456,7 @@ const UserManagementPage = () => {
           <div className="mt-6 flex justify-center">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPagination(prev => ({ ...prev, current: prev.current - 1 }))}
+                onClick={() => fetchUsers(Math.max(1, pagination.current - 1), searchTerm)}
                 disabled={pagination.current === 1}
                 className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -460,7 +466,7 @@ const UserManagementPage = () => {
                 Page {pagination.current} of {pagination.pages}
               </span>
               <button
-                onClick={() => setPagination(prev => ({ ...prev, current: prev.current + 1 }))}
+                onClick={() => fetchUsers(Math.min(pagination.pages, pagination.current + 1), searchTerm)}
                 disabled={pagination.current === pagination.pages}
                 className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
