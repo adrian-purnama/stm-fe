@@ -68,11 +68,13 @@ const OfferItemForm = ({
   const fetchBodyTypes = async () => {
     setLoadingBodyTypes(true);
     try {
-      const response = await axiosInstance.get('/api/body-types');
-      setBodyTypes(response.data.data || []);
+      const response = await axiosInstance.get('/api/body-types/list');
+      const list = response?.data?.data || response?.data?.bodyTypes || [];
+      setBodyTypes(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Error fetching body types:', error);
       toast.error('Failed to load body types');
+      setBodyTypes([]);
     } finally {
       setLoadingBodyTypes(false);
     }
@@ -81,11 +83,13 @@ const OfferItemForm = ({
   const fetchChassisTypes = async () => {
     setLoadingChassisTypes(true);
     try {
-      const response = await axiosInstance.get('/api/chassis-types');
-      setChassisTypes(response.data.data || []);
+      const response = await axiosInstance.get('/api/chassis-types/list');
+      const list = response?.data?.data || response?.data?.chassisTypes || [];
+      setChassisTypes(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Error fetching chassis types:', error);
       toast.error('Failed to load chassis types');
+      setChassisTypes([]);
     } finally {
       setLoadingChassisTypes(false);
     }
@@ -154,7 +158,7 @@ const OfferItemForm = ({
     const fetchDrawingSpec = async () => {
       if (formData.drawingSpecification && formData.drawingSpecification !== null && typeof formData.drawingSpecification === 'string') {
         try {
-          const response = await ApiHelper.get(`/api/drawing-specifications/${formData.drawingSpecification}`);
+          const response = await axiosInstance.get(`/api/drawing-specifications/${formData.drawingSpecification}`);
           setSelectedDrawingSpec(response.data.data);
         } catch (error) {
           console.error('Error fetching drawing specification:', error);
@@ -501,7 +505,7 @@ const OfferItemForm = ({
                   <CustomDropdown
                     options={bodyTypes.map(bt => ({
                       value: bt._id,
-                      label: `${bt.name} (${bt.shortName})`
+                      label: bt.shortName ? `${bt.name} (${bt.shortName})` : bt.name
                     }))}
                     value={formData.bodyTypeId || ''}
                     onChange={(value) => {
@@ -525,7 +529,7 @@ const OfferItemForm = ({
                   <CustomDropdown
                     options={chassisTypes.map(ct => ({
                       value: ct._id,
-                      label: `${ct.name} (${ct.shortName})`
+                      label: ct.shortName ? `${ct.name} (${ct.shortName})` : ct.name
                     }))}
                     value={formData.chassisTypeId || ''}
                     onChange={(value) => {
@@ -609,7 +613,7 @@ const OfferItemForm = ({
                   <CustomDropdown
                     options={bodyTypes.map(bt => ({
                       value: bt._id,
-                      label: `${bt.name} (${bt.shortName})`
+                      label: bt.shortName ? `${bt.name} (${bt.shortName})` : bt.name
                     }))}
                     value={formData.templateSourceId || ''}
                     onChange={(value) => {
@@ -637,7 +641,7 @@ const OfferItemForm = ({
                   <CustomDropdown
                     options={chassisTypes.map(ct => ({
                       value: ct._id,
-                      label: `${ct.name} (${ct.shortName})`
+                      label: ct.shortName ? `${ct.name} (${ct.shortName})` : ct.name
                     }))}
                     value={formData.chassisTypeId || ''}
                     onChange={(value) => {
