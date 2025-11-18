@@ -601,6 +601,8 @@ const RequestQuotationTab = () => {
     }
   };
 
+  const [isSubmittingToEngineering, setIsSubmittingToEngineering] = useState(false);
+
   // Handle submit to engineering
   const handleSubmitToEngineering = async () => {
     if (!selectedEngineer) {
@@ -614,6 +616,7 @@ const RequestQuotationTab = () => {
     }
     
     try {
+      setIsSubmittingToEngineering(true);
       await axiosInstance.post(`/api/rfq/${selectedRFQ._id}/submit-to-engineering`, {
         engineeringId: selectedEngineer
       });
@@ -625,6 +628,8 @@ const RequestQuotationTab = () => {
     } catch (error) {
       console.error('Error submitting to engineering:', error);
       toast.error(error.response?.data?.message || 'Failed to submit to engineering');
+    } finally {
+      setIsSubmittingToEngineering(false);
     }
   };
 
@@ -1212,10 +1217,10 @@ const RequestQuotationTab = () => {
               </button>
               <button
                 onClick={handleSubmitToEngineering}
-                disabled={!selectedEngineer}
+                disabled={!selectedEngineer || isSubmittingToEngineering}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Submit to Engineering
+                {isSubmittingToEngineering ? 'Submitting...' : 'Submit to Engineering'}
               </button>
             </div>
           </div>

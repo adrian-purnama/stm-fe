@@ -55,21 +55,33 @@ const RFQDetailsView = ({ rfq, loading }) => {
 
   const handleDownloadRfqDocument = async (docEntry) => {
     try {
-      const response = await ApiHelper.get(`/api/rfq/documents/${docEntry._id}/download`, {
+      // The endpoint is /api/rfq/documents/:documentId/download (rfqDocuments.js is mounted at /api/rfq)
+      const documentId = docEntry._id || docEntry.file?.fileId || docEntry.fileId;
+      if (!documentId) {
+        toast.error('Document ID not found');
+        return;
+      }
+      
+      const response = await ApiHelper.get(`/api/rfq/documents/${documentId}/download`, {
         responseType: 'blob'
       });
-      const blob = new Blob([response.data], { type: docEntry.mimeType || 'application/octet-stream' });
+      
+      // Get the original filename from the document entry
+      const filename = docEntry.file?.originalName || docEntry.originalName || 'document';
+      const mimeType = docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
+      
+      const blob = new Blob([response.data], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
-      link.download = docEntry.originalName || 'document';
+      link.download = filename;
       window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading RFQ document:', error);
-      toast.error('Failed to download document');
+      toast.error(error.response?.data?.message || 'Failed to download document');
     }
   };
 

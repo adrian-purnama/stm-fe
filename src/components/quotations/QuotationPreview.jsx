@@ -96,7 +96,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
 
   const predefinedNotes = useMemo(() => ([
     { text: paymentTermsNote, selected: true },
-    { text: 'Loco Pabrik Cikandel', selected: true },
+    { text: 'Loco Pabrik Cikande', selected: true },
     { text: 'Harga tidak mengikat bisa berubah sewaktu-waktu tanpa pemberitahuan terlebih dahulu.', selected: true },
     { text: 'DIMENSI KAROSERI diluar SKRB tidak diperuntukan untuk dijalan raya (OFF ROAD)', selected: true },
     { text: 'Uji Type yang terbit hanya untuk karoseri dengan ukuran standard Dishub. Ukuran Oversize STM tidak bertanggung jawab jika uji type tidak dapat terbit dari Dishub', selected: true },

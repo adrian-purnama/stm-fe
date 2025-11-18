@@ -35,21 +35,33 @@ const EngineeringReviewTab = () => {
 
   const handleDownloadDocument = async (docEntry) => {
     try {
-      const response = await axiosInstance.get(`/api/rfq/documents/${docEntry._id}/download`, {
+      // The endpoint is /api/rfq/documents/:documentId/download (rfqDocuments.js is mounted at /api/rfq)
+      const documentId = docEntry._id || docEntry.file?.fileId || docEntry.fileId;
+      if (!documentId) {
+        toast.error('Document ID not found');
+        return;
+      }
+      
+      const response = await axiosInstance.get(`/api/rfq/documents/${documentId}/download`, {
         responseType: 'blob'
       });
-      const blob = new Blob([response.data], { type: docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream' });
+      
+      // Get the original filename from the document entry
+      const filename = docEntry.file?.originalName || docEntry.originalName || 'document';
+      const mimeType = docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
+      
+      const blob = new Blob([response.data], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
-      link.download = docEntry.file?.originalName || docEntry.originalName || 'document';
+      link.download = filename;
       window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading RFQ document:', error);
-      toast.error('Failed to download document');
+      toast.error(error.response?.data?.message || 'Failed to download document');
     }
   };
 
@@ -186,6 +198,8 @@ const EngineeringReviewTab = () => {
   }, [showReviewModal, selectedRFQ]);
 
   // Handle engineering review submission
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  
   const handleSubmitReview = async () => {
     try {
       if (reviewData.canDo === null) {
@@ -193,6 +207,7 @@ const EngineeringReviewTab = () => {
         return;
       }
 
+      setIsSubmittingReview(true);
       await axiosInstance.patch(`/api/rfq/${selectedRFQ._id}/engineering-review`, {
         canDo: reviewData.canDo,
         comments: reviewData.comments,
@@ -211,6 +226,8 @@ const EngineeringReviewTab = () => {
     } catch (error) {
       console.error('Error submitting engineering review:', error);
       toast.error(error.response?.data?.message || 'Failed to submit engineering review');
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -1498,10 +1515,10 @@ const EngineeringReviewTab = () => {
             </button>
             <button
               onClick={handleSubmitReview}
-              disabled={reviewData.canDo === null}
+              disabled={reviewData.canDo === null || isSubmittingReview}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Submit Review
+              {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
             </button>
           </div>
         </BaseModal>

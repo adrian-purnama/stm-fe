@@ -66,9 +66,12 @@ const ApproveQuotationTab = () => {
     }
   };
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // Handle RFQ approval
   const handleApprove = async (rfqId, notes = '') => {
     try {
+      setIsProcessing(true);
       await axiosInstance.patch(`/api/rfq/${rfqId}/approve`, { approvalNotes: notes });
       toast.success('RFQ approved successfully');
       fetchRFQs();
@@ -79,12 +82,15 @@ const ApproveQuotationTab = () => {
     } catch (error) {
       console.error('Error approving RFQ:', error);
       toast.error('Failed to approve RFQ');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Handle RFQ rejection
   const handleReject = async (rfqId, notes = '') => {
     try {
+      setIsProcessing(true);
       await axiosInstance.patch(`/api/rfq/${rfqId}/reject`, { rejectionNotes: notes });
       toast.success('RFQ rejected successfully');
       fetchRFQs();
@@ -95,6 +101,8 @@ const ApproveQuotationTab = () => {
     } catch (error) {
       console.error('Error rejecting RFQ:', error);
       toast.error('Failed to reject RFQ');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -717,6 +725,27 @@ const ApproveQuotationTab = () => {
                 {/* Expanded Items Details */}
                 {expandedRFQ === rfq._id && rfq.items && (
                   <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50">
+                    {/* Approve/Reject Buttons in Expanded View - Only show when status is pending and stage is approver */}
+                    {rfq.status === 'pending' && rfq.stage === 'approver' && (
+                      <div className="mb-4 pt-3 flex gap-2">
+                        <button
+                          onClick={() => showApproval(rfq, 'approve')}
+                          disabled={isProcessing}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <CheckCircle size={14} />
+                          {isProcessing ? 'Processing...' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => showApproval(rfq, 'reject')}
+                          disabled={isProcessing}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <XCircle size={14} />
+                          {isProcessing ? 'Processing...' : 'Reject'}
+                        </button>
+                      </div>
+                    )}
                     <div className="pt-3 space-y-2">
                       {rfq.items.map((item, index) => (
                         <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
@@ -1001,13 +1030,17 @@ const ApproveQuotationTab = () => {
                     handleReject(selectedRFQ._id, approvalNotes);
                   }
                 }}
-                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                disabled={isProcessing}
+                className={`px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   selectedRFQ.action === 'approve'
                     ? 'bg-green-600 hover:bg-green-700'
                     : 'bg-red-600 hover:bg-red-700'
                 }`}
               >
-                {selectedRFQ.action === 'approve' ? 'Approve RFQ' : 'Reject RFQ'}
+                {isProcessing 
+                  ? (selectedRFQ.action === 'approve' ? 'Approving...' : 'Rejecting...')
+                  : (selectedRFQ.action === 'approve' ? 'Approve RFQ' : 'Reject RFQ')
+                }
               </button>
             </div>
           </div>

@@ -7,7 +7,8 @@ import {
   Eye,
   Check,
   X,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/api/ApiHelper';
@@ -24,8 +25,11 @@ const DrawingSpecificationSelector = ({
   const [drawings, setDrawings] = useState([]);
   const [loadingDrawings, setLoadingDrawings] = useState(false);
   
-  // State for truck types
-  const [truckTypes, setTruckTypes] = useState([]);
+  // State for master data
+  const [bodyTypes, setBodyTypes] = useState([]);
+  const [chassisTypes, setChassisTypes] = useState([]);
+  const [sizeTypes, setSizeTypes] = useState([]);
+  const [featureTypes, setFeatureTypes] = useState([]);
   
   // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,9 +39,15 @@ const DrawingSpecificationSelector = ({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showTruckTypeModal, setShowTruckTypeModal] = useState(false);
   
-  // State for form data
+  // State for form data (full form like DrawingSpecificationsPage)
   const [formData, setFormData] = useState({
-    truckType: ''
+    bodyTypeId: '',
+    chassisTypeId: '',
+    chassisModel: '',
+    sizeTypeId: '',
+    dimension: '',
+    features: [],
+    customSpecifications: []
   });
   
   // State for truck type form
@@ -48,18 +58,124 @@ const DrawingSpecificationSelector = ({
   });
   
   // State for file uploads
-  const [uploadFiles, setUploadFiles] = useState([]); // AutoCAD file
-  const [uploadImageFiles, setUploadImageFiles] = useState([]); // JPG file
+  const [uploadFile, setUploadFile] = useState(null); // AutoCAD file
+  const [uploadImageFile, setUploadImageFile] = useState(null); // JPG file
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileSize, setFileSize] = useState(null);
+  const [imageFileSize, setImageFileSize] = useState(null);
 
-  // Load truck types
-  const loadTruckTypes = useCallback(async () => {
+  // Helper function to format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Helper function to normalize key segments (UPPERCASE, remove spaces and slashes)
+  const normalizeKeySegment = (str) => {
+    if (!str) return '';
+    return String(str)
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .replace(/\//g, '')
+      .replace(/-/g, '');
+  };
+
+  // Helper function to format features for composite key
+  const formatFeatures = (features) => {
+    if (!features || features.length === 0) return '';
+    
+    return features
+      .map(feature => {
+        if (!feature.featureId) return null;
+        // Get feature shortName from featureTypes array
+        const featureType = featureTypes.find(ft => ft._id === feature.featureId);
+        const featureKey = featureType?.shortName || feature.featureId.toString();
+        const specValue = feature.spec ? normalizeKeySegment(feature.spec) : '';
+        return specValue ? `${normalizeKeySegment(featureKey)}_${specValue}` : normalizeKeySegment(featureKey);
+      })
+      .filter(Boolean)
+      .join('-');
+  };
+
+  // Generate drawing number from form data
+  const generateDrawingNumber = () => {
+    // Get body type shortName
+    const bodyType = bodyTypes.find(bt => bt._id === formData.bodyTypeId);
+    const bodyTypeKey = bodyType?.shortName || '';
+    
+    // Get chassis type shortName
+    const chassisType = chassisTypes.find(ct => ct._id === formData.chassisTypeId);
+    const chassisKey = chassisType?.shortName || '';
+    
+    // Get size type shortName
+    const sizeType = sizeTypes.find(st => st._id === formData.sizeTypeId);
+    const sizeKey = sizeType?.shortName || '';
+    
+    // Normalize other fields
+    const chassisModelKey = normalizeKeySegment(formData.chassisModel || '');
+    const dimensionKey = normalizeKeySegment(formData.dimension || '');
+    const featuresKey = formatFeatures(formData.features || []);
+    
+    // Build composite key: BODYTYPE/CHASSIS/CHASSISMODEL/SIZE/DIMENSION/FEATURES
+    const keyParts = [
+      normalizeKeySegment(bodyTypeKey) || '-',
+      chassisKey ? normalizeKeySegment(chassisKey) : '-',
+      chassisModelKey || '-',
+      sizeKey ? normalizeKeySegment(sizeKey) : '-',
+      dimensionKey || '-',
+      featuresKey || '-'
+    ];
+    
+    return keyParts.join('/');
+  };
+
+  // Load master data
+  const loadBodyTypes = useCallback(async () => {
     try {
       const response = await axiosInstance.get('/api/body-types/list');
-      setTruckTypes(response.data.data);
+      if (response.data?.success && response.data?.data) {
+        setBodyTypes(response.data.data);
+      }
     } catch (error) {
-      console.error('Error loading truck types:', error);
-      toast.error('Failed to load truck types');
+      console.error('Error loading body types:', error);
+    }
+  }, []);
+
+  const loadChassisTypes = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get('/api/chassis-types/list');
+      if (response.data?.success && response.data?.data) {
+        setChassisTypes(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading chassis types:', error);
+    }
+  }, []);
+
+  const loadSizeTypes = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get('/api/size-types/list');
+      if (response.data?.success && response.data?.data) {
+        setSizeTypes(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading size types:', error);
+    }
+  }, []);
+
+  const loadFeatureTypes = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get('/api/feature-types/list');
+      if (response.data?.success && response.data?.data) {
+        setFeatureTypes(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading feature types:', error);
     }
   }, []);
 
@@ -81,89 +197,193 @@ const DrawingSpecificationSelector = ({
     }
   }, [selectedTruckType, searchTerm]);
 
-  // Handle AutoCAD file selection for upload
-  const handleDrawingFileSelect = (event) => {
-    const file = event.target.files[0];
-    setUploadFiles(file ? [file] : []);
+  // Add feature row
+  const addFeature = () => {
+    setFormData({
+      ...formData,
+      features: [...formData.features, { featureId: '', spec: '' }]
+    });
   };
 
-  // Handle JPG image file selection for upload
-  const handleImageFileSelect = (event) => {
-    const file = event.target.files[0];
-    setUploadImageFiles(file ? [file] : []);
+  // Remove feature row
+  const removeFeature = (index) => {
+    const newFeatures = formData.features.filter((_, i) => i !== index);
+    setFormData({
+      ...formData,
+      features: newFeatures
+    });
   };
 
-  // Get file preview URL
-  const getFilePreviewUrl = (file) => {
-    if (file.type.startsWith('image/')) {
-      return URL.createObjectURL(file);
-    }
-    return null;
+  // Update feature
+  const updateFeature = (index, field, value) => {
+    const newFeatures = [...formData.features];
+    newFeatures[index] = {
+      ...newFeatures[index],
+      [field]: value
+    };
+    setFormData({
+      ...formData,
+      features: newFeatures
+    });
   };
 
-  // Get file icon based on type
-  const getFileIcon = (fileType) => {
-    if (fileType.startsWith('image/')) {
-      return '🖼️';
-    } else if (fileType === 'application/pdf') {
-      return '📄';
-    } else if (fileType.includes('dwg') || fileType.includes('dxf')) {
-      return '📐';
-    }
-    return '📁';
+  // Add custom specification category
+  const addCustomSpecCategory = () => {
+    setFormData({
+      ...formData,
+      customSpecifications: [...formData.customSpecifications, { category: '', items: [] }]
+    });
   };
 
-  // Create truck type
+  // Remove custom specification category
+  const removeCustomSpecCategory = (index) => {
+    const newCustomSpecs = formData.customSpecifications.filter((_, i) => i !== index);
+    setFormData({
+      ...formData,
+      customSpecifications: newCustomSpecs
+    });
+  };
+
+  // Update custom specification category
+  const updateCustomSpecCategory = (index, field, value) => {
+    const updated = [...formData.customSpecifications];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormData({ ...formData, customSpecifications: updated });
+  };
+
+  // Add custom specification item
+  const addCustomSpecItem = (categoryIndex) => {
+    const updated = [...formData.customSpecifications];
+    updated[categoryIndex] = {
+      ...updated[categoryIndex],
+      items: [...(updated[categoryIndex].items || []), { name: '', specification: '' }]
+    };
+    setFormData({ ...formData, customSpecifications: updated });
+  };
+
+  // Remove custom specification item
+  const removeCustomSpecItem = (categoryIndex, itemIndex) => {
+    const updated = [...formData.customSpecifications];
+    updated[categoryIndex] = {
+      ...updated[categoryIndex],
+      items: updated[categoryIndex].items.filter((_, i) => i !== itemIndex)
+    };
+    setFormData({ ...formData, customSpecifications: updated });
+  };
+
+  // Update custom specification item
+  const updateCustomSpecItem = (categoryIndex, itemIndex, field, value) => {
+    const updated = [...formData.customSpecifications];
+    updated[categoryIndex].items[itemIndex] = {
+      ...updated[categoryIndex].items[itemIndex],
+      [field]: value
+    };
+    setFormData({ ...formData, customSpecifications: updated });
+  };
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      bodyTypeId: '',
+      chassisTypeId: '',
+      chassisModel: '',
+      sizeTypeId: '',
+      dimension: '',
+      features: [],
+      customSpecifications: []
+    });
+    setUploadFile(null);
+    setUploadImageFile(null);
+    setFileSize(null);
+    setImageFileSize(null);
+    setUploadProgress(0);
+  };
+
+  // Create truck type (body type)
   const createTruckType = async () => {
     try {
       if (!truckTypeForm.name.trim()) {
-        toast.error('Truck type name is required');
+        toast.error('Body type name is required');
         return;
       }
       
       await axiosInstance.post('/api/body-types', truckTypeForm);
-      toast.success('Truck type created successfully');
+      toast.success('Body type created successfully');
       setShowTruckTypeModal(false);
       setTruckTypeForm({ name: '', description: '', category: 'Commercial' });
-      loadTruckTypes();
+      loadBodyTypes();
     } catch (error) {
-      console.error('Error creating truck type:', error);
-      toast.error(error.response?.data?.message || 'Failed to create truck type');
+      console.error('Error creating body type:', error);
+      toast.error(error.response?.data?.message || 'Failed to create body type');
     }
   };
 
   // Create new drawing specification
   const createDrawing = async () => {
     try {
-      if (!formData.truckType) {
-        toast.error('Truck type is required');
+      // Validation - only bodyType is required (file uploads are also required)
+      if (!formData.bodyTypeId) {
+        toast.error('Body type is required');
         return;
       }
-      if (uploadFiles.length === 0) {
-        toast.error('AutoCAD file (DWG/DXF) is required for archive purposes.');
+      if (!uploadFile) {
+        toast.error('AutoCAD file (DWG/DXF) upload is required for archive purposes.');
         return;
       }
-      if (uploadImageFiles.length === 0) {
-        toast.error('Quotation image (JPG) is required for quotation display.');
+      if (!uploadImageFile) {
+        toast.error('Quotation image (JPG) upload is required for quotation display.');
+        return;
+      }
+
+      // Validate AutoCAD file type
+      const fileName = uploadFile.name.toLowerCase();
+      if (!fileName.endsWith('.dwg') && !fileName.endsWith('.dxf')) {
+        toast.error('Invalid file type for AutoCAD file. Only DWG and DXF files are allowed.');
+        return;
+      }
+
+      // Validate JPG file type
+      const imageFileName = uploadImageFile.name.toLowerCase();
+      if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
+        toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
         return;
       }
 
       setUploading(true);
-
-      const data = new FormData();
-      data.append('bodyTypeId', formData.truckType); // truckType is actually bodyTypeId
-      data.append('drawingFile', uploadFiles[0]);
-      data.append('quotationImage', uploadImageFiles[0]);
-
-      const response = await axiosInstance.post('/api/drawing-specifications', data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      setUploadProgress(0);
+      
+      const formDataToSend = new FormData();
+      formDataToSend.append('bodyTypeId', formData.bodyTypeId);
+      if (formData.chassisTypeId) {
+        formDataToSend.append('chassisTypeId', formData.chassisTypeId);
+      }
+      if (formData.chassisModel) {
+        formDataToSend.append('chassisModel', formData.chassisModel);
+      }
+      if (formData.sizeTypeId) {
+        formDataToSend.append('sizeTypeId', formData.sizeTypeId);
+      }
+      if (formData.dimension) {
+        formDataToSend.append('dimension', formData.dimension);
+      }
+      formDataToSend.append('features', JSON.stringify(formData.features));
+      formDataToSend.append('customSpecifications', JSON.stringify(formData.customSpecifications));
+      
+      // Append both files with correct field names
+      formDataToSend.append('drawingFile', uploadFile);
+      formDataToSend.append('quotationImage', uploadImageFile);
+      
+      const response = await axiosInstance.post('/api/drawing-specifications', formDataToSend, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
       });
 
       toast.success('Drawing specification created successfully');
       setShowUploadModal(false);
-      setFormData({ truckType: '' });
-      setUploadFiles([]);
-      setUploadImageFiles([]);
+      resetForm();
       
       // Reload drawings and auto-select the new one
       await loadDrawings();
@@ -175,6 +395,7 @@ const DrawingSpecificationSelector = ({
       toast.error(error.response?.data?.message || 'Failed to create drawing specification');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -187,10 +408,13 @@ const DrawingSpecificationSelector = ({
   // Load data on component mount
   useEffect(() => {
     if (isOpen) {
-      loadTruckTypes();
+      loadBodyTypes();
+      loadChassisTypes();
+      loadSizeTypes();
+      loadFeatureTypes();
       loadDrawings();
     }
-  }, [isOpen, loadTruckTypes, loadDrawings]);
+  }, [isOpen, loadBodyTypes, loadChassisTypes, loadSizeTypes, loadFeatureTypes, loadDrawings]);
 
   return (
     <>
@@ -217,15 +441,15 @@ const DrawingSpecificationSelector = ({
             <div className="min-w-48">
               <CustomDropdown
                 options={[
-                  { value: '', label: 'All Truck Types' },
-                  ...truckTypes.map((type) => ({
+                  { value: '', label: 'All Body Types' },
+                  ...bodyTypes.map((type) => ({
                     value: type._id,
                     label: type.name
                   }))
                 ]}
                 value={selectedTruckType}
                 onChange={setSelectedTruckType}
-                placeholder="All Truck Types"
+                placeholder="All Body Types"
               />
             </div>
             
@@ -266,10 +490,10 @@ const DrawingSpecificationSelector = ({
                         <div>
                           <h3 className="font-medium text-gray-900">{drawing.drawingNumber}</h3>
                           <p className="text-sm text-gray-500">
-                            Truck Type: {drawing.truckType?.name || 'N/A'}
+                            Body Type: {drawing.bodyTypeId?.name || 'N/A'}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {drawing.drawingFile ? '1 file' : 'No file'}
+                            {drawing.drawingFile ? 'Has drawing file' : 'No file'} • {drawing.quotationImage ? 'Has image' : 'No image'}
                           </p>
                         </div>
                       </div>
@@ -297,133 +521,372 @@ const DrawingSpecificationSelector = ({
         </div>
       </BaseModal>
 
-      {/* Upload New Drawing Modal */}
+      {/* Upload New Drawing Modal - Full Form */}
       <BaseModal
         isOpen={showUploadModal}
         onClose={() => {
           setShowUploadModal(false);
-          setFormData({ truckType: '' });
-          setUploadFiles([]);
-          setUploadImageFiles([]);
+          resetForm();
         }}
-        title="Upload New Drawing Specification"
+        title="Create New Drawing Specification"
+        size="lg"
       >
         <div className="space-y-4">
+          {/* Drawing Number Preview - Auto-generated */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Drawing Number (Auto-generated)
+            </label>
+            <p className="text-lg font-mono font-semibold text-blue-900">
+              {generateDrawingNumber()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              This number will update automatically as you fill in the fields below
+            </p>
+          </div>
+
+          {/* Body Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Body Type (Truck Type) *
+              Body Type *
             </label>
             <div className="flex gap-2">
               <div className="flex-1">
                 <CustomDropdown
                   options={[
-                    { value: '', label: 'Select truck type' },
-                    ...truckTypes.map((type) => ({
+                    { value: '', label: 'Select Body Type' },
+                    ...bodyTypes.map((type) => ({
                       value: type._id,
-                      label: type.name
+                      label: `${type.name} (${type.shortName})`
                     }))
                   ]}
-                  value={formData.truckType}
-                  onChange={(value) => setFormData({ ...formData, truckType: value })}
-                  placeholder="Select truck type"
-                  required={true}
+                  value={formData.bodyTypeId}
+                  onChange={(value) => setFormData({ ...formData, bodyTypeId: value })}
+                  placeholder="Select Body Type"
                 />
               </div>
               <button
                 onClick={() => setShowTruckTypeModal(true)}
                 className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                title="Create new truck type"
+                title="Create new body type"
               >
                 <Plus className="h-4 w-4" />
               </button>
             </div>
           </div>
-          
+
+          {/* Chassis Type - Optional */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload AutoCAD File (DWG/DXF) - For Archive *
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Chassis Type
+            </label>
+            <CustomDropdown
+              options={[
+                { value: '', label: 'Select Chassis Type (Optional)' },
+                ...chassisTypes.map((type) => ({
+                  value: type._id,
+                  label: type.shortName ? `${type.name} (${type.shortName})` : type.name
+                }))
+              ]}
+              value={formData.chassisTypeId}
+              onChange={(value) => setFormData({ ...formData, chassisTypeId: value })}
+              placeholder="Select Chassis Type (Optional)"
+            />
+          </div>
+
+          {/* Chassis Model - Optional */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Chassis Model
             </label>
             <input
-              type="file"
-              accept=".dwg,.dxf"
-              onChange={handleDrawingFileSelect}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              type="text"
+              value={formData.chassisModel}
+              onChange={(e) => setFormData({ ...formData, chassisModel: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., Hino 500 Series (Optional)"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Only DWG and DXF files are allowed (max 50MB)
-            </p>
+          </div>
+
+          {/* Size Type - Optional */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Size Type
+            </label>
+            <CustomDropdown
+              options={[
+                { value: '', label: 'Select Size Type (Optional)' },
+                ...sizeTypes.map((type) => ({
+                  value: type._id,
+                  label: `${type.name} (${type.shortName})`
+                }))
+              ]}
+              value={formData.sizeTypeId}
+              onChange={(value) => setFormData({ ...formData, sizeTypeId: value })}
+              placeholder="Select Size Type (Optional)"
+            />
+          </div>
+
+          {/* Dimension - Optional */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Dimension
+            </label>
+            <input
+              type="text"
+              value={formData.dimension}
+              onChange={(e) => setFormData({ ...formData, dimension: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., 4500x2200x800 or 5.5m x 2.2m x 0.8m (Optional)"
+            />
+            <p className="mt-1 text-xs text-gray-500">Enter dimension as a single string (optional)</p>
+          </div>
+
+          {/* Features */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Features
+              </label>
+              <button
+                type="button"
+                onClick={addFeature}
+                className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Feature
+              </button>
+            </div>
             
-            {uploadFiles.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-gray-700 mb-2">Selected AutoCAD File:</p>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center text-2xl">
-                      📐
+            {formData.features.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No features added</p>
+            ) : (
+              <div className="space-y-2">
+                {formData.features.map((feature, index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <CustomDropdown
+                        options={[
+                          { value: '', label: 'Select Feature' },
+                          ...featureTypes.map((type) => ({
+                            value: type._id,
+                            label: `${type.name} (${type.shortName})`
+                          }))
+                        ]}
+                        value={feature.featureId}
+                        onChange={(value) => updateFeature(index, 'featureId', value)}
+                        placeholder="Select Feature"
+                      />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{uploadFiles[0].name}</p>
-                      <p className="text-xs text-gray-500">
-                        {(uploadFiles[0].size / 1024 / 1024).toFixed(2)} MB • {uploadFiles[0].type}
-                      </p>
+                      <input
+                        type="text"
+                        value={feature.spec}
+                        onChange={(e) => updateFeature(index, 'spec', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Spec value (optional)"
+                      />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFeature(index)}
+                      className="p-2 text-red-600 hover:text-red-900"
+                      title="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
 
+          {/* Custom Specifications */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Quotation Image (JPG) - For Quotation Display *
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Custom Specifications
+              </label>
+              <button
+                type="button"
+                onClick={addCustomSpecCategory}
+                className="text-sm px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              >
+                <Plus className="h-4 w-4 inline mr-1" />
+                Add Category
+              </button>
+            </div>
+            <div className="space-y-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
+              {formData.customSpecifications.map((spec, specIndex) => (
+                <div key={specIndex} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <input
+                      type="text"
+                      value={spec.category || ''}
+                      onChange={(e) => updateCustomSpecCategory(specIndex, 'category', e.target.value)}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm mr-2"
+                      placeholder="Category name"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomSpecCategory(specIndex)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2 ml-4">
+                    {spec.items && spec.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item.name || ''}
+                          onChange={(e) => updateCustomSpecItem(specIndex, itemIndex, 'name', e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                          placeholder="Name"
+                        />
+                        <span className="text-gray-500">:</span>
+                        <input
+                          type="text"
+                          value={item.specification || ''}
+                          onChange={(e) => updateCustomSpecItem(specIndex, itemIndex, 'specification', e.target.value)}
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                          placeholder="Specification"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeCustomSpecItem(specIndex, itemIndex)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => addCustomSpecItem(specIndex)}
+                      className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      <Plus className="h-3 w-3 inline mr-1" />
+                      Add Item
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {formData.customSpecifications.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">No custom specifications added yet</p>
+              )}
+            </div>
+          </div>
+
+          {/* AutoCAD File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              AutoCAD File (DWG/DXF) * - For Archive
             </label>
             <input
               type="file"
-              accept=".jpg,.jpeg,image/jpeg"
-              onChange={handleImageFileSelect}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(e) => {
+                const file = e.target.files[0] || null;
+                setUploadFile(file);
+                if (file) {
+                  setFileSize({
+                    original: file.size,
+                    formatted: formatFileSize(file.size)
+                  });
+                } else {
+                  setFileSize(null);
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              accept=".dwg,.dxf"
+              required
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Only JPG/JPEG files are allowed (max 10MB). This image will be used in quotations.
+            {uploadFile && (
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-medium text-gray-700">
+                  {uploadFile.name}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Original size: {fileSize?.formatted || formatFileSize(uploadFile.size)}
+                </p>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Only DWG and DXF files are allowed. DWG files will be converted to DXF automatically.
             </p>
-            
-            {uploadImageFiles.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-gray-700 mb-2">Selected Image:</p>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center gap-3">
-                    {getFilePreviewUrl(uploadImageFiles[0]) ? (
-                      <img 
-                        src={getFilePreviewUrl(uploadImageFiles[0])} 
-                        alt={uploadImageFiles[0].name}
-                        className="w-16 h-16 object-cover rounded border"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-2xl">
-                        🖼️
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{uploadImageFiles[0].name}</p>
-                      <p className="text-xs text-gray-500">
-                        {(uploadImageFiles[0].size / 1024 / 1024).toFixed(2)} MB • {uploadImageFiles[0].type}
-                      </p>
-                    </div>
+          </div>
+
+          {/* JPG Image Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Quotation Image (JPG) * - For Quotation Display
+            </label>
+            <input
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files[0] || null;
+                setUploadImageFile(file);
+                if (file) {
+                  setImageFileSize({
+                    original: file.size,
+                    formatted: formatFileSize(file.size)
+                  });
+                } else {
+                  setImageFileSize(null);
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              accept=".jpg,.jpeg,image/jpeg"
+              required
+            />
+            {uploadImageFile && (
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  {uploadImageFile.type.startsWith('image/') && (
+                    <img 
+                      src={URL.createObjectURL(uploadImageFile)} 
+                      alt={uploadImageFile.name}
+                      className="w-16 h-16 object-cover rounded border"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-700">
+                      {uploadImageFile.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Original size: {imageFileSize?.formatted || formatFileSize(uploadImageFile.size)}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
+            <p className="mt-1 text-xs text-gray-500">
+              Only JPG/JPEG files are allowed. This image will be used in quotations.
+            </p>
           </div>
+
+          {uploading && (
+            <div className="mt-3">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">{uploadProgress}% uploaded</p>
+            </div>
+          )}
         </div>
         
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 mt-4 px-6 pb-6">
           <button
             onClick={() => {
               setShowUploadModal(false);
-              setFormData({ drawingNumber: '', truckType: '' });
-              setUploadFiles([]);
+              resetForm();
             }}
             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            disabled={uploading}
           >
             Cancel
           </button>
@@ -434,14 +897,11 @@ const DrawingSpecificationSelector = ({
           >
             {uploading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
                 Creating...
               </>
             ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Create & Select
-              </>
+              'Create & Select'
             )}
           </button>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   Eye,
@@ -16,7 +16,10 @@ import {
   Filter,
   FileDown,
   X,
-  Save
+  Save,
+  Info,
+  SlidersHorizontal,
+  XCircle
 } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
@@ -125,19 +128,23 @@ const deriveSpkTypeFromCode = (code) => {
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(new Set()); // Track which quotations are loading details
   const [pagination, setPagination] = useState({
     current: 1,
     pages: 1,
     total: 0
   });
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
+  const [searchInput, setSearchInput] = useState('');
+  const [chips, setChips] = useState([]); // [{ type: 'status', value: 'open' }, ...]
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    status: [],
+    lineOfBusiness: [],
     customer: '',
     marketing: '',
-    startDate: '',
-    endDate: ''
+    dateFrom: '',
+    dateTo: ''
   });
   const [statusModal, setStatusModal] = useState({
     isOpen: false,
@@ -174,28 +181,183 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     setFavoriteStatuses(preferences.favoriteStatuses ?? ['open']);
   }, []);
 
-  useEffect(() => {
-    if (pagination && pagination.current) {
-      fetchQuotations();
+  // Parse search tokens (like RFQ)
+  const parseTokens = useCallback((input) => {
+    const regex = /([a-z]+):("[^"]+"|\S+)|"([^"]+)"|(\S+)/g;
+    const found = [];
+    let m;
+    while ((m = regex.exec(input))) {
+      if (m[1] && m[2]) {
+        let val = m[2];
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        found.push({ type: m[1], value: val });
+      } else if (m[3]) {
+        found.push({ type: 'phrase', value: m[3] });
+      } else if (m[4]) {
+        found.push({ type: 'global', value: m[4] });
+      }
     }
+    return found;
+  }, []);
+
+  const onSearchInput = (val) => {
+    setSearchInput(val);
+    // Don't reset pagination immediately - let debounced effect handle it
+    // This prevents loading interruption while typing
+  };
+
+  const onRemoveChip = (idx) => {
+    setChips((chips) => chips.filter((c, i) => i !== idx));
+    setPagination((p) => ({ ...p, current: 1 }));
+  };
+
+  const onAddChipFromInput = () => {
+    if (!searchInput.trim()) return;
+    const tokens = parseTokens(searchInput.trim());
+    setChips([...chips, ...tokens]);
+    setSearchInput('');
+  };
+
+  const toggleMultiFilter = (key, value) => {
+    setAdvancedFilters((prev) => {
+      const currentValues = prev[key] || [];
+      const exists = currentValues.includes(value);
+      const updatedValues = exists
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value];
+      return {
+        ...prev,
+        [key]: updatedValues
+      };
+    });
+  };
+
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters({
+      status: [],
+      lineOfBusiness: [],
+      customer: '',
+      marketing: '',
+      dateFrom: '',
+      dateTo: ''
+    });
+  };
+
+  // Build advanced filter chips
+  const advancedFilterChips = [];
+  const capitalize = (value = '') =>
+    value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+
+  (advancedFilters.status || []).forEach((value) => {
+    advancedFilterChips.push({
+      key: `status-${value}`,
+      label: `Status: ${capitalize(value)}`,
+      onRemove: () => toggleMultiFilter('status', value)
+    });
+  });
+
+  (advancedFilters.lineOfBusiness || []).forEach((value) => {
+    advancedFilterChips.push({
+      key: `lob-${value}`,
+      label: `Line of Business: ${capitalize(value)}`,
+      onRemove: () => toggleMultiFilter('lineOfBusiness', value)
+    });
+  });
+
+  if (advancedFilters.customer) {
+    advancedFilterChips.push({
+      key: 'customer',
+      label: `Customer: ${advancedFilters.customer}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, customer: '' }))
+    });
+  }
+
+  if (advancedFilters.marketing) {
+    advancedFilterChips.push({
+      key: 'marketing',
+      label: `Marketing: ${advancedFilters.marketing}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, marketing: '' }))
+    });
+  }
+
+  if (advancedFilters.dateFrom) {
+    advancedFilterChips.push({
+      key: 'dateFrom',
+      label: `From: ${advancedFilters.dateFrom}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, dateFrom: '' }))
+    });
+  }
+
+  if (advancedFilters.dateTo) {
+    advancedFilterChips.push({
+      key: 'dateTo',
+      label: `To: ${advancedFilters.dateTo}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, dateTo: '' }))
+    });
+  }
+
+  const advancedFilterCount = advancedFilterChips.length;
+
+  // Debounced search effect - only fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (pagination && pagination.current) {
+        fetchQuotations();
+      }
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination?.current, JSON.stringify(filters)]);
+  }, [pagination?.current, chips, searchInput, advancedFilters]);
 
   // Fetch quotation headers only (fast initial load)
   const fetchQuotations = async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load or when explicitly needed
+      if (isInitialLoad || pagination?.current === 1) {
+        setLoading(true);
+      }
+      
+      // Build search string from chips and searchInput
+      let search = '';
+      chips.forEach((chip) => {
+        if (chip.type === 'phrase') search += ' "' + chip.value + '"';
+        else if (chip.type === 'global') search += ' ' + chip.value;
+        else search += ` ${chip.type}:${chip.value}`;
+      });
+      if (searchInput.trim()) search += ' ' + searchInput.trim();
+      
       const params = {
         page: pagination?.current || 1,
         limit: 10,
         filterMode,
         lightweight: 'true', // Request lightweight mode for fast header load
-        ...filters
+        search: search.trim() || undefined
       };
 
-      // Remove empty filters
+      // Add advanced filters
+      if (advancedFilters.status?.length) {
+        params.status = advancedFilters.status;
+      }
+      if (advancedFilters.lineOfBusiness?.length) {
+        params.lineOfBusiness = advancedFilters.lineOfBusiness;
+      }
+      if (advancedFilters.customer) {
+        params.customer = advancedFilters.customer;
+      }
+      if (advancedFilters.marketing) {
+        params.marketing = advancedFilters.marketing;
+      }
+      if (advancedFilters.dateFrom) {
+        params.startDate = advancedFilters.dateFrom;
+      }
+      if (advancedFilters.dateTo) {
+        params.endDate = advancedFilters.dateTo;
+      }
+
+      // Remove undefined values
       Object.keys(params).forEach((key) => {
-        if (params[key] === '') {
+        if (params[key] === undefined || params[key] === '') {
           delete params[key];
         }
       });
@@ -218,6 +380,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             fetchQuotationDetails(quotationNumber);
         }
       });
+      
+      // Mark initial load as complete
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+      }
     } catch (error) {
       toast.error('Failed to fetch quotations');
       console.error('Error fetching quotations:', error);
@@ -358,13 +525,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     }
   };
 
-  const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [field]: value
-    }));
+  // Reset pagination when filters change (but don't fetch yet - debounced fetch will handle it)
+  useEffect(() => {
     setPagination((prev) => ({ ...prev, current: 1 }));
-  };
+  }, [chips, advancedFilters]);
 
   const handlePageChange = (page) => {
     if (page < 1 || page > pagination.pages) return;
@@ -1090,7 +1254,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     return loadingDetails.has(idStr) || loadingDetails.has(quoteNumber) || loadingDetails.has(quoteNumber?.toString());
   };
 
-  if (loading) {
+  // Only show loading spinner on initial load to avoid interrupting user while typing
+  if (loading && isInitialLoad) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
@@ -1114,151 +1279,208 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         )}
       </div>
 
-      {/* Filter Header with Favorites */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        {/* Filter Header */}
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleToggleFilterCollapse}
-              className="flex items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:border-gray-200 hover:text-gray-900"
-            >
-              <Filter className="h-5 w-5" />
-              <span className="font-medium">Filters</span>
-              {isFilterCollapsed ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
-            </button>
+      {/* Search and Filter UI (like RFQ) */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1 w-full">
+            <input
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Search by quotation number, customer, or use filters: status:open customer:ABC marketing:name..."
+              value={searchInput}
+              onChange={(e) => onSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onAddChipFromInput()}
+            />
           </div>
-          
-          {/* Favorite Status Quick Filters - Only show favorited statuses */}
-          {favoriteStatuses.length > 0 && (
-            <div className="flex w-full items-center gap-2 overflow-x-auto text-sm text-gray-500 sm:justify-end">
-              <span className="ml-1 mr-1 flex-shrink-0 font-medium text-gray-500">Quick Filter:</span>
-              {favoriteStatuses.map((statusValue) => {
-                const status = statusOptions.find(s => s.value === statusValue);
-                if (!status) return null;
-                
-                return (
-                  <button
-                    key={status.value}
-                    onClick={() => handleQuickFilterByStatus(status.value)}
-                    className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                      filters.status === status.value
-                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {status.label}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => handleQuickFilterByStatus('')}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                  filters.status === ''
-                    ? 'bg-gray-200 text-gray-800'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                All
-              </button>
-            </div>
-          )}
+          <button 
+            onClick={() => {}}
+            className="inline-flex items-center justify-center rounded-lg p-2.5 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
+            title="Search help"
+          >
+            <Info className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Collapsible Filter Content */}
-        {!isFilterCollapsed && (
-          <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                placeholder="Search karoseri, chassis, or specs"
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            {showAdvancedFilters ? 'Hide advanced filters' : 'Show advanced filters'}
+            {advancedFilterCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-white text-blue-600 font-semibold">
+                {advancedFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {showAdvancedFilters && (
+          <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                Advanced Filters
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900"
+                >
+                  Close
+                </button>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <CustomDropdown
-              options={statusOptions}
-              value={filters.status}
-              onChange={(value) => handleFilterChange('status', value)}
-              placeholder="Select status"
-                  onStarClick={handleToggleFavoriteStatus}
-                  starredValues={favoriteStatuses}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-            <input
-              type="text"
-              value={filters.customer}
-              onChange={(e) => handleFilterChange('customer', e.target.value)}
-              placeholder="Customer name..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Marketing</label>
-            <input
-              type="text"
-              value={filters.marketing}
-              onChange={(e) => handleFilterChange('marketing', e.target.value)}
-              placeholder="Marketing name..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setFilters({
-                  search: '',
-                  status: '',
-                  customer: '',
-                  marketing: '',
-                  startDate: '',
-                  endDate: ''
-                });
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</p>
+                <div className="flex flex-wrap gap-2">
+                  {statusOptions.filter(s => s.value).map((option) => {
+                    const active = advancedFilters.status.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => toggleMultiFilter('status', option.value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Line of Business</p>
+                <div className="flex flex-wrap gap-2">
+                  {['karoseri', 'service', 'sparepart'].map((value) => {
+                    const active = advancedFilters.lineOfBusiness.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleMultiFilter('lineOfBusiness', value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                          active
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-purple-400 hover:text-purple-600'
+                        }`}
+                      >
+                        {capitalize(value)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Customer</p>
+                <input
+                  type="text"
+                  value={advancedFilters.customer}
+                  onChange={(e) => setAdvancedFilters((prev) => ({ ...prev, customer: e.target.value }))}
+                  placeholder="Customer name..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Marketing</p>
+                <input
+                  type="text"
+                  value={advancedFilters.marketing}
+                  onChange={(e) => setAdvancedFilters((prev) => ({ ...prev, marketing: e.target.value }))}
+                  placeholder="Marketing name..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Date Range</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">From</label>
+                    <input
+                      type="date"
+                      value={advancedFilters.dateFrom}
+                      onChange={(e) =>
+                        setAdvancedFilters((prev) => ({
+                          ...prev,
+                          dateFrom: e.target.value
+                        }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">To</label>
+                    <input
+                      type="date"
+                      value={advancedFilters.dateTo}
+                      min={advancedFilters.dateFrom || undefined}
+                      onChange={(e) =>
+                        setAdvancedFilters((prev) => ({
+                          ...prev,
+                          dateTo: e.target.value
+                        }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Chips UI */}
+      <div className="mb-2 flex flex-wrap gap-2">
+        {chips.map((chip, i) => (
+          <span key={i} className="inline-flex items-center rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+            {chip.type}:{chip.value}
+            <button className="ml-1" onClick={() => onRemoveChip(i)}>
+              <XCircle className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {chips.length > 0 && (
+          <button
+            onClick={() => setChips([])}
+            className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-200"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+      {advancedFilterChips.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {advancedFilterChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs text-purple-700"
+            >
+              {chip.label}
+              <button
+                onClick={chip.onRemove}
+                className="text-purple-500 hover:text-purple-700"
+              >
+                <XCircle className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          <button
+            onClick={clearAdvancedFilters}
+            className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+          >
+            Clear advanced filters
+          </button>
+        </div>
+      )}
 
       {/* Quotation Cards */}
       {(quotations || []).map((quotationData) => {

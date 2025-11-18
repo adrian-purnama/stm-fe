@@ -64,6 +64,10 @@ const DrawingSpecificationsPage = () => {
   const [fileSize, setFileSize] = useState(null);
   const [imageFileSize, setImageFileSize] = useState(null);
   
+  // State for file removal flags (edit mode)
+  const [removeDrawingFile, setRemoveDrawingFile] = useState(false);
+  const [removeQuotationImage, setRemoveQuotationImage] = useState(false);
+  
   // State for selected drawing
   const [selectedDrawing, setSelectedDrawing] = useState(null);
 
@@ -306,34 +310,57 @@ const DrawingSpecificationsPage = () => {
       }
       
       setUploading(true);
+      setUploadProgress(0);
       
-      const updatePayload = {
-        bodyTypeId: formData.bodyTypeId,
-        chassisTypeId: formData.chassisTypeId || null,
-        chassisModel: formData.chassisModel,
-        sizeTypeId: formData.sizeTypeId || null,
-        dimension: formData.dimension,
-        features: (formData.features || []).map((feature) => ({
-          featureId:
-            feature?.featureId && typeof feature.featureId === 'object'
-              ? feature.featureId._id || feature.featureId.id || ''
-              : feature?.featureId || '',
-          spec: feature?.spec?.trim() || ''
-        })),
-        customSpecifications: (formData.customSpecifications || []).map((category) => ({
-          category: category?.category?.trim() || '',
-          items: Array.isArray(category?.items)
-            ? category.items
-                .filter((item) => item && (item.name || item.specification))
-                .map((item) => ({
-                  name: item?.name?.trim() || '',
-                  specification: item?.specification?.trim() || ''
-                }))
-            : []
-        }))
-      };
+      // Create FormData for file uploads
+      const formDataToSend = new FormData();
+      formDataToSend.append('bodyTypeId', formData.bodyTypeId);
+      formDataToSend.append('chassisTypeId', formData.chassisTypeId || '');
+      formDataToSend.append('chassisModel', formData.chassisModel);
+      formDataToSend.append('sizeTypeId', formData.sizeTypeId || '');
+      formDataToSend.append('dimension', formData.dimension);
+      formDataToSend.append('features', JSON.stringify((formData.features || []).map((feature) => ({
+        featureId:
+          feature?.featureId && typeof feature.featureId === 'object'
+            ? feature.featureId._id || feature.featureId.id || ''
+            : feature?.featureId || '',
+        spec: feature?.spec?.trim() || ''
+      }))));
+      formDataToSend.append('customSpecifications', JSON.stringify((formData.customSpecifications || []).map((category) => ({
+        category: category?.category?.trim() || '',
+        items: Array.isArray(category?.items)
+          ? category.items
+              .filter((item) => item && (item.name || item.specification))
+              .map((item) => ({
+                name: item?.name?.trim() || '',
+                specification: item?.specification?.trim() || ''
+              }))
+          : []
+      }))));
       
-      await axiosInstance.put(`/api/drawing-specifications/${selectedDrawing._id}`, updatePayload);
+      // Add file removal flags
+      if (removeDrawingFile) {
+        formDataToSend.append('removeDrawingFile', 'true');
+      }
+      if (removeQuotationImage) {
+        formDataToSend.append('removeQuotationImage', 'true');
+      }
+      
+      // Add new files if selected
+      if (uploadFile) {
+        formDataToSend.append('drawingFile', uploadFile);
+      }
+      if (uploadImageFile) {
+        formDataToSend.append('quotationImage', uploadImageFile);
+      }
+      
+      await axiosInstance.put(`/api/drawing-specifications/${selectedDrawing._id}`, formDataToSend, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
+      });
       
       toast.success('Drawing specification updated successfully');
       setShowEditModal(false);
@@ -345,6 +372,7 @@ const DrawingSpecificationsPage = () => {
       toast.error(error.response?.data?.message || 'Failed to update drawing specification');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -466,6 +494,8 @@ const DrawingSpecificationsPage = () => {
     setFileSize(null);
     setImageFileSize(null);
     setUploadProgress(0);
+    setRemoveDrawingFile(false);
+    setRemoveQuotationImage(false);
   };
 
   // Handle edit
@@ -1006,6 +1036,269 @@ const DrawingSpecificationsPage = () => {
                 )}
               </div>
             </div>
+
+            {/* File Management - For edit mode */}
+            {showEditModal && selectedDrawing && (
+              <>
+                {/* Existing AutoCAD File */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    AutoCAD File (DWG/DXF) - For Archive
+                  </label>
+                  {!removeDrawingFile && selectedDrawing.drawingFile && selectedDrawing.drawingFile.fileId ? (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-700">
+                            {selectedDrawing.drawingFile.originalName}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {selectedDrawing.drawingFile.originalFileSize ? formatFileSize(selectedDrawing.drawingFile.originalFileSize) : 'File size unknown'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Format: {selectedDrawing.drawingFile.uploadedFormat} → {selectedDrawing.drawingFile.storedFormat}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => downloadFile(selectedDrawing._id, selectedDrawing.drawingFile.fileId, selectedDrawing.drawingFile.originalName)}
+                            className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRemoveDrawingFile(true);
+                              setUploadFile(null);
+                            }}
+                            className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : removeDrawingFile ? (
+                    <div className="mt-2 p-3 bg-red-50 rounded-lg border border-red-200">
+                      <p className="text-sm text-red-700">File will be removed on update</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRemoveDrawingFile(false);
+                        }}
+                        className="mt-2 text-xs text-red-600 hover:text-red-800 underline"
+                      >
+                        Cancel removal
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-500">No file uploaded</p>
+                    </div>
+                  )}
+                  
+                  {/* File upload for replacement */}
+                  {!removeDrawingFile && (
+                    <div className="mt-3">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files[0] || null;
+                          setUploadFile(file);
+                          if (file) {
+                            setFileSize({
+                              original: file.size,
+                              formatted: formatFileSize(file.size)
+                            });
+                          } else {
+                            setFileSize(null);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        accept=".dwg,.dxf"
+                      />
+                      {uploadFile && (
+                        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-blue-900">
+                                New file: {uploadFile.name}
+                              </p>
+                              <p className="text-xs text-blue-700 mt-1">
+                                Original size: {fileSize?.formatted || formatFileSize(uploadFile.size)}
+                              </p>
+                              <p className="text-xs text-blue-600 mt-1 font-medium">
+                                This will replace the existing file
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadFile(null);
+                                setFileSize(null);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-900"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500">
+                        Select a new file to replace the existing one. Only DWG and DXF files are allowed.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Existing Quotation Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quotation Image (JPG) - For Quotation Display
+                  </label>
+                  {!removeQuotationImage && selectedDrawing.quotationImage && selectedDrawing.quotationImage.fileId ? (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <img 
+                            src={getDrawingAssetUrl(selectedDrawing._id, selectedDrawing.quotationImage.fileId, false)}
+                            alt={selectedDrawing.quotationImage.originalName}
+                            className="w-16 h-16 object-cover rounded border"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">
+                              {selectedDrawing.quotationImage.originalName}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {selectedDrawing.quotationImage.originalFileSize ? formatFileSize(selectedDrawing.quotationImage.originalFileSize) : 'File size unknown'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => downloadFile(selectedDrawing._id, selectedDrawing.quotationImage.fileId, selectedDrawing.quotationImage.originalName)}
+                            className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRemoveQuotationImage(true);
+                              setUploadImageFile(null);
+                            }}
+                            className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : removeQuotationImage ? (
+                    <div className="mt-2 p-3 bg-red-50 rounded-lg border border-red-200">
+                      <p className="text-sm text-red-700">Image will be removed on update</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRemoveQuotationImage(false);
+                        }}
+                        className="mt-2 text-xs text-red-600 hover:text-red-800 underline"
+                      >
+                        Cancel removal
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-500">No image uploaded</p>
+                    </div>
+                  )}
+                  
+                  {/* Image upload for replacement */}
+                  {!removeQuotationImage && (
+                    <div className="mt-3">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files[0] || null;
+                          setUploadImageFile(file);
+                          if (file) {
+                            setImageFileSize({
+                              original: file.size,
+                              formatted: formatFileSize(file.size)
+                            });
+                          } else {
+                            setImageFileSize(null);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        accept=".jpg,.jpeg,image/jpeg"
+                      />
+                      {uploadImageFile && (
+                        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1">
+                              {uploadImageFile.type.startsWith('image/') && (
+                                <img 
+                                  src={URL.createObjectURL(uploadImageFile)} 
+                                  alt={uploadImageFile.name}
+                                  className="w-16 h-16 object-cover rounded border"
+                                />
+                              )}
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-blue-900">
+                                  New image: {uploadImageFile.name}
+                                </p>
+                                <p className="text-xs text-blue-700 mt-1">
+                                  Original size: {imageFileSize?.formatted || formatFileSize(uploadImageFile.size)}
+                                </p>
+                                <p className="text-xs text-blue-600 mt-1 font-medium">
+                                  This will replace the existing image
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadImageFile(null);
+                                setImageFileSize(null);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-900"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500">
+                        Select a new image to replace the existing one. Only JPG/JPEG files are allowed.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {uploading && (
+                  <div className="mt-3">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{uploadProgress}% uploaded</p>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* File Uploads - Required for create */}
             {showCreateModal && (

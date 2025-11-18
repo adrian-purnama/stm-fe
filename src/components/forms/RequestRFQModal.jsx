@@ -974,7 +974,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       }
       delete submitData.paymentTermsOption;
       delete submitData.paymentTermsCustom;
-      submitData.engineeringId = submitData.engineeringId || null;
+      // Convert empty string to null for engineeringId to prevent backend errors
+      submitData.engineeringId = (submitData.engineeringId && submitData.engineeringId.trim() !== '') 
+        ? submitData.engineeringId 
+        : null;
       
       // Build lineOfBusiness object for submission
       submitData.lineOfBusiness = {

@@ -25,7 +25,8 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState({
     fullName: user?.fullName || '',
-    phoneNumbers: user?.phoneNumbers || []
+    phoneNumbers: user?.phoneNumbers || [],
+    sendToEmail: user?.sendToEmail !== undefined ? user.sendToEmail : true
   });
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -38,7 +39,8 @@ const ProfilePage = () => {
           const userData = response.data.data.user;
           setProfileData({
             fullName: userData.fullName || '',
-            phoneNumbers: userData.phoneNumbers || []
+            phoneNumbers: userData.phoneNumbers || [],
+            sendToEmail: userData.sendToEmail !== undefined ? Boolean(userData.sendToEmail) : true
           });
 
           const updatedUser = {
@@ -46,6 +48,7 @@ const ProfilePage = () => {
             email: userData.email || user.email,
             fullName: userData.fullName || '',
             phoneNumbers: userData.phoneNumbers || [],
+            sendToEmail: userData.sendToEmail !== undefined ? Boolean(userData.sendToEmail) : true,
             permissions: user.permissions || [],
             isLoggedIn: true
           };
@@ -56,7 +59,8 @@ const ProfilePage = () => {
         // Fallback to user context data
         setProfileData({
           fullName: user?.fullName || '',
-          phoneNumbers: user?.phoneNumbers || []
+          phoneNumbers: user?.phoneNumbers || [],
+          sendToEmail: user?.sendToEmail !== undefined ? Boolean(user.sendToEmail) : true
         });
       }
     };
@@ -108,7 +112,8 @@ const ProfilePage = () => {
     try {
       const response = await axiosInstance.put('/api/auth/profile', {
         fullName: profileData.fullName,
-        phoneNumbers: profileData.phoneNumbers
+        phoneNumbers: profileData.phoneNumbers,
+        sendToEmail: profileData.sendToEmail
       });
 
       if (response.data.success) {
@@ -117,7 +122,8 @@ const ProfilePage = () => {
         const updatedUser = response.data.data.user;
         setProfileData({
           fullName: updatedUser.fullName || '',
-          phoneNumbers: updatedUser.phoneNumbers || []
+          phoneNumbers: updatedUser.phoneNumbers || [],
+          sendToEmail: updatedUser.sendToEmail !== undefined ? Boolean(updatedUser.sendToEmail) : true
         });
 
         setUser({
@@ -125,6 +131,7 @@ const ProfilePage = () => {
           email: updatedUser.email || user.email,
           fullName: updatedUser.fullName || '',
           phoneNumbers: updatedUser.phoneNumbers || [],
+          sendToEmail: updatedUser.sendToEmail !== undefined ? Boolean(updatedUser.sendToEmail) : true,
           permissions: user.permissions || [],
           isLoggedIn: true
         });
@@ -315,6 +322,44 @@ const ProfilePage = () => {
                     Reset Kata Sandi
                   </button>
                 </div>
+              </div>
+
+              {/* Send to Email Toggle */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Kirim Notifikasi ke Email
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sendToEmail"
+                      checked={Boolean(profileData.sendToEmail)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setProfileData(prev => ({...prev, sendToEmail: true}));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">Ya</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sendToEmail"
+                      checked={!Boolean(profileData.sendToEmail)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setProfileData(prev => ({...prev, sendToEmail: false}));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">Tidak</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pilih untuk menerima notifikasi melalui email (kecuali reset password)
+                </p>
               </div>
             </div>
 
