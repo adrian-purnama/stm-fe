@@ -8,6 +8,7 @@ import PriceInput from '../common/PriceInput';
 import OfferItemForm from '../forms/OfferItemForm';
 import BaseModal from '../modals/BaseModal';
 import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
+import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 
 const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
   const [formData, setFormData] = useState({
@@ -39,13 +40,6 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   const [removedImages, setRemovedImages] = useState([]); // Track images removed from form // Store images to be uploaded
   const [showRFQReference, setShowRFQReference] = useState(false);
   const [rfqReferenceData, setRfqReferenceData] = useState(null);
-
-  // Get asset URL for notes images
-  const getNotesImageAssetUrl = (imageId, fileId) => {
-    const baseURL = window.location.origin.includes('localhost') ? 'http://localhost:5000' : 'http://localhost:5000';
-    const token = localStorage.getItem('asb-token');
-    return `${baseURL}/api/assets/notes-images/${imageId}/files/${fileId}?token=${token}`;
-  };
 
   // Fetch RFQ reference data
   const fetchRFQReference = useCallback(async () => {
