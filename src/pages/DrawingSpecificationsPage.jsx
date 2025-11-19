@@ -211,32 +211,28 @@ const DrawingSpecificationsPage = () => {
   // Create drawing specification
   const createDrawing = async () => {
     try {
-      // Validation - only bodyType is required (file uploads are also required)
+      // Validation - only bodyType is required (file uploads are optional)
       if (!formData.bodyTypeId) {
         toast.error('Body type is required');
         return;
       }
-      if (!uploadFile) {
-        toast.error('AutoCAD file (DWG/DXF) upload is required for archive purposes.');
-        return;
-      }
-      if (!uploadImageFile) {
-        toast.error('Quotation image (JPG) upload is required for quotation display.');
-        return;
+
+      // Validate AutoCAD file type if provided
+      if (uploadFile) {
+        const fileName = uploadFile.name.toLowerCase();
+        if (!fileName.endsWith('.dwg') && !fileName.endsWith('.dxf')) {
+          toast.error('Invalid file type for AutoCAD file. Only DWG and DXF files are allowed.');
+          return;
+        }
       }
 
-      // Validate AutoCAD file type
-      const fileName = uploadFile.name.toLowerCase();
-      if (!fileName.endsWith('.dwg') && !fileName.endsWith('.dxf')) {
-        toast.error('Invalid file type for AutoCAD file. Only DWG and DXF files are allowed.');
-        return;
-      }
-
-      // Validate JPG file type
-      const imageFileName = uploadImageFile.name.toLowerCase();
-      if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
-        toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
-        return;
+      // Validate JPG file type if provided
+      if (uploadImageFile) {
+        const imageFileName = uploadImageFile.name.toLowerCase();
+        if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
+          toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
+          return;
+        }
       }
 
       setUploading(true);
@@ -259,9 +255,13 @@ const DrawingSpecificationsPage = () => {
       formDataToSend.append('features', JSON.stringify(formData.features));
       formDataToSend.append('customSpecifications', JSON.stringify(formData.customSpecifications));
       
-      // Append both files with correct field names
-      formDataToSend.append('drawingFile', uploadFile);
-      formDataToSend.append('quotationImage', uploadImageFile);
+      // Append files only if provided
+      if (uploadFile) {
+        formDataToSend.append('drawingFile', uploadFile);
+      }
+      if (uploadImageFile) {
+        formDataToSend.append('quotationImage', uploadImageFile);
+      }
       
       await axiosInstance.post('/api/drawing-specifications', formDataToSend, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -1300,13 +1300,13 @@ const DrawingSpecificationsPage = () => {
               </>
             )}
 
-            {/* File Uploads - Required for create */}
+            {/* File Uploads - Optional */}
             {showCreateModal && (
               <>
                 {/* AutoCAD File Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    AutoCAD File (DWG/DXF) * - For Archive
+                    AutoCAD File (DWG/DXF) <span className="text-gray-500 text-xs font-normal">(Optional - For Archive)</span>
                   </label>
                   <input
                     type="file"
@@ -1324,7 +1324,6 @@ const DrawingSpecificationsPage = () => {
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     accept=".dwg,.dxf"
-                    required
                   />
                   {uploadFile && (
                     <div className="mt-2 p-3 bg-gray-50 rounded-lg">
@@ -1344,7 +1343,7 @@ const DrawingSpecificationsPage = () => {
                 {/* JPG Image Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quotation Image (JPG) * - For Quotation Display
+                    Quotation Image (JPG) <span className="text-gray-500 text-xs font-normal">(Optional - For Quotation Display)</span>
                   </label>
                   <input
                     type="file"
@@ -1362,7 +1361,6 @@ const DrawingSpecificationsPage = () => {
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     accept=".jpg,.jpeg,image/jpeg"
-                    required
                   />
                   {uploadImageFile && (
                     <div className="mt-2 p-3 bg-gray-50 rounded-lg">
