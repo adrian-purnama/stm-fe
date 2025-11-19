@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Trash2, Save, X, Edit3, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PriceInput from '../common/PriceInput';
@@ -19,30 +19,57 @@ const OfferItemForm = ({
   onToggleSelect = null,
   lineOfBusinessType = 'karoseri'
 }) => {
-  const [formData, setFormData] = useState({
-    karoseri: item?.karoseri || '',
-    chassis: item?.chassis || '',
-    chassisModel: item?.chassisModel || '',
-    drawingSpecification: item?.drawingSpecification || null,
-    bodyTypeId: item?.bodyTypeId || '',
-    chassisTypeId: item?.chassisTypeId || '',
-    sizeTypeId: item?.sizeTypeId || '',
-    templateMode: item?.templateMode || 'manual',
-    templateSourceModel: item?.templateSourceModel || null,
-    templateSourceId: item?.templateSourceId || null,
-    specifications: item?.specifications || [],
-    quantity: item?.quantity || 1,
-    price: item?.price || 0,
-    discountType: item?.discountType || 'percentage',
-    discountValue: item?.discountValue || 0,
-    netto: item?.netto || 0,
-    commission: item?.commission || 0,
-    notes: item?.notes || ''
-  });
+  // Initialize formData based on lineOfBusinessType
+  const getInitialFormData = () => {
+    const baseData = {
+      quantity: item?.quantity || 1,
+      price: item?.price || 0,
+      discountType: item?.discountType || 'percentage',
+      discountValue: item?.discountValue || 0,
+      netto: item?.netto || 0,
+      commission: item?.commission || 0,
+      notes: item?.notes || ''
+    };
+
+    if (lineOfBusinessType === 'karoseri') {
+      return {
+        ...baseData,
+        karoseri: item?.karoseri || '',
+        chassis: item?.chassis || '',
+        chassisModel: item?.chassisModel || '',
+        drawingSpecification: item?.drawingSpecification || null,
+        bodyTypeId: item?.bodyTypeId || '',
+        chassisTypeId: item?.chassisTypeId || '',
+        sizeTypeId: item?.sizeTypeId || '',
+        templateMode: item?.templateMode || 'manual',
+        templateSourceModel: item?.templateSourceModel || null,
+        templateSourceId: item?.templateSourceId || null,
+        specifications: item?.specifications || []
+      };
+    } else if (lineOfBusinessType === 'service') {
+      return {
+        ...baseData,
+        serviceName: item?.serviceName || '',
+        serviceDetails: item?.serviceDetails || []
+      };
+    } else if (lineOfBusinessType === 'sparepart') {
+      return {
+        ...baseData,
+        sparepartName: item?.sparepartName || '',
+        pricePerUnit: item?.pricePerUnit || 0
+      };
+    }
+    return baseData;
+  };
+
+  const [formData, setFormData] = useState(getInitialFormData());
 
   const [newSpecCategory, setNewSpecCategory] = useState('');
   const [showDrawingSelector, setShowDrawingSelector] = useState(false);
   const [selectedDrawingSpec, setSelectedDrawingSpec] = useState(null);
+  
+  // Refs for specification input fields to manage focus
+  const specInputRefs = useRef({});
   
   // Master data for dropdowns
   const [bodyTypes, setBodyTypes] = useState([]);
@@ -121,21 +148,10 @@ const OfferItemForm = ({
     }
   };
 
-  // Update form data when item prop changes
+  // Update form data when item prop or lineOfBusinessType changes
   useEffect(() => {
-    console.log('OfferItemForm: useEffect triggered, item:', item);
-    const newFormData = {
-      karoseri: item?.karoseri || '',
-      chassis: item?.chassis || '',
-      chassisModel: item?.chassisModel || '',
-      drawingSpecification: item?.drawingSpecification || null,
-      bodyTypeId: item?.bodyTypeId?._id || item?.bodyTypeId || '',
-      chassisTypeId: item?.chassisTypeId?._id || item?.chassisTypeId || '',
-      sizeTypeId: item?.sizeTypeId || '',
-      templateMode: item?.templateMode || 'manual',
-      templateSourceModel: item?.templateSourceModel || null,
-      templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
-      specifications: item?.specifications || [],
+    console.log('OfferItemForm: useEffect triggered, item:', item, 'lineOfBusinessType:', lineOfBusinessType);
+    const baseData = {
       quantity: item?.quantity || 1,
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
@@ -144,14 +160,46 @@ const OfferItemForm = ({
       commission: item?.commission || 0,
       notes: item?.notes || ''
     };
+
+    let newFormData;
+    if (lineOfBusinessType === 'karoseri') {
+      newFormData = {
+        ...baseData,
+        karoseri: item?.karoseri || '',
+        chassis: item?.chassis || '',
+        chassisModel: item?.chassisModel || '',
+        drawingSpecification: item?.drawingSpecification || null,
+        bodyTypeId: item?.bodyTypeId?._id || item?.bodyTypeId || '',
+        chassisTypeId: item?.chassisTypeId?._id || item?.chassisTypeId || '',
+        sizeTypeId: item?.sizeTypeId || '',
+        templateMode: item?.templateMode || 'manual',
+        templateSourceModel: item?.templateSourceModel || null,
+        templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
+        specifications: item?.specifications || []
+      };
+      // Set the selected drawing spec if it exists
+      if (item?.drawingSpecification) {
+        setSelectedDrawingSpec(item.drawingSpecification);
+      }
+    } else if (lineOfBusinessType === 'service') {
+      newFormData = {
+        ...baseData,
+        serviceName: item?.serviceName || '',
+        serviceDetails: item?.serviceDetails || []
+      };
+    } else if (lineOfBusinessType === 'sparepart') {
+      newFormData = {
+        ...baseData,
+        sparepartName: item?.sparepartName || '',
+        pricePerUnit: item?.pricePerUnit || 0
+      };
+    } else {
+      newFormData = baseData;
+    }
+    
     console.log('OfferItemForm: Setting formData to:', newFormData);
     setFormData(newFormData);
-    
-    // Set the selected drawing spec if it exists
-    if (item?.drawingSpecification) {
-      setSelectedDrawingSpec(item.drawingSpecification);
-    }
-  }, [item]);
+  }, [item, lineOfBusinessType]);
 
   // Fetch drawing specification details when drawingSpecification ID changes
   useEffect(() => {
@@ -225,30 +273,51 @@ const OfferItemForm = ({
   };
 
 
-  const addCategory = () => {
-    if (newSpecCategory.trim()) {
-      console.log('Adding category:', newSpecCategory.trim());
+  const addCategory = (categoryName = null, focusFirstSpec = false) => {
+    const categoryToAdd = categoryName || newSpecCategory.trim();
+    if (categoryToAdd) {
+      console.log('Adding category:', categoryToAdd);
       console.log('Current specifications before adding:', formData.specifications);
       
       setFormData(prev => {
+        const newCategoryIndex = prev.specifications.length;
         const newSpecifications = [...prev.specifications, {
-          category: newSpecCategory.trim(),
-          items: []
+          category: categoryToAdd,
+          items: [{
+            name: '',
+            specification: ''
+          }]
         }];
         console.log('New specifications after adding:', newSpecifications);
+        
+        // Focus on the first spec name field of the new category
+        if (focusFirstSpec) {
+          setTimeout(() => {
+            const refKey = `spec-name-${newCategoryIndex}-0`;
+            if (specInputRefs.current[refKey]) {
+              specInputRefs.current[refKey].focus();
+            }
+          }, 0);
+        }
+        
         return {
           ...prev,
           specifications: newSpecifications
         };
       });
-      setNewSpecCategory('');
+      
+      if (!categoryName) {
+        setNewSpecCategory('');
+      }
     } else {
       console.log('Category name is empty, not adding');
     }
   };
 
-  const addItemToCategory = (categoryIndex) => {
+  const addItemToCategory = (categoryIndex, focusNewItem = false) => {
     setFormData(prev => {
+      const currentItems = prev.specifications[categoryIndex]?.items || [];
+      const newItemIndex = currentItems.length;
       const newSpecifications = prev.specifications.map((spec, index) => 
         index === categoryIndex ? {
           ...spec,
@@ -258,6 +327,17 @@ const OfferItemForm = ({
           }]
         } : spec
       );
+      
+      // Focus on the new spec name field
+      if (focusNewItem) {
+        setTimeout(() => {
+          const refKey = `spec-name-${categoryIndex}-${newItemIndex}`;
+          if (specInputRefs.current[refKey]) {
+            specInputRefs.current[refKey].focus();
+          }
+        }, 0);
+      }
+      
       return {
         ...prev,
         specifications: newSpecifications
@@ -288,34 +368,52 @@ const OfferItemForm = ({
 
   const handleSave = () => {
     console.log('OfferItemForm handleSave called with formData:', formData);
-    console.log('OfferItemForm specifications:', formData.specifications);
-    console.log('OfferItemForm specifications length:', formData.specifications.length);
+    console.log('OfferItemForm lineOfBusinessType:', lineOfBusinessType);
     console.log('OfferItemForm onSave function exists:', !!onSave);
     
-    // Validate required fields based on template mode
-    if (!formData.karoseri.trim()) {
-      console.log('Validation failed: karoseri is empty');
-      toast.error('Please enter karoseri/body type');
-      return;
-    }
-    if (!formData.chassis.trim()) {
-      console.log('Validation failed: chassis is empty');
-      toast.error('Please enter chassis');
-      return;
-    }
-    
-    // For bodyType mode, require templateSourceId
-    if (formData.templateMode === 'bodyType' && !formData.templateSourceId) {
-      console.log('Validation failed: body type template not selected');
-      toast.error('Please select a body type template');
-      return;
-    }
-    
-    // For drawing mode, require templateSourceId
-    if (formData.templateMode === 'drawing' && !formData.templateSourceId) {
-      console.log('Validation failed: drawing not selected');
-      toast.error('Please select a drawing');
-      return;
+    // Validate required fields based on line of business type
+    if (lineOfBusinessType === 'karoseri') {
+      if (!formData.karoseri?.trim()) {
+        console.log('Validation failed: karoseri is empty');
+        toast.error('Please enter karoseri/body type');
+        return;
+      }
+      if (!formData.chassis?.trim()) {
+        console.log('Validation failed: chassis is empty');
+        toast.error('Please enter chassis');
+        return;
+      }
+      
+      // For bodyType mode, require templateSourceId
+      if (formData.templateMode === 'bodyType' && !formData.templateSourceId) {
+        console.log('Validation failed: body type template not selected');
+        toast.error('Please select a body type template');
+        return;
+      }
+      
+      // For drawing mode, require templateSourceId
+      if (formData.templateMode === 'drawing' && !formData.templateSourceId) {
+        console.log('Validation failed: drawing not selected');
+        toast.error('Please select a drawing');
+        return;
+      }
+    } else if (lineOfBusinessType === 'service') {
+      if (!formData.serviceName?.trim()) {
+        console.log('Validation failed: serviceName is empty');
+        toast.error('Please enter service name');
+        return;
+      }
+    } else if (lineOfBusinessType === 'sparepart') {
+      if (!formData.sparepartName?.trim()) {
+        console.log('Validation failed: sparepartName is empty');
+        toast.error('Please enter sparepart name');
+        return;
+      }
+      if (!formData.pricePerUnit || formData.pricePerUnit <= 0) {
+        console.log('Validation failed: pricePerUnit is invalid');
+        toast.error('Please enter a valid price per unit');
+        return;
+      }
     }
     
     if (formData.quantity <= 0) {
@@ -340,19 +438,8 @@ const OfferItemForm = ({
   };
 
   const handleCancel = () => {
-    // Reset form data to original values
-    setFormData({
-      karoseri: item?.karoseri || '',
-      chassis: item?.chassis || '',
-      chassisModel: item?.chassisModel || '',
-      drawingSpecification: item?.drawingSpecification || null,
-      bodyTypeId: item?.bodyTypeId || '',
-      chassisTypeId: item?.chassisTypeId || '',
-      sizeTypeId: item?.sizeTypeId || '',
-      templateMode: item?.templateMode || 'manual',
-      templateSourceModel: item?.templateSourceModel || null,
-      templateSourceId: item?.templateSourceId || null,
-      specifications: item?.specifications || [],
+    // Reset form data to original values based on lineOfBusinessType
+    const baseData = {
       quantity: item?.quantity || 1,
       price: item?.price || 0,
       discountType: item?.discountType || 'percentage',
@@ -360,7 +447,41 @@ const OfferItemForm = ({
       netto: item?.netto || 0,
       commission: item?.commission || 0,
       notes: item?.notes || ''
-    });
+    };
+
+    let resetData;
+    if (lineOfBusinessType === 'karoseri') {
+      resetData = {
+        ...baseData,
+        karoseri: item?.karoseri || '',
+        chassis: item?.chassis || '',
+        chassisModel: item?.chassisModel || '',
+        drawingSpecification: item?.drawingSpecification || null,
+        bodyTypeId: item?.bodyTypeId || '',
+        chassisTypeId: item?.chassisTypeId || '',
+        sizeTypeId: item?.sizeTypeId || '',
+        templateMode: item?.templateMode || 'manual',
+        templateSourceModel: item?.templateSourceModel || null,
+        templateSourceId: item?.templateSourceId || null,
+        specifications: item?.specifications || []
+      };
+    } else if (lineOfBusinessType === 'service') {
+      resetData = {
+        ...baseData,
+        serviceName: item?.serviceName || '',
+        serviceDetails: item?.serviceDetails || []
+      };
+    } else if (lineOfBusinessType === 'sparepart') {
+      resetData = {
+        ...baseData,
+        sparepartName: item?.sparepartName || '',
+        pricePerUnit: item?.pricePerUnit || 0
+      };
+    } else {
+      resetData = baseData;
+    }
+    
+    setFormData(resetData);
     setNewSpecCategory('');
     onCancel && onCancel();
   };
@@ -400,7 +521,11 @@ const OfferItemForm = ({
               {item ? `Item ${index + 1}` : 'Add New Item'}
             </h4>
             <p className="text-sm text-gray-600">
-              {item ? 'Edit item details' : 'Enter karoseri and chassis information'}
+              {item ? 'Edit item details' : 
+                lineOfBusinessType === 'karoseri' ? 'Enter karoseri and chassis information' :
+                lineOfBusinessType === 'service' ? 'Enter service information' :
+                lineOfBusinessType === 'sparepart' ? 'Enter sparepart information' :
+                'Enter item information'}
             </p>
           </div>
         </div>
@@ -452,7 +577,8 @@ const OfferItemForm = ({
       {renderBulkActions()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Product Information */}
+        {/* Product Information - Conditional based on lineOfBusinessType */}
+        {lineOfBusinessType === 'karoseri' && (
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
           <div className="flex items-center mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
@@ -762,6 +888,119 @@ const OfferItemForm = ({
 
           </div>
         </div>
+        )}
+
+        {/* Service Information */}
+        {lineOfBusinessType === 'service' && (
+        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-blue-600 font-semibold text-sm">🔧</span>
+            </div>
+            <h5 className="font-semibold text-gray-900">Service Information</h5>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Service Name *
+              </label>
+              <input
+                type="text"
+                value={formData.serviceName || ''}
+                onChange={(e) => handleInputChange('serviceName', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter service name"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Service Details
+              </label>
+              <div className="space-y-2">
+                {Array.isArray(formData.serviceDetails) && formData.serviceDetails.map((detail, detailIndex) => (
+                  <div key={detailIndex} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={detail || ''}
+                      onChange={(e) => {
+                        const newDetails = [...formData.serviceDetails];
+                        newDetails[detailIndex] = e.target.value;
+                        handleInputChange('serviceDetails', newDetails);
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={`Service detail ${detailIndex + 1}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newDetails = formData.serviceDetails.filter((_, i) => i !== detailIndex);
+                        handleInputChange('serviceDetails', newDetails);
+                      }}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleInputChange('serviceDetails', [...(formData.serviceDetails || []), '']);
+                  }}
+                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Service Detail
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* Sparepart Information */}
+        {lineOfBusinessType === 'sparepart' && (
+        <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-blue-600 font-semibold text-sm">⚙️</span>
+            </div>
+            <h5 className="font-semibold text-gray-900">Sparepart Information</h5>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sparepart Name *
+              </label>
+              <input
+                type="text"
+                value={formData.sparepartName || ''}
+                onChange={(e) => handleInputChange('sparepartName', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter sparepart name"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Price Per Unit *
+              </label>
+              <PriceInput
+                value={formData.pricePerUnit || 0}
+                onChange={(value) => handleInputChange('pricePerUnit', value)}
+                placeholder="0"
+                required
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+        )}
 
       {/* Pricing Information */}
       <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
@@ -919,7 +1158,8 @@ const OfferItemForm = ({
         </div>
       </div>
 
-      {/* Specifications */}
+      {/* Specifications - Only for karoseri */}
+      {lineOfBusinessType === 'karoseri' && (
       <div className="mt-8 bg-white rounded-lg p-5 shadow-sm border border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h5 className="font-semibold text-gray-900">Specifications (Editable)</h5>
@@ -939,7 +1179,11 @@ const OfferItemForm = ({
             />
             <button
               type="button"
-              onClick={addCategory}
+              onClick={() => {
+                if (newSpecCategory.trim()) {
+                  addCategory(null, true);
+                }
+              }}
               disabled={!newSpecCategory.trim()}
               className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -964,6 +1208,21 @@ const OfferItemForm = ({
                       )
                     }));
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // If category has no items yet, add first item and focus on its name field
+                      if (!spec.items || spec.items.length === 0) {
+                        addItemToCategory(categoryIndex, true);
+                      } else {
+                        // Focus on first spec name field in this category
+                        const refKey = `spec-name-${categoryIndex}-0`;
+                        if (specInputRefs.current[refKey]) {
+                          specInputRefs.current[refKey].focus();
+                        }
+                      }
+                    }
+                  }}
                   className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Category name"
                 />
@@ -980,6 +1239,14 @@ const OfferItemForm = ({
                 {spec.items && spec.items.map((item, specItemIndex) => (
                   <div key={specItemIndex} className="flex items-center gap-2">
                     <input
+                      ref={(el) => {
+                        const refKey = `spec-name-${categoryIndex}-${specItemIndex}`;
+                        if (el) {
+                          specInputRefs.current[refKey] = el;
+                        } else {
+                          delete specInputRefs.current[refKey];
+                        }
+                      }}
                       type="text"
                       value={item.name || ''}
                       onChange={(e) => {
@@ -995,11 +1262,29 @@ const OfferItemForm = ({
                           )
                         }));
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Move focus to value field
+                          const valueRefKey = `spec-value-${categoryIndex}-${specItemIndex}`;
+                          if (specInputRefs.current[valueRefKey]) {
+                            specInputRefs.current[valueRefKey].focus();
+                          }
+                        }
+                      }}
                       className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Specification name"
                     />
                     <span className="text-gray-500">:</span>
                     <input
+                      ref={(el) => {
+                        const refKey = `spec-value-${categoryIndex}-${specItemIndex}`;
+                        if (el) {
+                          specInputRefs.current[refKey] = el;
+                        } else {
+                          delete specInputRefs.current[refKey];
+                        }
+                      }}
                       type="text"
                       value={item.specification || ''}
                       onChange={(e) => {
@@ -1014,6 +1299,13 @@ const OfferItemForm = ({
                             } : s
                           )
                         }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Always add new item to current category and focus on its name field
+                          addItemToCategory(categoryIndex, true);
+                        }
                       }}
                       className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Specification value"
@@ -1041,6 +1333,7 @@ const OfferItemForm = ({
           ))}
         </div>
       </div>
+      )}
 
       {/* Notes */}
       <div className="mt-8 bg-white rounded-lg p-5 shadow-sm border border-gray-100">

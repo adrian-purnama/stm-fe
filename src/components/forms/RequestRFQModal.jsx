@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, X, Search, Paperclip, Download, Trash2 } from 'lucide-react';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
@@ -76,6 +76,9 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
   const [existingDocuments, setExistingDocuments] = useState([]);
   const [documentsToDelete, setDocumentsToDelete] = useState([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  
+  // Refs for specification input fields to manage focus
+  const specInputRefs = useRef({});
 
   // Fetch master data when modal opens
   useEffect(() => {
@@ -682,19 +685,37 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
   };
 
   // Specification management functions
-  const addSpecificationCategory = (itemIndex) => {
-    const newCategory = {
-      category: '',
-      items: []
-    };
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => 
-        i === itemIndex 
-          ? { ...item, specifications: [...(item.specifications || []), newCategory] }
-          : item
-      )
-    }));
+  const addSpecificationCategory = (itemIndex, focusFirstSpec = false) => {
+    setFormData(prev => {
+      const newCategoryIndex = prev.items[itemIndex]?.specifications?.length || 0;
+      const newCategory = {
+        category: '',
+        items: [{
+          name: '',
+          specification: ''
+        }]
+      };
+      const updated = {
+        ...prev,
+        items: prev.items.map((item, i) => 
+          i === itemIndex 
+            ? { ...item, specifications: [...(item.specifications || []), newCategory] }
+            : item
+        )
+      };
+      
+      // Focus on the first spec name field of the new category
+      if (focusFirstSpec) {
+        setTimeout(() => {
+          const refKey = `spec-name-${itemIndex}-${newCategoryIndex}-0`;
+          if (specInputRefs.current[refKey]) {
+            specInputRefs.current[refKey].focus();
+          }
+        }, 0);
+      }
+      
+      return updated;
+    });
   };
 
   const removeSpecificationCategory = (itemIndex, categoryIndex) => {
@@ -724,26 +745,42 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     }));
   };
 
-  const addSpecificationItem = (itemIndex, categoryIndex) => {
-    const newSpecItem = {
-      name: '',
-      specification: ''
-    };
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => 
-        i === itemIndex 
-          ? {
-              ...item,
-              specifications: item.specifications.map((spec, si) => 
-                si === categoryIndex 
-                  ? { ...spec, items: [...(spec.items || []), newSpecItem] }
-                  : spec
-              )
-            }
-          : item
-      )
-    }));
+  const addSpecificationItem = (itemIndex, categoryIndex, focusNewItem = false) => {
+    setFormData(prev => {
+      const currentItems = prev.items[itemIndex]?.specifications?.[categoryIndex]?.items || [];
+      const newItemIndex = currentItems.length;
+      const newSpecItem = {
+        name: '',
+        specification: ''
+      };
+      const updated = {
+        ...prev,
+        items: prev.items.map((item, i) => 
+          i === itemIndex 
+            ? {
+                ...item,
+                specifications: item.specifications.map((spec, si) => 
+                  si === categoryIndex 
+                    ? { ...spec, items: [...(spec.items || []), newSpecItem] }
+                    : spec
+                )
+              }
+            : item
+        )
+      };
+      
+      // Focus on the new spec name field
+      if (focusNewItem) {
+        setTimeout(() => {
+          const refKey = `spec-name-${itemIndex}-${categoryIndex}-${newItemIndex}`;
+          if (specInputRefs.current[refKey]) {
+            specInputRefs.current[refKey].focus();
+          }
+        }, 0);
+      }
+      
+      return updated;
+    });
   };
 
   const removeSpecificationItem = (itemIndex, categoryIndex, itemSpecIndex) => {
@@ -2255,6 +2292,21 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                         type="text"
                         value={spec.category || ''}
                         onChange={(e) => updateSpecificationCategory(itemIndex, specIndex, 'category', e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // If category has no items yet, add first item and focus on its name field
+                            if (!spec.items || spec.items.length === 0) {
+                              addSpecificationItem(itemIndex, specIndex, true);
+                            } else {
+                              // Focus on first spec name field in this category
+                              const refKey = `spec-name-${itemIndex}-${specIndex}-0`;
+                              if (specInputRefs.current[refKey]) {
+                                specInputRefs.current[refKey].focus();
+                              }
+                            }
+                          }
+                        }}
                         className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Category name"
                         disabled={loading}
@@ -2272,18 +2324,51 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                       {spec.items && spec.items.map((specItem, specItemIndex) => (
                         <div key={specItemIndex} className="flex items-center gap-2">
                           <input
+                            ref={(el) => {
+                              const refKey = `spec-name-${itemIndex}-${specIndex}-${specItemIndex}`;
+                              if (el) {
+                                specInputRefs.current[refKey] = el;
+                              } else {
+                                delete specInputRefs.current[refKey];
+                              }
+                            }}
                             type="text"
                             value={specItem.name || ''}
                             onChange={(e) => updateSpecificationItem(itemIndex, specIndex, specItemIndex, 'name', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                // Move focus to value field
+                                const valueRefKey = `spec-value-${itemIndex}-${specIndex}-${specItemIndex}`;
+                                if (specInputRefs.current[valueRefKey]) {
+                                  specInputRefs.current[valueRefKey].focus();
+                                }
+                              }
+                            }}
                             className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Specification name"
                             disabled={loading}
                           />
                           <span className="text-gray-500">:</span>
                           <input
+                            ref={(el) => {
+                              const refKey = `spec-value-${itemIndex}-${specIndex}-${specItemIndex}`;
+                              if (el) {
+                                specInputRefs.current[refKey] = el;
+                              } else {
+                                delete specInputRefs.current[refKey];
+                              }
+                            }}
                             type="text"
                             value={specItem.specification || ''}
                             onChange={(e) => updateSpecificationItem(itemIndex, specIndex, specItemIndex, 'specification', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                // Always add new item to current category and focus on its name field
+                                addSpecificationItem(itemIndex, specIndex, true);
+                              }
+                            }}
                             className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Specification value"
                             disabled={loading}

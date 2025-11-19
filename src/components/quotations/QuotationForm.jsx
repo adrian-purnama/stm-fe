@@ -23,6 +23,20 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     notesImages: []
   });
 
+  // Get line of business type from quotation data
+  const lineOfBusinessType = useMemo(() => {
+    if (quotation?.header?.lineOfBusiness?.type) {
+      return quotation.header.lineOfBusiness.type;
+    }
+    if (quotation?.lineOfBusiness?.type) {
+      return quotation.lineOfBusiness.type;
+    }
+    if (quotation?.rfq?.lineOfBusiness?.type) {
+      return quotation.rfq.lineOfBusiness.type;
+    }
+    return 'karoseri'; // Default
+  }, [quotation]);
+
   // Debug formData changes
   useEffect(() => {
     console.log('QuotationForm: formData changed:', formData);
@@ -216,19 +230,46 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           offerItems = processedQuotation.offers[0].offerItems;
         } else if (processedQuotation.items) {
           console.log('QuotationForm: Found items in processedQuotation, transforming:', processedQuotation.items);
-          // If it's direct RFQ items, transform them
-          offerItems = processedQuotation.items.map((item, index) => ({
-            itemNumber: index + 1,
-            karoseri: item.karoseri,
-            chassis: item.chassis,
-            drawingSpecification: item.drawingSpecification,
-            specifications: item.specifications,
-            price: item.price,           // RFQ price -> quotation price
-            netto: item.priceNet,        // RFQ priceNet -> quotation netto
-            discountType: 'percentage',  // Default discount type
-            discountValue: 0,            // Default discount value
-            notes: item.notes
-          }));
+          // If it's direct RFQ items, transform them based on line of business type
+          const lineOfBusinessType = processedQuotation.lineOfBusiness?.type;
+          offerItems = processedQuotation.items.map((item, index) => {
+            const itemRevenue = item.estimatedRevenue || item.price || 0;
+            const baseItem = {
+              itemNumber: index + 1,
+              price: itemRevenue,
+              netto: itemRevenue * 0.91,
+              discountType: 'percentage',
+              discountValue: 0,
+              quantity: item.quantity || 1,
+              notes: item.notes || ''
+            };
+            
+            // Add type-specific fields
+            if (lineOfBusinessType === 'karoseri') {
+              return {
+                ...baseItem,
+                karoseri: item.karoseri || '',
+                chassis: item.chassis || '',
+                chassisModel: item.chassisModel || '',
+                drawingSpecification: item.drawingSpecification || null,
+                specifications: item.specifications || []
+              };
+            } else if (lineOfBusinessType === 'service') {
+              return {
+                ...baseItem,
+                serviceName: item.serviceName || '',
+                serviceDetails: item.serviceDetails || []
+              };
+            } else if (lineOfBusinessType === 'sparepart') {
+              return {
+                ...baseItem,
+                sparepartName: item.sparepartName || '',
+                pricePerUnit: item.pricePerUnit || 0
+              };
+            }
+            
+            return baseItem;
+          });
         } else {
           console.log('QuotationForm: No offerItems found in any location');
         }
@@ -913,13 +954,18 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   isEditing={true}
                   onSave={saveOfferItem}
                   onCancel={cancelEditItem}
+                  lineOfBusinessType={lineOfBusinessType}
                 />
               ) : (
                 <div className="p-4">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-medium text-gray-900">Item {index + 1}</h4>
-                      <p className="text-sm text-gray-600">{item.karoseri} - {item.chassis}</p>
+                      <p className="text-sm text-gray-600">
+                        {lineOfBusinessType === 'karoseri' && `${item.karoseri || ''} - ${item.chassis || ''}`}
+                        {lineOfBusinessType === 'service' && item.serviceName}
+                        {lineOfBusinessType === 'sparepart' && item.sparepartName}
+                      </p>
                     </div>
                     <div className="flex space-x-2">
                       <button
@@ -968,6 +1014,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               isEditing={true}
               onSave={saveOfferItem}
               onCancel={cancelEditItem}
+              lineOfBusinessType={lineOfBusinessType}
             />
           )}
           

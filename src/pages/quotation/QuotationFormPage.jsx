@@ -80,17 +80,11 @@ const QuotationFormPage = () => {
                 offerItems: rfqData.items?.map((item, index) => {
                   // Each RFQ item already has its own estimatedRevenue
                   const itemRevenue = item.estimatedRevenue || 0;
+                  const lineOfBusinessType = rfqData.lineOfBusiness?.type;
                   
+                  // Base item data (common to all types)
                   const itemData = {
                     itemNumber: index + 1,
-                    karoseri: item.karoseri,
-                    chassis: item.chassis,
-                    chassisModel: item.chassisModel || '',
-                    drawingSpecification: item.drawingSpecification,
-                    templateMode: item.templateMode || 'manual',
-                    templateSourceModel: item.templateSourceModel || null,
-                    templateSourceId: item.templateSourceId || null,
-                    specifications: item.specifications || [],
                     price: itemRevenue,
                     netto: itemRevenue * 0.91,
                     discountType: 'percentage',
@@ -99,20 +93,26 @@ const QuotationFormPage = () => {
                     notes: item.notes || ''
                   };
                   
-                  // Add RFQ-level bodyTypeId and chassisTypeId if karoseri type
-                  if (rfqData.lineOfBusiness?.type === 'karoseri') {
+                  // Add type-specific fields based on line of business
+                  if (lineOfBusinessType === 'karoseri') {
+                    // Karoseri-specific fields
+                    itemData.karoseri = item.karoseri || '';
+                    itemData.chassis = item.chassis || '';
+                    itemData.chassisModel = item.chassisModel || '';
+                    itemData.drawingSpecification = item.drawingSpecification || null;
+                    itemData.templateMode = item.templateMode || 'manual';
+                    itemData.templateSourceModel = item.templateSourceModel || null;
+                    itemData.templateSourceId = item.templateSourceId || null;
+                    itemData.specifications = item.specifications || [];
                     // Handle populated objects (get _id) or plain IDs
                     itemData.bodyTypeId = rfqData.bodyTypeId?._id || rfqData.bodyTypeId || null;
                     itemData.chassisTypeId = rfqData.chassisTypeId?._id || rfqData.chassisTypeId || null;
-                  }
-                  
-                  // Add service/sparepart fields if applicable
-                  if (rfqData.lineOfBusiness?.type === 'service') {
+                  } else if (lineOfBusinessType === 'service') {
+                    // Service-specific fields
                     itemData.serviceName = item.serviceName || '';
                     itemData.serviceDetails = item.serviceDetails || [];
-                  }
-                  
-                  if (rfqData.lineOfBusiness?.type === 'sparepart') {
+                  } else if (lineOfBusinessType === 'sparepart') {
+                    // Sparepart-specific fields
                     itemData.sparepartName = item.sparepartName || '';
                     itemData.pricePerUnit = item.pricePerUnit || 0;
                   }
