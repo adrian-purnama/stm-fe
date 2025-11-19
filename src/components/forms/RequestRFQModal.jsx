@@ -936,15 +936,46 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       }
     }
     
-    return Object.keys(newErrors).length === 0;
+    return { isValid: Object.keys(newErrors).length === 0, errors: newErrors };
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      toast.error('Please fix the errors below');
+    // For draft, skip validation - allow saving incomplete forms
+    if (!isDraft) {
+      // Validate form and get errors
+      const { isValid, errors: validationErrors } = validateForm();
+      if (!isValid) {
+      // Show error message with first error
+      const errorKeys = Object.keys(validationErrors);
+      if (errorKeys.length > 0) {
+        const firstErrorKey = errorKeys[0];
+        const firstErrorMessage = validationErrors[firstErrorKey];
+        // Create user-friendly field name
+        const fieldName = firstErrorKey
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, str => str.toUpperCase())
+          .replace(/\./g, ' ')
+          .replace(/items \d+ /, 'Item ')
+          .replace(/template source id/i, 'Body Type/Drawing')
+          .replace(/contact person name/i, 'Contact Person Name');
+        toast.error(`${fieldName}: ${firstErrorMessage}`, {
+          duration: 5000
+        });
+      } else {
+        toast.error('Please fill all required fields', {
+          duration: 4000
+        });
+      }
+      // Scroll to top of form to show errors
+      const formElement = document.querySelector('form');
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // DO NOT reset form - keep user's data
       return;
+      }
     }
     
     setLoading(true);
@@ -952,6 +983,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       // Format data based on line of business type
       const lineOfBusinessType = formData.lineOfBusiness?.type || 'karoseri';
       const submitData = { ...formData };
+      
+      // Add draft/submit flags
+      submitData.isDraft = isDraft;
+      submitData.submitToEngineering = !isDraft && formData.engineeringId ? true : false;
       
       // Remove estimatedRevenue from RFQ level (it's now only in items)
       delete submitData.estimatedRevenue;
@@ -1084,6 +1119,26 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       setErrors({});
     } catch (error) {
       console.error('Error submitting RFQ:', error);
+      // Show error message to user without resetting form
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to submit RFQ. Please check all required fields.';
+      toast.error(errorMessage);
+      
+      // If backend returns validation errors, try to map them to form errors
+      if (error.response?.data?.errors) {
+        const backendErrors = {};
+        const errorData = error.response.data.errors;
+        
+        // Map backend error fields to form error fields
+        Object.keys(errorData).forEach(key => {
+          backendErrors[key] = errorData[key];
+        });
+        
+        if (Object.keys(backendErrors).length > 0) {
+          setErrors(prevErrors => ({ ...prevErrors, ...backendErrors }));
+        }
+      }
+      
+      // Don't reset form on error - keep user's data
     } finally {
       setLoading(false);
     }
@@ -2575,20 +2630,37 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                {rfqToEdit ? 'Saving...' : 'Submitting...'}
-              </div>
-            ) : (
-              rfqToEdit ? 'Save' : 'Submit RFQ'
-            )}
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  Saving...
+                </div>
+              ) : (
+                'Save as Draft'
+              )}
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  {rfqToEdit ? 'Saving...' : 'Submitting...'}
+                </div>
+              ) : (
+                rfqToEdit ? 'Save' : 'Submit'
+              )}
+            </button>
+          </div>
          </div>
        </form>
      </BaseModal>

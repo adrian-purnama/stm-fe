@@ -561,12 +561,20 @@ const RequestQuotationTab = () => {
         }
       }
 
-      toast.success('RFQ submitted successfully');
+      // Show appropriate success message based on draft/submit
+      if (rfqData.isDraft) {
+        toast.success('RFQ saved as draft successfully');
+      } else if (rfqData.submitToEngineering && createdRfq?.stage === 'engineering') {
+        toast.success('RFQ submitted and sent to engineering for review');
+      } else {
+        toast.success('RFQ submitted successfully');
+      }
       setShowModal(false);
       fetchRFQs(1, true);
     } catch (error) {
       console.error('Error creating RFQ:', error);
-      toast.error(error.response?.data?.message || 'Failed to submit RFQ');
+      // Re-throw error so the modal can handle it, show error message, and preserve form data
+      throw error;
     }
   };
 
