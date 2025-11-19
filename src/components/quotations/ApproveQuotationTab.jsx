@@ -747,16 +747,29 @@ const ApproveQuotationTab = () => {
                       </div>
                     )}
                     <div className="pt-3 space-y-2">
-                      {rfq.items.map((item, index) => (
+                      {rfq.items.map((item, index) => {
+                        const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                        const quantity = parseInt(item.quantity) || 1;
+                        const totalRevenue = perQuantity * quantity;
+                        const formatCurrency = (amount) => 
+                          new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                        
+                        return (
                         <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
                           <div className="flex items-start justify-between mb-2">
                             <h4 className="text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
-                            <div className="text-xs text-gray-600 space-x-2">
-                              <span>Qty: {item.quantity || 1}</span>
-                              {item.estimatedRevenue && (
-                                <span className="font-medium text-green-700">
-                                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format((parseFloat(item.estimatedRevenue) || 0) * (parseInt(item.quantity) || 1))}
-                                </span>
+                            <div className="text-xs text-gray-600 space-y-1 text-right">
+                              <div>Qty: {quantity}</div>
+                              {perQuantity > 0 && (
+                                <>
+                                  <div className="text-gray-500">Per Qty: {formatCurrency(perQuantity)}</div>
+                                  <div className="font-medium text-green-700">
+                                    Total: {formatCurrency(totalRevenue)}
+                                  </div>
+                                  <div className="text-gray-400 italic text-[10px]">
+                                    {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
@@ -828,7 +841,8 @@ const ApproveQuotationTab = () => {
                             </details>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -961,34 +975,68 @@ const ApproveQuotationTab = () => {
                 {/* Budget Information */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                   <h4 className="text-sm font-semibold text-blue-800 mb-2">Budget Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-blue-700">Total Estimated Revenue per Quantity:</span>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-                        {(() => {
-                          // Calculate total estimated revenue from all items
-                          const totalRevenue = selectedRFQ.items?.reduce((sum, item) => {
-                            const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
-                            const itemQuantity = parseInt(item.quantity) || 1;
-                            return sum + (itemRevenue * itemQuantity);
-                          }, 0) || 0;
-                          return totalRevenue > 0 
-                            ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue)
-                            : 'Not Set';
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-blue-700">Items:</span>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                        {selectedRFQ.items?.length || 0} item{(selectedRFQ.items?.length || 0) !== 1 ? 's' : ''}
-                        {selectedRFQ.items && selectedRFQ.items.length > 0 && (
-                          <span className="ml-1">
-                            (Qty: {selectedRFQ.items.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0)})
-                          </span>
-                        )}
-                      </span>
-                    </div>
+                  <div className="space-y-2 text-xs">
+                    {selectedRFQ.items && selectedRFQ.items.length > 0 ? (
+                      <>
+                        {selectedRFQ.items.map((item, index) => {
+                          const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                          const quantity = parseInt(item.quantity) || 1;
+                          const totalRevenue = perQuantity * quantity;
+                          const formatCurrency = (amount) => 
+                            new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                          
+                          return (
+                            <div key={index} className="bg-white rounded p-2 border border-blue-100">
+                              <div className="font-medium text-blue-700 mb-1">Item {item.itemNumber || index + 1}:</div>
+                              <div className="space-y-1 text-gray-700">
+                                <div className="flex items-center justify-between">
+                                  <span>Estimated Revenue per Quantity:</span>
+                                  <span className="font-medium">{formatCurrency(perQuantity)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Quantity:</span>
+                                  <span className="font-medium">{quantity}</span>
+                                </div>
+                                <div className="flex items-center justify-between pt-1 border-t border-blue-100">
+                                  <span className="font-semibold text-blue-800">Total Revenue:</span>
+                                  <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                                    {formatCurrency(totalRevenue)}
+                                  </span>
+                                </div>
+                                {perQuantity > 0 && quantity > 0 && (
+                                  <div className="text-xs text-gray-500 italic pt-1">
+                                    {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="bg-white rounded p-2 border border-blue-200 mt-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-blue-800">Grand Total Revenue:</span>
+                            <span className="px-2 py-1 rounded text-xs font-semibold bg-green-200 text-green-900">
+                              {(() => {
+                                const grandTotal = selectedRFQ.items?.reduce((sum, item) => {
+                                  const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
+                                  const itemQuantity = parseInt(item.quantity) || 1;
+                                  return sum + (itemRevenue * itemQuantity);
+                                }, 0) || 0;
+                                return grandTotal > 0 
+                                  ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(grandTotal)
+                                  : 'Not Set';
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          No Items / Budget: 0
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {selectedRFQ.description && (

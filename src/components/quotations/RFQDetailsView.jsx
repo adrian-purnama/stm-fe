@@ -3,11 +3,16 @@ import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, C
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
 import useSmartBackNavigation from '../../hooks/useSmartBackNavigation';
+import BaseModal from '../modals/BaseModal';
 
-const RFQDetailsView = ({ rfq, loading }) => {
+const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
   const goBack = useSmartBackNavigation('/quotations');
   const [expandedItems, setExpandedItems] = React.useState({});
   const [showSpecComparison, setShowSpecComparison] = React.useState(false);
+  const [showApprovalModal, setShowApprovalModal] = React.useState(false);
+  const [approvalAction, setApprovalAction] = React.useState(null); // 'approve' or 'reject'
+  const [approvalNotes, setApprovalNotes] = React.useState('');
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
   const toggleItemExpansion = (itemIndex) => {
     setExpandedItems(prev => ({
@@ -85,6 +90,56 @@ const RFQDetailsView = ({ rfq, loading }) => {
     }
   };
 
+  // Handle approve/reject actions
+  const handleApproveAction = async () => {
+    try {
+      setIsProcessing(true);
+      if (onApprove) {
+        await onApprove(rfq._id, approvalNotes);
+      } else {
+        await ApiHelper.patch(`/api/rfq/${rfq._id}/approve`, { approvalNotes });
+        toast.success('RFQ approved successfully');
+      }
+      setShowApprovalModal(false);
+      setApprovalNotes('');
+      setApprovalAction(null);
+      // Reload page or refresh data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error approving RFQ:', error);
+      toast.error(error.response?.data?.message || 'Failed to approve RFQ');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRejectAction = async () => {
+    try {
+      setIsProcessing(true);
+      if (onReject) {
+        await onReject(rfq._id, approvalNotes);
+      } else {
+        await ApiHelper.patch(`/api/rfq/${rfq._id}/reject`, { rejectionNotes: approvalNotes });
+        toast.success('RFQ rejected successfully');
+      }
+      setShowApprovalModal(false);
+      setApprovalNotes('');
+      setApprovalAction(null);
+      // Reload page or refresh data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error rejecting RFQ:', error);
+      toast.error(error.response?.data?.message || 'Failed to reject RFQ');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const showApproval = (action) => {
+    setApprovalAction(action);
+    setShowApprovalModal(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -107,7 +162,7 @@ const RFQDetailsView = ({ rfq, loading }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={goBack}
           className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
@@ -115,6 +170,28 @@ const RFQDetailsView = ({ rfq, loading }) => {
           <ArrowLeft size={20} />
           Back to Quotations
         </button>
+        
+        {/* Approve/Reject Buttons - Only show when status is pending and stage is approver */}
+        {rfq.status === 'pending' && rfq.stage === 'approver' && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => showApproval('approve')}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle size={16} />
+              {isProcessing ? 'Processing...' : 'Approve RFQ'}
+            </button>
+            <button
+              onClick={() => showApproval('reject')}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <XCircle size={16} />
+              {isProcessing ? 'Processing...' : 'Reject RFQ'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* RFQ Header */}
@@ -283,38 +360,68 @@ const RFQDetailsView = ({ rfq, loading }) => {
         {/* Budget Information */}
         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <h3 className="text-lg font-semibold text-blue-800 mb-3">Budget Information</h3>
-          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-blue-700">Total Estimated Revenue per Quantity:</span>
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                {(() => {
-                  // Calculate total estimated revenue from all items
-                  const totalRevenue = rfq.items?.reduce((sum, item) => {
-                    const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
-                    const itemQuantity = parseInt(item.quantity) || 1;
-                    return sum + (itemRevenue * itemQuantity);
-                  }, 0) || 0;
-                  return totalRevenue > 0 
-                    ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue)
-                    : 'Not Set';
-                })()}
-              </span>
-            </div>
-            {rfq.items && rfq.items.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-blue-700">Items:</span>
-                <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {rfq.items.length} item{(rfq.items.length !== 1 ? 's' : '')} • Total Qty: {rfq.items.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0)}
-                </span>
-              </div>
-            )}
-            {!rfq.items || rfq.items.length === 0 ? (
-              <div className="col-span-2 text-center">
+          <div className="space-y-3">
+            {rfq.items && rfq.items.length > 0 ? (
+              <>
+                {rfq.items.map((item, index) => {
+                  const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                  const quantity = parseInt(item.quantity) || 1;
+                  const totalRevenue = perQuantity * quantity;
+                  const formatCurrency = (amount) => 
+                    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                  
+                  return (
+                    <div key={index} className="bg-white rounded-lg p-3 border border-blue-100">
+                      <div className="font-medium text-blue-700 mb-2">Item {item.itemNumber || index + 1}:</div>
+                      <div className="space-y-1.5 text-sm text-gray-700">
+                        <div className="flex items-center justify-between">
+                          <span>Estimated Revenue per Quantity:</span>
+                          <span className="font-medium">{formatCurrency(perQuantity)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Quantity:</span>
+                          <span className="font-medium">{quantity}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1.5 border-t border-blue-100">
+                          <span className="font-semibold text-blue-800">Total Revenue:</span>
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                            {formatCurrency(totalRevenue)}
+                          </span>
+                        </div>
+                        {perQuantity > 0 && quantity > 0 && (
+                          <div className="text-xs text-gray-500 italic pt-1">
+                            {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="bg-white rounded-lg p-3 border border-blue-200 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-blue-800">Grand Total Revenue:</span>
+                    <span className="px-3 py-1 rounded text-sm font-semibold bg-green-200 text-green-900">
+                      {(() => {
+                        const grandTotal = rfq.items?.reduce((sum, item) => {
+                          const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
+                          const itemQuantity = parseInt(item.quantity) || 1;
+                          return sum + (itemRevenue * itemQuantity);
+                        }, 0) || 0;
+                        return grandTotal > 0 
+                          ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(grandTotal)
+                          : 'Not Set';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-2">
                 <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                   No Items / Budget: 0
                 </span>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -626,13 +733,26 @@ const RFQDetailsView = ({ rfq, loading }) => {
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-md font-medium text-gray-900">Item {item.itemNumber}</h4>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <span>Quantity: {item.quantity || 1}</span>
-                      {item.estimatedRevenue && (
-                        <span className="font-medium text-green-700">
-                          Revenue: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format((parseFloat(item.estimatedRevenue) || 0) * (parseInt(item.quantity) || 1))}
-                        </span>
-                      )}
+                    <div className="flex flex-col items-end gap-1 text-sm text-gray-600">
+                      <div>Quantity: {item.quantity || 1}</div>
+                      {item.estimatedRevenue && (() => {
+                        const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                        const quantity = parseInt(item.quantity) || 1;
+                        const totalRevenue = perQuantity * quantity;
+                        const formatCurrency = (amount) => 
+                          new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                        return (
+                          <>
+                            <div className="text-gray-500 text-xs">Per Qty: {formatCurrency(perQuantity)}</div>
+                            <div className="font-medium text-green-700">
+                              Total Revenue: {formatCurrency(totalRevenue)}
+                            </div>
+                            <div className="text-gray-400 italic text-xs">
+                              {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   
@@ -747,6 +867,63 @@ const RFQDetailsView = ({ rfq, loading }) => {
           )}
         </div>
       </div>
+
+      {/* Approval/Rejection Modal */}
+      {showApprovalModal && approvalAction && (
+        <BaseModal
+          isOpen={showApprovalModal}
+          onClose={() => {
+            setShowApprovalModal(false);
+            setApprovalNotes('');
+            setApprovalAction(null);
+          }}
+          title={`${approvalAction === 'approve' ? 'Approve' : 'Reject'} RFQ`}
+          size="md"
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="approvalNotes" className="block text-sm font-medium text-gray-700 mb-2">
+                {approvalAction === 'approve' ? 'Approval' : 'Rejection'} Notes
+              </label>
+              <textarea
+                id="approvalNotes"
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder={`Enter ${approvalAction === 'approve' ? 'approval' : 'rejection'} notes...`}
+                rows="4"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowApprovalModal(false);
+                  setApprovalNotes('');
+                  setApprovalAction(null);
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={approvalAction === 'approve' ? handleApproveAction : handleRejectAction}
+                disabled={isProcessing}
+                className={`px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  approvalAction === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {isProcessing 
+                  ? (approvalAction === 'approve' ? 'Approving...' : 'Rejecting...')
+                  : (approvalAction === 'approve' ? 'Approve RFQ' : 'Reject RFQ')
+                }
+              </button>
+            </div>
+          </div>
+        </BaseModal>
+      )}
     </div>
   );
 };
