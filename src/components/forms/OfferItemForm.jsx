@@ -853,31 +853,65 @@ const OfferItemForm = ({
                     label: `${d.drawingNumber || 'Drawing'} ${d.bodyTypeId?.name || ''}`
                   }))}
                   value={formData.templateSourceId || ''}
-                  onChange={(value) => {
+                  onChange={async (value) => {
                     handleInputChange('templateSourceModel', 'DrawingSpecification');
                     handleInputChange('templateSourceId', value);
                     handleInputChange('drawingSpecification', value);
-                    const selectedDrawing = drawings.find(d => d._id === value);
-                    if (selectedDrawing) {
+                    
+                    // Fetch full drawing details to ensure we have all data including customSpecifications
+                    try {
+                      const response = await axiosInstance.get(`/api/drawing-specifications/${value}`);
+                      const fullDrawing = response.data.data;
+                      
                       // Populate body type
-                      if (selectedDrawing.bodyTypeId) {
-                        handleInputChange('karoseri', selectedDrawing.bodyTypeId.name || '');
-                        handleInputChange('bodyTypeId', selectedDrawing.bodyTypeId._id);
+                      if (fullDrawing.bodyTypeId) {
+                        handleInputChange('karoseri', fullDrawing.bodyTypeId.name || '');
+                        handleInputChange('bodyTypeId', fullDrawing.bodyTypeId._id);
                       }
                       // Populate chassis type
-                      if (selectedDrawing.chassisTypeId) {
-                        handleInputChange('chassisTypeId', selectedDrawing.chassisTypeId._id);
-                        handleInputChange('chassis', selectedDrawing.chassisTypeId.name || '');
+                      if (fullDrawing.chassisTypeId) {
+                        handleInputChange('chassisTypeId', fullDrawing.chassisTypeId._id);
+                        handleInputChange('chassis', fullDrawing.chassisTypeId.name || '');
                       }
                       // Populate chassis model if available
-                      if (selectedDrawing.chassisModel) {
-                        handleInputChange('chassisModel', selectedDrawing.chassisModel);
+                      if (fullDrawing.chassisModel) {
+                        handleInputChange('chassisModel', fullDrawing.chassisModel);
                       }
-                      // Populate specifications
-                      if (selectedDrawing.customSpecifications) {
-                        handleInputChange('specifications', selectedDrawing.customSpecifications);
+                      // Override specifications with drawing's specifications
+                      if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
+                        handleInputChange('specifications', fullDrawing.customSpecifications);
+                      } else {
+                        // Clear specifications if drawing has none
+                        handleInputChange('specifications', []);
                       }
                       toast.success('Drawing template loaded with all details!');
+                    } catch (error) {
+                      console.error('Error fetching drawing details:', error);
+                      // Fallback to using the drawing from the list
+                      const selectedDrawing = drawings.find(d => d._id === value);
+                      if (selectedDrawing) {
+                        // Populate body type
+                        if (selectedDrawing.bodyTypeId) {
+                          handleInputChange('karoseri', selectedDrawing.bodyTypeId.name || '');
+                          handleInputChange('bodyTypeId', selectedDrawing.bodyTypeId._id);
+                        }
+                        // Populate chassis type
+                        if (selectedDrawing.chassisTypeId) {
+                          handleInputChange('chassisTypeId', selectedDrawing.chassisTypeId._id);
+                          handleInputChange('chassis', selectedDrawing.chassisTypeId.name || '');
+                        }
+                        // Populate chassis model if available
+                        if (selectedDrawing.chassisModel) {
+                          handleInputChange('chassisModel', selectedDrawing.chassisModel);
+                        }
+                        // Override specifications with drawing's specifications
+                        if (selectedDrawing.customSpecifications && selectedDrawing.customSpecifications.length > 0) {
+                          handleInputChange('specifications', selectedDrawing.customSpecifications);
+                        } else {
+                          handleInputChange('specifications', []);
+                        }
+                        toast.success('Drawing template loaded with all details!');
+                      }
                     }
                   }}
                   placeholder="Select drawing"
@@ -1451,13 +1485,42 @@ const OfferItemForm = ({
       <DrawingSpecificationSelector
         isOpen={showDrawingSelector}
         value={formData.drawingSpecification?._id || formData.drawingSpecification}
-        onChange={(drawingSpec) => {
-          handleInputChange('drawingSpecification', drawingSpec._id);
-          setSelectedDrawingSpec(drawingSpec);
-          setShowDrawingSelector(false);
-          // Only show toast for manual/bodyType modes (not drawing mode which auto-fills)
-          if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
-            toast.success('Drawing selected (optional - other fields not changed)');
+        onChange={async (drawingSpec) => {
+          // Fetch full drawing details to ensure we have customSpecifications
+          try {
+            const response = await axiosInstance.get(`/api/drawing-specifications/${drawingSpec._id}`);
+            const fullDrawing = response.data.data;
+            
+            handleInputChange('drawingSpecification', fullDrawing._id);
+            setSelectedDrawingSpec(fullDrawing);
+            setShowDrawingSelector(false);
+            
+            // Override specifications with drawing's specifications if they exist
+            if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
+              handleInputChange('specifications', fullDrawing.customSpecifications);
+              toast.success('Drawing selected - specifications overridden with drawing specifications');
+            } else {
+              // Only show toast for manual/bodyType modes (not drawing mode which auto-fills)
+              if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
+                toast.success('Drawing selected (optional - other fields not changed)');
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching drawing details:', error);
+            // Fallback to using the drawing spec as-is
+            handleInputChange('drawingSpecification', drawingSpec._id);
+            setSelectedDrawingSpec(drawingSpec);
+            setShowDrawingSelector(false);
+            
+            // Try to use customSpecifications from the drawing spec if available
+            if (drawingSpec.customSpecifications && drawingSpec.customSpecifications.length > 0) {
+              handleInputChange('specifications', drawingSpec.customSpecifications);
+              toast.success('Drawing selected - specifications overridden with drawing specifications');
+            } else {
+              if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
+                toast.success('Drawing selected (optional - other fields not changed)');
+              }
+            }
           }
         }}
         onClose={() => setShowDrawingSelector(false)}
