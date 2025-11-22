@@ -25,7 +25,7 @@ import {
   Save,
   RotateCcw
 } from 'lucide-react';
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Treemap } from 'recharts';
 import Navigation from '../components/common/Navigation';
 import CustomDropdown from '../components/common/CustomDropdown';
 import BaseModal from '../components/modals/BaseModal';
@@ -70,7 +70,15 @@ const QuotationAnalysisPage = () => {
       notFollowedUp: { count: 0 },
       mediumWarning: { count: 0 },
       upToDate: { count: 0 }
-    }
+    },
+    rfqStats: {
+      total: 0,
+      approved: 0,
+      rejected: 0,
+      pending: 0
+    },
+    bodyTypeFrequency: [],
+    quarterlyStatus: []
   });
 
   // Time period options
@@ -85,7 +93,10 @@ const QuotationAnalysisPage = () => {
 
   // Available sections for customization
   const availableSections = [
+    { id: 'rfqStats', title: 'RFQ Statistics', icon: FileText, color: 'blue' },
     { id: 'keyMetrics', title: 'Key Metrics', icon: BarChart3, color: 'blue' },
+    { id: 'bodyTypeFrequency', title: 'Body Type Frequency', icon: PieChart, color: 'purple' },
+    { id: 'quarterlyStatus', title: 'Quarterly Status', icon: BarChart3, color: 'indigo' },
     { id: 'followUpStatus', title: 'Follow-up Status', icon: Clock, color: 'green' },
     { id: 'statusOverview', title: 'Status Overview', icon: PieChart, color: 'purple' },
     { id: 'lossAnalysis', title: 'Loss Analysis', icon: TrendingDown, color: 'red' },
@@ -104,7 +115,10 @@ const QuotationAnalysisPage = () => {
   // User preferences state
   const [isFilterCollapsed, setIsFilterCollapsed] = useState(true);
   const [selectedSections, setSelectedSections] = useState([
+    'rfqStats',
     'keyMetrics',
+    'bodyTypeFrequency',
+    'quarterlyStatus',
     'followUpStatus', 
     'statusOverview',
     'lossAnalysis',
@@ -435,6 +449,39 @@ const QuotationAnalysisPage = () => {
           </div>
         </div>
 
+        {/* RFQ Statistics */}
+        {Array.isArray(selectedSections) && selectedSections.includes('rfqStats') && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">RFQ Statistics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <StatCard
+                title="Total RFQs Created"
+                value={analysisData.rfqStats?.total?.toLocaleString() || '0'}
+                icon={FileText}
+                color="blue"
+              />
+              <StatCard
+                title="Approved"
+                value={analysisData.rfqStats?.approved?.toLocaleString() || '0'}
+                icon={CheckCircle}
+                color="green"
+              />
+              <StatCard
+                title="Rejected"
+                value={analysisData.rfqStats?.rejected?.toLocaleString() || '0'}
+                icon={XCircle}
+                color="red"
+              />
+              <StatCard
+                title="Pending"
+                value={analysisData.rfqStats?.pending?.toLocaleString() || '0'}
+                icon={Clock}
+                color="yellow"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Key Metrics */}
         {Array.isArray(selectedSections) && selectedSections.includes('keyMetrics') && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
@@ -535,6 +582,112 @@ const QuotationAnalysisPage = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Body Type Frequency Treemap */}
+        {Array.isArray(selectedSections) && selectedSections.includes('bodyTypeFrequency') && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Body Type Frequency (RFQ & Quotation)</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              {analysisData.bodyTypeFrequency && analysisData.bodyTypeFrequency.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <Treemap
+                    data={analysisData.bodyTypeFrequency}
+                    dataKey="total"
+                    ratio={4/3}
+                    stroke="#fff"
+                    fill="#8884d8"
+                    content={({ x, y, width, height, index, payload }) => {
+                      if (!payload || !payload.name) {
+                        return null;
+                      }
+                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+                      const color = colors[index % colors.length];
+                      return (
+                        <g>
+                          <rect
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            style={{
+                              fill: color,
+                              stroke: '#fff',
+                              strokeWidth: 2
+                            }}
+                          />
+                          <text
+                            x={x + width / 2}
+                            y={y + height / 2 - 10}
+                            textAnchor="middle"
+                            fill="#fff"
+                            fontSize={14}
+                            fontWeight="bold"
+                          >
+                            {payload.name || 'Unknown'}
+                          </text>
+                          <text
+                            x={x + width / 2}
+                            y={y + height / 2 + 10}
+                            textAnchor="middle"
+                            fill="#fff"
+                            fontSize={12}
+                          >
+                            RFQ: {payload.rfq || 0} | Qtn: {payload.quotation || 0}
+                          </text>
+                          <text
+                            x={x + width / 2}
+                            y={y + height / 2 + 25}
+                            textAnchor="middle"
+                            fill="#fff"
+                            fontSize={11}
+                          >
+                            Total: {payload.total || 0}
+                          </text>
+                        </g>
+                      );
+                    }}
+                  />
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-8">No body type data available</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Quarterly Status Chart */}
+        {Array.isArray(selectedSections) && selectedSections.includes('quarterlyStatus') && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quotation Status by Quarter</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              {analysisData.quarterlyStatus && analysisData.quarterlyStatus.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <RechartsBarChart data={analysisData.quarterlyStatus}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                    />
+                    <YAxis 
+                      label={{ value: 'Count', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="win" fill="#10B981" name="Win" />
+                    <Bar dataKey="loss" fill="#EF4444" name="Loss" />
+                    <Bar dataKey="cancel" fill="#6B7280" name="Cancel" />
+                    <Bar dataKey="open" fill="#3B82F6" name="Open" />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-8">No quarterly data available</p>
+              )}
             </div>
           </div>
         )}

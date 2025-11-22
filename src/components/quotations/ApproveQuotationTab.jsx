@@ -647,20 +647,52 @@ const ApproveQuotationTab = () => {
                     </div>
                   )}
 
-                  {/* Compact Info Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {/* Budget */}
-                    <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
-                      <div className="text-xs font-medium text-gray-600 mb-1">Total Budget</div>
-                      <div className="text-sm font-bold text-blue-700">
-                        {totalRevenue > 0 
-                          ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalRevenue)
-                          : 'N/A'}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {rfq.items?.length || 0} item{(rfq.items?.length || 0) !== 1 ? 's' : ''}
-                      </div>
-                    </div>
+                   {/* Budget Breakdown - Visible in List */}
+                   {rfq.items && rfq.items.length > 0 && (
+                     <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                       <div className="text-xs font-semibold text-blue-800 mb-2">Budget Breakdown</div>
+                       <div className="space-y-2">
+                         {rfq.items.map((item, idx) => {
+                           const perQty = parseFloat(item.estimatedRevenue) || 0;
+                           const qty = parseInt(item.quantity) || 1;
+                           const itemTotal = perQty * qty;
+                           const formatCurrency = (amount) => 
+                             new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                           
+                           return (
+                             <div key={idx} className="bg-white rounded p-2 border border-blue-100">
+                               <div className="text-xs font-medium text-gray-700 mb-1">Item {item.itemNumber || idx + 1}</div>
+                               <div className="text-xs text-gray-600 space-y-0.5">
+                                 <div className="flex justify-between">
+                                   <span>Per Qty:</span>
+                                   <span className="font-semibold">{formatCurrency(perQty)}</span>
+                                 </div>
+                                 <div className="flex justify-between">
+                                   <span>Qty:</span>
+                                   <span className="font-semibold">{qty}</span>
+                                 </div>
+                                 <div className="flex justify-between pt-0.5 border-t border-blue-100">
+                                   <span>{formatCurrency(perQty)} × {qty}:</span>
+                                   <span className="font-bold text-green-700">{formatCurrency(itemTotal)}</span>
+                                 </div>
+                               </div>
+                             </div>
+                           );
+                         })}
+                         <div className="bg-blue-100 rounded p-2 border border-blue-200 mt-2">
+                           <div className="flex justify-between items-center">
+                             <span className="text-xs font-semibold text-blue-800">Total Budget:</span>
+                             <span className="text-sm font-bold text-blue-900">
+                               {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue)}
+                             </span>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   )}
+
+                   {/* Compact Info Grid */}
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
 
                     {/* Confidence */}
                     <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-100">
@@ -746,33 +778,37 @@ const ApproveQuotationTab = () => {
                         </button>
                       </div>
                     )}
-                    <div className="pt-3 space-y-2">
-                      {rfq.items.map((item, index) => {
-                        const perQuantity = parseFloat(item.estimatedRevenue) || 0;
-                        const quantity = parseInt(item.quantity) || 1;
-                        const totalRevenue = perQuantity * quantity;
-                        const formatCurrency = (amount) => 
-                          new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-                        
-                        return (
-                        <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="text-sm font-medium text-gray-900">Item {item.itemNumber}</h4>
-                            <div className="text-xs text-gray-600 space-y-1 text-right">
-                              <div>Qty: {quantity}</div>
-                              {perQuantity > 0 && (
-                                <>
-                                  <div className="text-gray-500">Per Qty: {formatCurrency(perQuantity)}</div>
-                                  <div className="font-medium text-green-700">
-                                    Total: {formatCurrency(totalRevenue)}
-                                  </div>
-                                  <div className="text-gray-400 italic text-[10px]">
-                                    {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                     <div className="pt-3 space-y-3">
+                       {rfq.items.map((item, index) => {
+                         const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                         const quantity = parseInt(item.quantity) || 1;
+                         const totalRevenue = perQuantity * quantity;
+                         const formatCurrency = (amount) => 
+                           new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                         
+                         return (
+                         <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                           <div className="flex items-start justify-between mb-2">
+                             <h4 className="text-sm font-semibold text-gray-900">Item {item.itemNumber || index + 1}</h4>
+                           </div>
+                           
+                           {/* Budget Details - Simple Format */}
+                           <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-200 mb-2">
+                             <div className="text-xs text-gray-700 space-y-1">
+                               <div className="flex items-center justify-between">
+                                 <span>Per Qty:</span>
+                                 <span className="font-semibold">{formatCurrency(perQuantity)}</span>
+                               </div>
+                               <div className="flex items-center justify-between">
+                                 <span>Qty:</span>
+                                 <span className="font-semibold">{quantity}</span>
+                               </div>
+                               <div className="flex items-center justify-between pt-1 border-t border-blue-200">
+                                 <span>{formatCurrency(perQuantity)} × {quantity}:</span>
+                                 <span className="font-bold text-green-700">{formatCurrency(totalRevenue)}</span>
+                               </div>
+                             </div>
+                           </div>
                           
                           {/* Type-specific fields */}
                           {rfq.lineOfBusiness?.type === 'karoseri' && (
@@ -978,40 +1014,37 @@ const ApproveQuotationTab = () => {
                   <div className="space-y-2 text-xs">
                     {selectedRFQ.items && selectedRFQ.items.length > 0 ? (
                       <>
-                        {selectedRFQ.items.map((item, index) => {
-                          const perQuantity = parseFloat(item.estimatedRevenue) || 0;
-                          const quantity = parseInt(item.quantity) || 1;
-                          const totalRevenue = perQuantity * quantity;
-                          const formatCurrency = (amount) => 
-                            new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-                          
-                          return (
-                            <div key={index} className="bg-white rounded p-2 border border-blue-100">
-                              <div className="font-medium text-blue-700 mb-1">Item {item.itemNumber || index + 1}:</div>
-                              <div className="space-y-1 text-gray-700">
-                                <div className="flex items-center justify-between">
-                                  <span>Estimated Revenue per Quantity:</span>
-                                  <span className="font-medium">{formatCurrency(perQuantity)}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span>Quantity:</span>
-                                  <span className="font-medium">{quantity}</span>
-                                </div>
-                                <div className="flex items-center justify-between pt-1 border-t border-blue-100">
-                                  <span className="font-semibold text-blue-800">Total Revenue:</span>
-                                  <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                                    {formatCurrency(totalRevenue)}
-                                  </span>
-                                </div>
-                                {perQuantity > 0 && quantity > 0 && (
-                                  <div className="text-xs text-gray-500 italic pt-1">
-                                    {formatCurrency(perQuantity)} × {quantity} = {formatCurrency(totalRevenue)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                         {selectedRFQ.items.map((item, index) => {
+                           const perQuantity = parseFloat(item.estimatedRevenue) || 0;
+                           const quantity = parseInt(item.quantity) || 1;
+                           const totalRevenue = perQuantity * quantity;
+                           const formatCurrency = (amount) => 
+                             new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+                           
+                           return (
+                             <div key={index} className="bg-white rounded-lg p-3 border border-blue-200">
+                               <div className="font-semibold text-blue-800 mb-2 text-sm">Item {item.itemNumber || index + 1}</div>
+                               
+                               {/* Budget Details - Simple Format */}
+                               <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-200">
+                                 <div className="text-xs text-gray-700 space-y-1">
+                                   <div className="flex items-center justify-between">
+                                     <span>Per Qty:</span>
+                                     <span className="font-semibold">{formatCurrency(perQuantity)}</span>
+                                   </div>
+                                   <div className="flex items-center justify-between">
+                                     <span>Qty:</span>
+                                     <span className="font-semibold">{quantity}</span>
+                                   </div>
+                                   <div className="flex items-center justify-between pt-1 border-t border-blue-200">
+                                     <span>{formatCurrency(perQuantity)} × {quantity}:</span>
+                                     <span className="font-bold text-green-700">{formatCurrency(totalRevenue)}</span>
+                                   </div>
+                                 </div>
+                               </div>
+                             </div>
+                           );
+                         })}
                         <div className="bg-white rounded p-2 border border-blue-200 mt-2">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-blue-800">Grand Total Revenue:</span>
