@@ -35,7 +35,7 @@ const BodyTypeTab = () => {
         page: pagination.page,
         limit: pagination.limit
       };
-      if (bodyTypesSearchTerm) {
+      if (bodyTypesSearchTerm && bodyTypesSearchTerm.trim()) {
         params.search = bodyTypesSearchTerm.trim();
       }
 
@@ -71,12 +71,23 @@ const BodyTypeTab = () => {
     } finally {
       setBodyTypesLoading(false);
     }
-  }, [bodyTypesSearchTerm, pagination.page, pagination.limit, reloadKey]);
+  }, [pagination.page, pagination.limit, reloadKey]);
 
   // Load data on mount
   useEffect(() => {
     loadBodyTypes();
   }, [loadBodyTypes]);
+
+  // Debounced search - reset to page 1 and fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPagination((prev) => ({ ...prev, page: 1 }));
+      // Trigger reload by updating reloadKey
+      setReloadKey((prev) => prev + 1);
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
+  }, [bodyTypesSearchTerm]);
 
   // Body Type handlers
   const createBodyType = async () => {

@@ -39,7 +39,9 @@ const TruckEntryTab = () => {
     try {
       setBodyTypesLoading(true);
       const params = {};
-      if (bodyTypesSearchTerm) params.search = bodyTypesSearchTerm;
+      if (bodyTypesSearchTerm && bodyTypesSearchTerm.trim()) {
+        params.search = bodyTypesSearchTerm.trim();
+      }
       
       const response = await ApiHelper.get('/api/body-types', { params });
       setBodyTypes(response.data.data || []);
@@ -49,14 +51,16 @@ const TruckEntryTab = () => {
     } finally {
       setBodyTypesLoading(false);
     }
-  }, [bodyTypesSearchTerm]);
+  }, []);
 
   // Load chassis types
   const loadChassisTypes = useCallback(async () => {
     try {
       setChassisTypesLoading(true);
       const params = {};
-      if (chassisTypesSearchTerm) params.search = chassisTypesSearchTerm;
+      if (chassisTypesSearchTerm && chassisTypesSearchTerm.trim()) {
+        params.search = chassisTypesSearchTerm.trim();
+      }
       
       const response = await ApiHelper.get('/api/chassis-types', { params });
       setChassisTypes(response.data.data || []);
@@ -66,7 +70,7 @@ const TruckEntryTab = () => {
     } finally {
       setChassisTypesLoading(false);
     }
-  }, [chassisTypesSearchTerm]);
+  }, []);
 
   // Load data on mount
   useEffect(() => {
@@ -76,6 +80,24 @@ const TruckEntryTab = () => {
   useEffect(() => {
     loadChassisTypes();
   }, [loadChassisTypes]);
+
+  // Debounced search for body types - fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      loadBodyTypes();
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
+  }, [bodyTypesSearchTerm, loadBodyTypes]);
+
+  // Debounced search for chassis types - fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      loadChassisTypes();
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
+  }, [chassisTypesSearchTerm, loadChassisTypes]);
 
   // Body Type handlers
   const createBodyType = async () => {

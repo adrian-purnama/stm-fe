@@ -81,9 +81,13 @@ const UserManagementPage = () => {
     fetchPermissions();
   }, []);
 
-  // Fetch users when search changes
+  // Debounced search - fetch users from backend after user stops typing
   useEffect(() => {
-    fetchUsers(1, searchTerm);
+    const timeout = setTimeout(() => {
+      fetchUsers(1, searchTerm); // Always reset to page 1 on search
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
   }, [searchTerm]);
 
   const handleCreateUser = () => {
@@ -227,11 +231,8 @@ const UserManagementPage = () => {
     }
   };
 
-  const filteredUsers = (users || []).filter(user => {
-    const matchesSearch = user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  // No client-side filtering needed - backend handles search across all users
+  const filteredUsers = users || [];
 
   const getPermissionNames = (userPermissions, maxLength = 50) => {
     if (!userPermissions || userPermissions.length === 0) return 'No permissions';

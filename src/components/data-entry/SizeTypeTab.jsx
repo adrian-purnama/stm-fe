@@ -33,7 +33,7 @@ const SizeTypeTab = () => {
         page: pagination.page,
         limit: pagination.limit
       };
-      if (searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
         params.search = searchTerm.trim();
       }
       
@@ -69,12 +69,23 @@ const SizeTypeTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, pagination.page, pagination.limit, reloadKey]);
+  }, [pagination.page, pagination.limit, reloadKey]);
 
   // Load data on mount
   useEffect(() => {
     loadSizeTypes();
   }, [loadSizeTypes]);
+
+  // Debounced search - reset to page 1 and fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPagination((prev) => ({ ...prev, page: 1 }));
+      // Trigger reload by updating reloadKey
+      setReloadKey((prev) => prev + 1);
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
 
   // Create size type
   const createSizeType = async () => {

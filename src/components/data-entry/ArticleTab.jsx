@@ -54,8 +54,8 @@ const ArticleTab = () => {
           limit: pagination.limit
         };
 
-        if (searchTerm) {
-          params.search = searchTerm;
+        if (searchTerm && searchTerm.trim()) {
+          params.search = searchTerm.trim();
         }
 
         if (bodyTypeFilter) {
@@ -83,7 +83,18 @@ const ArticleTab = () => {
     };
 
     loadArticles();
-  }, [pagination.page, pagination.limit, searchTerm, bodyTypeFilter, reloadCounter]);
+  }, [pagination.page, pagination.limit, bodyTypeFilter, reloadCounter]);
+
+  // Debounced search - reset to page 1 and fetch after user stops typing
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPagination((prev) => ({ ...prev, page: 1 }));
+      // Trigger reload by incrementing reloadCounter
+      setReloadCounter((prev) => prev + 1);
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
 
   const bodyTypeDropdownOptions = useMemo(() => [
     { value: '', label: 'Unassigned' },

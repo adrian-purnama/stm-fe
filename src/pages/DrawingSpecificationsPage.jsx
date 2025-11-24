@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, 
-  Search, 
   Edit, 
   Trash2, 
   Eye,
@@ -13,7 +12,9 @@ import {
   ArrowLeft,
   X,
   Calculator,
-  Ruler
+  Ruler,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosInstance from '../utils/api/ApiHelper';
@@ -27,6 +28,12 @@ const DrawingSpecificationsPage = () => {
   // State for drawing specifications
   const [drawings, setDrawings] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0
+  });
   
   // State for master data
   const [bodyTypes, setBodyTypes] = useState([]);
@@ -34,8 +41,7 @@ const DrawingSpecificationsPage = () => {
   const [sizeTypes, setSizeTypes] = useState([]);
   const [featureTypes, setFeatureTypes] = useState([]);
   
-  // State for filters and search
-  const [searchTerm, setSearchTerm] = useState('');
+  // State for filters (search removed - users search via dropdowns only)
   const [selectedBodyType, setSelectedBodyType] = useState('');
   const [selectedChassisType, setSelectedChassisType] = useState('');
   const [selectedSizeType, setSelectedSizeType] = useState('');
@@ -191,14 +197,39 @@ const DrawingSpecificationsPage = () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
+      params.append('page', pagination.page);
+      params.append('limit', pagination.limit);
       if (selectedBodyType) params.append('bodyTypeId', selectedBodyType);
       if (selectedChassisType) params.append('chassisTypeId', selectedChassisType);
       if (selectedSizeType) params.append('sizeTypeId', selectedSizeType);
       
       const response = await axiosInstance.get(`/api/drawing-specifications?${params}`);
-      if (response.data?.success && response.data?.data) {
-      setDrawings(response.data.data);
+      if (response.data?.success) {
+        const payload = response.data || {};
+        const items = payload.data || [];
+        const paginationInfo = payload.pagination || {};
+        
+        setDrawings(items);
+        setPagination((prev) => {
+          const next = {
+            page: paginationInfo.page || prev.page,
+            limit: paginationInfo.limit || prev.limit,
+            total: paginationInfo.total ?? prev.total,
+            pages:
+              paginationInfo.pages ||
+              Math.ceil((paginationInfo.total ?? prev.total) / (paginationInfo.limit || prev.limit) || 1)
+          };
+
+          if (
+            next.page === prev.page &&
+            next.limit === prev.limit &&
+            next.total === prev.total &&
+            next.pages === prev.pages
+          ) {
+            return prev;
+          }
+          return next;
+        });
       }
     } catch (error) {
       console.error('Error loading drawings:', error);
@@ -206,7 +237,21 @@ const DrawingSpecificationsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedBodyType, selectedChassisType, selectedSizeType]);
+  }, [selectedBodyType, selectedChassisType, selectedSizeType, pagination.page, pagination.limit]);
+
+  // Handle pagination change
+  const handlePaginationChange = (direction) => {
+    setPagination((prev) => {
+      const nextPage = direction === 'next' ? prev.page + 1 : prev.page - 1;
+      if (nextPage < 1 || (prev.pages && nextPage > prev.pages)) {
+        return prev;
+      }
+      if (nextPage === prev.page) {
+        return prev;
+      }
+      return { ...prev, page: nextPage };
+    });
+  };
 
   // Create drawing specification
   const createDrawing = async () => {
@@ -385,8 +430,14 @@ const DrawingSpecificationsPage = () => {
     try {
       const response = await axiosInstance.delete(`/api/drawing-specifications/${drawing._id}`);
       if (response.data.success) {
-      toast.success('Drawing specification deleted successfully');
-      loadDrawings();
+        toast.success('Drawing specification deleted successfully');
+        setPagination((prev) => {
+          const nextTotal = Math.max(prev.total - 1, 0);
+          const nextPages = Math.max(Math.ceil(nextTotal / prev.limit) || 1, 1);
+          const nextPage = prev.page > nextPages ? nextPages : prev.page;
+          return { ...prev, page: nextPage, total: nextTotal, pages: nextPages };
+        });
+        loadDrawings();
       }
     } catch (error) {
       console.error('Error deleting drawing:', error);
@@ -571,20 +622,6 @@ const DrawingSpecificationsPage = () => {
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6">
             <div className="flex flex-wrap items-center gap-4 mb-4">
-              {/* Search */}
-              <div className="flex-1 min-w-64">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    placeholder="Search drawing numbers or chassis models..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
               {/* Body Type Filter */}
               <div className="min-w-48">
                 <CustomDropdown
@@ -784,6 +821,33 @@ const DrawingSpecificationsPage = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {drawings.length > 0 && pagination.pages > 1 && (
+            <div className="flex items-center justify-between mt-4 px-6 py-4 border-t border-gray-200 text-sm text-gray-600">
+              <span>
+                Page {pagination.page} of {pagination.pages} · {pagination.total} items
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePaginationChange('prev')}
+                  disabled={pagination.page <= 1}
+                  className="inline-flex items-center gap-1 px-3 py-1 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Prev
+                </button>
+                <button
+                  onClick={() => handlePaginationChange('next')}
+                  disabled={pagination.page >= pagination.pages}
+                  className="inline-flex items-center gap-1 px-3 py-1 border border-gray-200 rounded-lg text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>
