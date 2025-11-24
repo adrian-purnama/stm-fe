@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ApiHelper from '../utils/api/ApiHelper';
 
 // Cache for permissions to avoid redundant API calls
@@ -14,6 +14,15 @@ const permissionsCacheTimeout = 5 * 60 * 1000; // 5 minutes
 export const usePermissions = (permissionKeys = [], forceRefresh = false) => {
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
+  
+  // Create a stable string representation of permissionKeys for comparison
+  const permissionKeysString = useMemo(() => {
+    const sorted = [...(permissionKeys || [])].sort();
+    return JSON.stringify(sorted);
+  }, [permissionKeys]);
+  
+  // Use ref to track the last fetched permissionKeys string
+  const lastFetchedKeysRef = useRef('');
 
   const checkPermission = useCallback(async (permissionKey) => {
     // Check cache first (unless force refresh)
@@ -47,16 +56,76 @@ export const usePermissions = (permissionKeys = [], forceRefresh = false) => {
     }
   }, [forceRefresh]);
 
-  const fetchPermissions = useCallback(async () => {
-    if (permissionKeys.length === 0) {
+  useEffect(() => {
+    // Only fetch if permissionKeys actually changed
+    if (lastFetchedKeysRef.current === permissionKeysString) {
+      return;
+    }
+    
+    lastFetchedKeysRef.current = permissionKeysString;
+    
+    // Parse the permissionKeys from the string
+    let keysToCheck = [];
+    try {
+      keysToCheck = JSON.parse(permissionKeysString);
+    } catch {
+      keysToCheck = permissionKeys || [];
+    }
+    
+    if (keysToCheck.length === 0) {
       setLoading(false);
+      setPermissions({});
+      return;
+    }
+
+    const fetchPermissionsAsync = async () => {
+      setLoading(true);
+      try {
+        // Check all permissions in parallel
+        const permissionPromises = keysToCheck.map(key => 
+          checkPermission(key).then(hasPermission => [key, hasPermission])
+        );
+        
+        const results = await Promise.all(permissionPromises);
+        const permissionsMap = Object.fromEntries(results);
+        
+        setPermissions(permissionsMap);
+      } catch (error) {
+        console.error('Error fetching permissions:', error);
+        // Set all permissions to false on error
+        const permissionsMap = Object.fromEntries(
+          keysToCheck.map(key => [key, false])
+        );
+        setPermissions(permissionsMap);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchPermissionsAsync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionKeysString]);
+
+  const fetchPermissions = useCallback(async () => {
+    // Parse the permissionKeys from the string
+    let keysToCheck = [];
+    try {
+      const sorted = [...(permissionKeys || [])].sort();
+      keysToCheck = sorted;
+    } catch {
+      keysToCheck = permissionKeys || [];
+    }
+    
+    if (keysToCheck.length === 0) {
+      setLoading(false);
+      setPermissions({});
       return;
     }
 
     setLoading(true);
     try {
       // Check all permissions in parallel
-      const permissionPromises = permissionKeys.map(key => 
+      const permissionPromises = keysToCheck.map(key => 
         checkPermission(key).then(hasPermission => [key, hasPermission])
       );
       
@@ -68,17 +137,13 @@ export const usePermissions = (permissionKeys = [], forceRefresh = false) => {
       console.error('Error fetching permissions:', error);
       // Set all permissions to false on error
       const permissionsMap = Object.fromEntries(
-        permissionKeys.map(key => [key, false])
+        keysToCheck.map(key => [key, false])
       );
       setPermissions(permissionsMap);
     } finally {
       setLoading(false);
     }
   }, [permissionKeys, checkPermission]);
-
-  useEffect(() => {
-    fetchPermissions();
-  }, [fetchPermissions]);
 
   const hasPermission = useCallback((permissionKey) => {
     return permissions[permissionKey] || false;

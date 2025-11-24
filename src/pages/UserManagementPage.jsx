@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Trash2, Copy, Settings, ArrowLeft, Send } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Copy, Settings, ArrowLeft, Send, Mail } from 'lucide-react';
 import Navigation from '../components/common/Navigation';
 import axiosInstance from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
@@ -10,12 +9,14 @@ import CustomDropdown from '../components/common/CustomDropdown';
 import AddUserModal from '../components/modals/AddUserModal';
 import EditUserModal from '../components/modals/EditUserModal';
 import BaseModal from '../components/modals/BaseModal';
+import BroadcastEmailModal from '../components/modals/BroadcastEmailModal';
 import useSmartBackNavigation from '../hooks/useSmartBackNavigation';
+import { usePermissions } from '../hooks/usePermissions';
 
 
 const UserManagementPage = () => {
-  const navigate = useNavigate();
   const handleBack = useSmartBackNavigation('/');
+  const { hasPermission } = usePermissions(['email_broadcast']);
   
   const [users, setUsers] = useState([]);
   const [permissions, setPermissions] = useState([]);
@@ -30,6 +31,7 @@ const UserManagementPage = () => {
   const [showEditUser, setShowEditUser] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [selectedUserPermissions, setSelectedUserPermissions] = useState([]);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
 
   const fetchUsers = async (page = 1, search = '') => {
     try {
@@ -258,6 +260,48 @@ const UserManagementPage = () => {
     });
   };
 
+  const handleBroadcastEmail = async ({ userIds, subject, message }) => {
+    const toastId = toast.loading('Sending broadcast email...');
+    try {
+      const response = await axiosInstance.post('/api/auth/broadcast-email', {
+        userIds,
+        subject,
+        message
+      });
+      
+      const result = response.data?.data || {};
+      const sent = result.sent || 0;
+      const skipped = result.skipped || 0;
+      const failed = result.failed || 0;
+      
+      let resultMessage = `Broadcast email completed: ${sent} sent`;
+      if (skipped > 0) {
+        resultMessage += `, ${skipped} skipped`;
+        console.warn('Skipped emails - check backend logs for details. Common reasons: email notifications disabled (sendToEmail: false) or missing email address');
+      }
+      if (failed > 0) {
+        resultMessage += `, ${failed} failed`;
+        console.error('Email sending errors:', result.errors);
+      }
+      
+      if (sent > 0) {
+        toast.success(resultMessage, { id: toastId, duration: 5000 });
+      } else if (failed > 0) {
+        toast.error(resultMessage, { id: toastId, duration: 5000 });
+      } else if (skipped > 0) {
+        toast.error(resultMessage + ' - Check user email settings (sendToEmail must be true)', { id: toastId, duration: 7000 });
+      } else {
+        toast(resultMessage, { id: toastId, duration: 5000 });
+      }
+      
+      setShowBroadcastModal(false);
+    } catch (error) {
+      console.error('Error sending broadcast email:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to send broadcast email';
+      toast.error(errorMessage, { id: toastId, duration: 5000 });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -278,13 +322,24 @@ const UserManagementPage = () => {
                 <p className="mt-2 text-gray-600">Manage users and permissions</p>
               </div>
             </div>
-            <button
-              onClick={handleCreateUser}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Add User
-            </button>
+            <div className="flex items-center gap-3">
+              {hasPermission('email_broadcast') && (
+                <button
+                  onClick={() => setShowBroadcastModal(true)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+                >
+                  <Mail className="w-5 h-5" />
+                  Broadcast Email
+                </button>
+              )}
+              <button
+                onClick={handleCreateUser}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Add User
+              </button>
+            </div>
           </div>
         </div>
 
@@ -550,6 +605,16 @@ const UserManagementPage = () => {
             </div>
           </div>
         </BaseModal>
+      )}
+
+      {/* Broadcast Email Modal */}
+      {showBroadcastModal && (
+        <BroadcastEmailModal
+          isOpen={showBroadcastModal}
+          onClose={() => setShowBroadcastModal(false)}
+          users={users}
+          onSend={handleBroadcastEmail}
+        />
       )}
     </div>
   );

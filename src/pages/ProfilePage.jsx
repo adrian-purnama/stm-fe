@@ -30,26 +30,28 @@ const ProfilePage = () => {
   });
   const [profileLoading, setProfileLoading] = useState(false);
 
-  // Fetch profile data when component mounts
+  // Fetch profile data when component mounts (only once)
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const response = await axiosInstance.get('/api/auth/profile');
         if (response.data.success) {
           const userData = response.data.data.user;
+          const sendToEmailValue = userData.sendToEmail !== undefined ? Boolean(userData.sendToEmail) : true;
+          
           setProfileData({
             fullName: userData.fullName || '',
             phoneNumbers: userData.phoneNumbers || [],
-            sendToEmail: userData.sendToEmail !== undefined ? Boolean(userData.sendToEmail) : true
+            sendToEmail: sendToEmailValue
           });
 
           const updatedUser = {
-            id: userData._id || userData.id || user.id,
-            email: userData.email || user.email,
+            id: userData._id || userData.id || user?.id,
+            email: userData.email || user?.email,
             fullName: userData.fullName || '',
             phoneNumbers: userData.phoneNumbers || [],
-            sendToEmail: userData.sendToEmail !== undefined ? Boolean(userData.sendToEmail) : true,
-            permissions: user.permissions || [],
+            sendToEmail: sendToEmailValue,
+            permissions: user?.permissions || [],
             isLoggedIn: true
           };
           setUser(updatedUser);
@@ -57,16 +59,18 @@ const ProfilePage = () => {
       } catch (error) {
         console.error('Error fetching profile:', error);
         // Fallback to user context data
+        const sendToEmailValue = user?.sendToEmail !== undefined ? Boolean(user.sendToEmail) : true;
         setProfileData({
           fullName: user?.fullName || '',
           phoneNumbers: user?.phoneNumbers || [],
-          sendToEmail: user?.sendToEmail !== undefined ? Boolean(user.sendToEmail) : true
+          sendToEmail: sendToEmailValue
         });
       }
     };
 
     fetchProfile();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
@@ -110,34 +114,51 @@ const ProfilePage = () => {
     
     setProfileLoading(true);
     try {
-      const response = await axiosInstance.put('/api/auth/profile', {
+      // Ensure sendToEmail is explicitly a boolean - no conversion needed, it should already be boolean
+      const sendToEmailValue = profileData.sendToEmail === true || profileData.sendToEmail === 'true';
+      
+      const updatePayload = {
         fullName: profileData.fullName,
         phoneNumbers: profileData.phoneNumbers,
-        sendToEmail: profileData.sendToEmail
-      });
+        sendToEmail: sendToEmailValue
+      };
+      
+      console.log('Current profileData:', profileData);
+      console.log('Updating profile with payload:', updatePayload);
+      console.log('sendToEmail type:', typeof updatePayload.sendToEmail, 'value:', updatePayload.sendToEmail);
+      
+      const response = await axiosInstance.put('/api/auth/profile', updatePayload);
+      
+      console.log('Response from server:', response.data);
 
       if (response.data.success) {
         toast.success('Profil berhasil diperbarui!');
         // Update the profile data with the response
         const updatedUser = response.data.data.user;
+        const newSendToEmail = updatedUser.sendToEmail !== undefined ? Boolean(updatedUser.sendToEmail) : true;
+        
+        console.log('Updated user from server:', updatedUser);
+        console.log('New sendToEmail value:', newSendToEmail);
+        
         setProfileData({
           fullName: updatedUser.fullName || '',
           phoneNumbers: updatedUser.phoneNumbers || [],
-          sendToEmail: updatedUser.sendToEmail !== undefined ? Boolean(updatedUser.sendToEmail) : true
+          sendToEmail: newSendToEmail
         });
 
         setUser({
-          id: updatedUser._id || updatedUser.id || user.id,
-          email: updatedUser.email || user.email,
+          id: updatedUser._id || updatedUser.id || user?.id,
+          email: updatedUser.email || user?.email,
           fullName: updatedUser.fullName || '',
           phoneNumbers: updatedUser.phoneNumbers || [],
-          sendToEmail: updatedUser.sendToEmail !== undefined ? Boolean(updatedUser.sendToEmail) : true,
-          permissions: user.permissions || [],
+          sendToEmail: newSendToEmail,
+          permissions: user?.permissions || [],
           isLoggedIn: true
         });
       }
     } catch (error) {
       console.error('Profile update error:', error);
+      console.error('Error response:', error.response?.data);
       toast.error(error.response?.data?.message || 'Gagal memperbarui profil');
     } finally {
       setProfileLoading(false);
@@ -326,39 +347,72 @@ const ProfilePage = () => {
 
               {/* Send to Email Toggle */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
                   Kirim Notifikasi ke Email
                 </label>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="sendToEmail"
-                      checked={Boolean(profileData.sendToEmail)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setProfileData(prev => ({...prev, sendToEmail: true}));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-gray-700">Ya</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="sendToEmail"
-                      checked={!Boolean(profileData.sendToEmail)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setProfileData(prev => ({...prev, sendToEmail: false}));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-gray-700">Tidak</span>
-                  </label>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      console.log('Setting sendToEmail to true');
+                      setProfileData(prev => {
+                        console.log('Previous state:', prev);
+                        const newState = { ...prev, sendToEmail: true };
+                        console.log('New state:', newState);
+                        return newState;
+                      });
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                      profileData.sendToEmail === true
+                        ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium'
+                        : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      profileData.sendToEmail === true
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {profileData.sendToEmail === true && (
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      )}
+                    </div>
+                    <span className="text-sm">Ya</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      console.log('Setting sendToEmail to false');
+                      setProfileData(prev => {
+                        console.log('Previous state:', prev);
+                        const newState = { ...prev, sendToEmail: false };
+                        console.log('New state:', newState);
+                        return newState;
+                      });
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
+                      profileData.sendToEmail === false
+                        ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium'
+                        : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      profileData.sendToEmail === false
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {profileData.sendToEmail === false && (
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      )}
+                    </div>
+                    <span className="text-sm">Tidak</span>
+                  </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-2">
                   Pilih untuk menerima notifikasi melalui email (kecuali reset password)
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Status saat ini: {profileData.sendToEmail ? 'Ya' : 'Tidak'} (sendToEmail = {String(profileData.sendToEmail)})
                 </p>
               </div>
             </div>

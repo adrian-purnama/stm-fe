@@ -12,15 +12,10 @@ const ALLOWED_DOCUMENT_TYPES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ];
-const ALLOWED_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp';
-const ALLOWED_DOCUMENT_EXTENSION_LIST = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
+const ALLOWED_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.xls,.xlsx';
+const ALLOWED_DOCUMENT_EXTENSION_LIST = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB
 
 const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreators, engineers, rfqToEdit }) => {
@@ -419,7 +414,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         deliveryNotes: rfqToEdit.deliveryNotes || '',
         paymentTermsOption: rfqToEdit.paymentTerms && rfqToEdit.paymentTerms !== DEFAULT_PAYMENT_TERMS ? 'custom' : 'default',
         paymentTermsCustom: rfqToEdit.paymentTerms && rfqToEdit.paymentTerms !== DEFAULT_PAYMENT_TERMS ? rfqToEdit.paymentTerms : '',
-        isTaxIncluded: false, // Always false for simplified tax handling
+        isTaxIncluded: existingIsTaxIncluded,
         includePPN: existingIncludePPN,
         inclusionNotes: rfqToEdit.inclusionNotes || '',
         exclusionNotes: rfqToEdit.exclusionNotes || '',
@@ -548,11 +543,13 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     }
   };
 
+  const taxSelection = formData.isTaxIncluded ? 'inclusive' : 'include_ppn';
+
   const handleTaxSelectionChange = (value) => {
     setFormData(prev => ({
       ...prev,
-      isTaxIncluded: false, // Always false for simplified tax handling
-      includePPN: value === 'include'
+      isTaxIncluded: value === 'inclusive',
+      includePPN: value === 'include_ppn'
     }));
   };
 
@@ -877,24 +874,6 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       newErrors.projectOngoing = 'Project Ongoing flag is required';
     }
 
-    // Validate customer contacts - if a contact exists, both key and value must be filled
-    if (formData.customerContacts && formData.customerContacts.length > 0) {
-      formData.customerContacts.forEach((contact, index) => {
-        const keyTrimmed = contact.key?.trim() || '';
-        const valueTrimmed = contact.value?.trim() || '';
-        
-        // If either field has content, both must be filled
-        if (keyTrimmed || valueTrimmed) {
-          if (!keyTrimmed) {
-            newErrors[`customerContacts.${index}.key`] = 'Contact type is required';
-          }
-          if (!valueTrimmed) {
-            newErrors[`customerContacts.${index}.value`] = 'Contact value is required';
-          }
-        }
-      });
-    }
-
     // Validate based on line of business type
     const lineOfBusinessType = formData.lineOfBusiness?.type || 'karoseri';
 
@@ -997,121 +976,40 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     return { isValid: Object.keys(newErrors).length === 0, errors: newErrors };
   };
 
-  // Helper function to get user-friendly field name
-  const getFieldName = (errorKey) => {
-    return errorKey
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .replace(/\./g, ' ')
-      .replace(/items \d+ /, 'Item ')
-      .replace(/template source id/i, 'Body Type/Drawing')
-      .replace(/contact person name/i, 'Contact Person Name')
-      .replace(/customer contacts \d+ key/i, 'Customer Contact Type')
-      .replace(/customer contacts \d+ value/i, 'Customer Contact Value')
-      .replace(/approver id/i, 'Approver')
-      .replace(/quotation creator id/i, 'Quotation Creator')
-      .replace(/customer name/i, 'Customer Name')
-      .replace(/confidence rate/i, 'Confidence Rate')
-      .replace(/delivery location/i, 'Delivery Location')
-      .replace(/can make/i, 'Can Make')
-      .replace(/project ongoing/i, 'Project Ongoing');
-  };
-
-  // Scroll to first error field
-  const scrollToFirstError = (errorKeys) => {
-    // Try to find the first error field and scroll to it
-    for (const errorKey of errorKeys) {
-      let element = null;
-      
-      // Handle nested keys like customerContacts.0.key
-      if (errorKey.includes('customerContacts')) {
-        const match = errorKey.match(/customerContacts\.(\d+)\.(key|value)/);
-        if (match) {
-          const index = match[1];
-          const field = match[2];
-          element = document.querySelector(`[data-contact-index="${index}"][data-contact-field="${field}"]`);
-        }
-      } else if (errorKey.includes('items.')) {
-        // For item errors, scroll to items section
-        element = document.querySelector('[data-items-section]');
-      } else {
-        // Try common field IDs
-        const fieldId = errorKey
-          .replace(/\./g, '-')
-          .replace(/([A-Z])/g, '-$1')
-          .toLowerCase();
-        element = document.getElementById(fieldId) || 
-                  document.querySelector(`[name="${errorKey}"]`) ||
-                  document.querySelector(`[data-field="${errorKey}"]`);
-      }
-      
-      if (element) {
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.focus();
-        }, 100);
-        break;
-      }
-    }
-    
-    // Fallback: scroll to top of form
-    const formElement = document.querySelector('form');
-    if (formElement) {
-      setTimeout(() => {
-        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    }
-  };
-
   const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
 
-    // Clean up empty customer contacts before validation/submission
-    setFormData(prev => ({
-      ...prev,
-      customerContacts: prev.customerContacts.filter(contact => {
-        const keyTrimmed = contact.key?.trim() || '';
-        const valueTrimmed = contact.value?.trim() || '';
-        // Keep only contacts where both fields are filled
-        return keyTrimmed && valueTrimmed;
-      })
-    }));
-
-    // Wait a tick for state to update, then validate
-    await new Promise(resolve => setTimeout(resolve, 0));
-
     // For draft, skip validation - allow saving incomplete forms
     if (!isDraft) {
-      // Re-validate after cleanup
+      // Validate form and get errors
       const { isValid, errors: validationErrors } = validateForm();
       if (!isValid) {
+        // Show error message with first error
         const errorKeys = Object.keys(validationErrors);
-        
-        // Show comprehensive error message
         if (errorKeys.length > 0) {
-          const errorCount = errorKeys.length;
           const firstErrorKey = errorKeys[0];
           const firstErrorMessage = validationErrors[firstErrorKey];
-          const fieldName = getFieldName(firstErrorKey);
-          
-          if (errorCount === 1) {
-            toast.error(`${fieldName}: ${firstErrorMessage}`, {
-              duration: 5000
-            });
-          } else {
-            toast.error(`${fieldName}: ${firstErrorMessage} (and ${errorCount - 1} more error${errorCount - 1 > 1 ? 's' : ''})`, {
-              duration: 6000
-            });
-          }
+          // Create user-friendly field name
+          const fieldName = firstErrorKey
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, str => str.toUpperCase())
+            .replace(/\./g, ' ')
+            .replace(/items \d+ /, 'Item ')
+            .replace(/template source id/i, 'Body Type/Drawing')
+            .replace(/contact person name/i, 'Contact Person Name');
+          toast.error(`${fieldName}: ${firstErrorMessage}`, {
+            duration: 5000
+          });
         } else {
           toast.error('Please fill all required fields', {
             duration: 4000
           });
         }
-        
-        // Scroll to first error
-        scrollToFirstError(errorKeys);
-        
+        // Scroll to top of form to show errors
+        const formElement = document.querySelector('form');
+        if (formElement) {
+          formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         // DO NOT reset form - keep user's data
         return;
       }
@@ -1184,14 +1082,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           submitData.chassisTypeId = chassisTypeId;
         }
 
-        // Clean up customer contacts - remove any empty ones
-      submitData.customerContacts = (formData.customerContacts || []).filter(contact => {
-        const keyTrimmed = contact.key?.trim() || '';
-        const valueTrimmed = contact.value?.trim() || '';
-        return keyTrimmed && valueTrimmed;
-      });
-
-      // Clean up items: for manual mode, remove templateSourceId as it's not needed by backend
+        // Clean up items: for manual mode, remove templateSourceId as it's not needed by backend
         submitData.items = formData.items.map(item => {
           const cleanedItem = { ...item };
 
@@ -1270,39 +1161,17 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       toast.error(errorMessage);
 
       // If backend returns validation errors, try to map them to form errors
-      if (error.response?.data?.errors || error.response?.data?.message) {
+      if (error.response?.data?.errors) {
         const backendErrors = {};
-        const errorData = error.response.data.errors || {};
-        const errorMessage = error.response.data.message || '';
+        const errorData = error.response.data.errors;
 
         // Map backend error fields to form error fields
         Object.keys(errorData).forEach(key => {
           backendErrors[key] = errorData[key];
         });
 
-        // Handle customerContacts errors from backend
-        if (errorMessage.includes('customerContacts') || errorMessage.includes('customer contact')) {
-          // Check if we have empty contacts that need to be filled
-          formData.customerContacts.forEach((contact, index) => {
-            const keyTrimmed = contact.key?.trim() || '';
-            const valueTrimmed = contact.value?.trim() || '';
-            if (!keyTrimmed || !valueTrimmed) {
-              if (!keyTrimmed) {
-                backendErrors[`customerContacts.${index}.key`] = 'Contact type is required';
-              }
-              if (!valueTrimmed) {
-                backendErrors[`customerContacts.${index}.value`] = 'Contact value is required';
-              }
-            }
-          });
-        }
-
         if (Object.keys(backendErrors).length > 0) {
           setErrors(prevErrors => ({ ...prevErrors, ...backendErrors }));
-          // Scroll to first error after a brief delay
-          setTimeout(() => {
-            scrollToFirstError(Object.keys(backendErrors));
-          }, 100);
         }
       }
 
@@ -1359,46 +1228,10 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     label: `${engineer.fullName || engineer.email} (${engineer.email})`
   }));
 
-  // Get all error messages for display
-  const errorMessages = Object.keys(errors).map(key => ({
-    key,
-    message: errors[key],
-    fieldName: getFieldName(key)
-  }));
-
   return (
     <>
       <BaseModal isOpen={isOpen} onClose={handleClose} title="Request Quotation">
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Error Summary */}
-          {errorMessages.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3 flex-1">
-                  <h3 className="text-sm font-medium text-red-800 mb-2">
-                    Please fix the following {errorMessages.length} error{errorMessages.length > 1 ? 's' : ''}:
-                  </h3>
-                  <ul className="list-disc list-inside space-y-1">
-                    {errorMessages.slice(0, 5).map((error, idx) => (
-                      <li key={idx} className="text-sm text-red-700">
-                        <strong>{error.fieldName}:</strong> {error.message}
-                      </li>
-                    ))}
-                    {errorMessages.length > 5 && (
-                      <li className="text-sm text-red-700 font-medium">
-                        ... and {errorMessages.length - 5} more error{errorMessages.length - 5 > 1 ? 's' : ''}
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Section 1: Assignment */}
           <div className="border-t border-b border-gray-200 pt-6 pb-6">
@@ -1528,108 +1361,52 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   <button
                     type="button"
                     onClick={addCustomerContact}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1 transition-colors"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
                     disabled={loading}
                   >
                     <Plus className="w-4 h-4" />
                     Add Contact
                   </button>
                 </div>
-                
-                <p className="text-xs text-gray-500 mb-3">
-                  If you add a contact, both type and value must be filled. Empty contacts will be removed automatically.
-                </p>
 
                 {formData.customerContacts.length === 0 && (
                   <p className="text-sm text-gray-500 mb-2">No additional contacts added</p>
                 )}
 
-                {formData.customerContacts.map((contact, index) => {
-                  const keyError = errors[`customerContacts.${index}.key`];
-                  const valueError = errors[`customerContacts.${index}.value`];
-                  const hasError = keyError || valueError;
-                  
-                  return (
-                    <div key={index} className={`mb-3 p-3 rounded-lg border ${hasError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-                      <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-12 md:col-span-4">
-                          <input
-                            type="text"
-                            value={contact.key}
-                            onChange={(e) => {
-                              updateCustomerContact(index, 'key', e.target.value);
-                              // Clear error when user starts typing
-                              if (errors[`customerContacts.${index}.key`]) {
-                                setErrors(prev => {
-                                  const newErrors = { ...prev };
-                                  delete newErrors[`customerContacts.${index}.key`];
-                                  return newErrors;
-                                });
-                              }
-                            }}
-                            data-contact-index={index}
-                            data-contact-field="key"
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                              keyError ? 'border-red-500 bg-white' : 'border-gray-300'
-                            }`}
-                            placeholder="e.g., Phone, Email"
-                            disabled={loading}
-                          />
-                          {keyError && (
-                            <p className="mt-1 text-xs text-red-600">{keyError}</p>
-                          )}
-                        </div>
-                        <div className="col-span-12 md:col-span-7">
-                          <input
-                            type="text"
-                            value={contact.value}
-                            onChange={(e) => {
-                              updateCustomerContact(index, 'value', e.target.value);
-                              // Clear error when user starts typing
-                              if (errors[`customerContacts.${index}.value`]) {
-                                setErrors(prev => {
-                                  const newErrors = { ...prev };
-                                  delete newErrors[`customerContacts.${index}.value`];
-                                  return newErrors;
-                                });
-                              }
-                            }}
-                            data-contact-index={index}
-                            data-contact-field="value"
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                              valueError ? 'border-red-500 bg-white' : 'border-gray-300'
-                            }`}
-                            placeholder="Contact value"
-                            disabled={loading}
-                          />
-                          {valueError && (
-                            <p className="mt-1 text-xs text-red-600">{valueError}</p>
-                          )}
-                        </div>
-                        <div className="col-span-12 md:col-span-1 flex items-start">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              removeCustomerContact(index);
-                              // Clear errors for this contact
-                              setErrors(prev => {
-                                const newErrors = { ...prev };
-                                delete newErrors[`customerContacts.${index}.key`];
-                                delete newErrors[`customerContacts.${index}.value`];
-                                return newErrors;
-                              });
-                            }}
-                            className="w-full px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-colors"
-                            disabled={loading}
-                            title="Remove contact"
-                          >
-                            <X className="w-5 h-5 mx-auto" />
-                          </button>
-                        </div>
-                      </div>
+                {formData.customerContacts.map((contact, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-2 mb-2">
+                    <div className="col-span-12 md:col-span-4">
+                      <input
+                        type="text"
+                        value={contact.key}
+                        onChange={(e) => updateCustomerContact(index, 'key', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., Phone, Email"
+                        disabled={loading}
+                      />
                     </div>
-                  );
-                })}
+                    <div className="col-span-12 md:col-span-7">
+                      <input
+                        type="text"
+                        value={contact.value}
+                        onChange={(e) => updateCustomerContact(index, 'value', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Contact value"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="col-span-12 md:col-span-1">
+                      <button
+                        type="button"
+                        onClick={() => removeCustomerContact(index)}
+                        className="w-full px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition"
+                        disabled={loading}
+                      >
+                        <X className="w-5 h-5 mx-auto" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* End User Field */}
@@ -1840,17 +1617,17 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  PPN (VAT)
+                  Tax & PPN
                 </label>
                 <CustomDropdown
                   options={[
-                    { value: 'include', label: 'Include PPN' },
-                    { value: 'exclude', label: 'Exclude PPN' }
+                    { value: 'inclusive', label: 'Prices are tax inclusive' },
+                    { value: 'include_ppn', label: 'Include PPN (VAT)' }
                   ]}
-                  value={formData.includePPN ? 'include' : 'exclude'}
+                  value={taxSelection}
                   onChange={handleTaxSelectionChange}
                   disabled={loading}
-                  placeholder="Select PPN treatment"
+                  placeholder="Select tax treatment"
                 />
               </div>
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1906,7 +1683,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                       className="hidden"
                     />
                     <p className="text-xs text-gray-500">
-                      Allowed: PDF, Word, Excel, Images (JPG, PNG, GIF, WEBP). Max size {MAX_DOCUMENT_SIZE / (1024 * 1024)}MB each.
+                      Allowed: PDF, Word, Excel. Max size {MAX_DOCUMENT_SIZE / (1024 * 1024)}MB each.
                     </p>
                   </div>
 
@@ -2043,7 +1820,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           </div>
 
           {/* Section 5: Line of Business & Items */}
-          <div className="border-b border-gray-200 pb-6" data-items-section>
+          <div className="border-b border-gray-200 pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Business & Items</h3>
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -301,22 +301,38 @@ const QuotationAnalysisPage = () => {
     value: data.count
   }));
 
-  const StatCard = ({ title, value, icon: Icon, color = 'blue', subtitle }) => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && (
-            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-          )}
-        </div>
-        <div className={`p-3 rounded-full bg-${color}-100`}>
-          <Icon className={`h-6 w-6 text-${color}-600`} />
+  const StatCard = ({ title, value, icon: Icon, color = 'blue', subtitle }) => {
+    const colorClasses = {
+      blue: 'bg-blue-50 border-blue-200 text-blue-600',
+      green: 'bg-green-50 border-green-200 text-green-600',
+      red: 'bg-red-50 border-red-200 text-red-600',
+      yellow: 'bg-yellow-50 border-yellow-200 text-yellow-600',
+      gray: 'bg-gray-50 border-gray-200 text-gray-600',
+      purple: 'bg-purple-50 border-purple-200 text-purple-600',
+      indigo: 'bg-indigo-50 border-indigo-200 text-indigo-600',
+      emerald: 'bg-emerald-50 border-emerald-200 text-emerald-600',
+      orange: 'bg-orange-50 border-orange-200 text-orange-600'
+    };
+    
+    const bgColor = colorClasses[color] || colorClasses.blue;
+    
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
+            <p className="text-3xl font-bold text-gray-900">{value}</p>
+            {subtitle && (
+              <p className="text-xs text-gray-500 mt-2">{subtitle}</p>
+            )}
+          </div>
+          <div className={`p-3 rounded-xl ${bgColor.split(' ')[0]} border ${bgColor.split(' ')[1]}`}>
+            <Icon className={`h-6 w-6 ${bgColor.split(' ')[2]}`} />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -332,16 +348,16 @@ const QuotationAnalysisPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Navigation title="Quotation Analysis" subtitle="Analisis dan laporan quotation" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
               <button
                 onClick={handleBack}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all shadow-sm hover:shadow"
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
@@ -352,7 +368,7 @@ const QuotationAnalysisPage = () => {
             </div>
             <button
               onClick={handleExportReport}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-md hover:shadow-lg"
             >
               <Download className="h-4 w-4 mr-2" />
               Export Report
@@ -360,14 +376,14 @@ const QuotationAnalysisPage = () => {
           </div>
           
           {/* Collapsible Filters */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <button
               onClick={() => setIsFilterCollapsed(!isFilterCollapsed)}
               className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center space-x-2">
                 <Filter className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Filters</span>
+                <span className="text-sm font-semibold text-gray-700">Filters & Settings</span>
               </div>
               {isFilterCollapsed ? (
                 <ChevronDown className="h-4 w-4 text-gray-500" />
@@ -452,7 +468,7 @@ const QuotationAnalysisPage = () => {
         {/* RFQ Statistics */}
         {Array.isArray(selectedSections) && selectedSections.includes('rfqStats') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">RFQ Statistics</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">RFQ Statistics</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard
                 title="Total RFQs Created"
@@ -484,7 +500,9 @@ const QuotationAnalysisPage = () => {
 
         {/* Key Metrics */}
         {Array.isArray(selectedSections) && selectedSections.includes('keyMetrics') && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Key Metrics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <StatCard
               title="Total Quotations"
               value={analysisData.totalQuotations.toLocaleString()}
@@ -515,70 +533,135 @@ const QuotationAnalysisPage = () => {
               icon={AlertCircle}
               color="gray"
             />
+            </div>
           </div>
         )}
 
         {/* Follow-up Status Section */}
         {Array.isArray(selectedSections) && selectedSections.includes('followUpStatus') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Follow-up Status</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Currently Open</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {analysisData.followUpStatus.currentlyOpen.count.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">Total open quotations</p>
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Time Tracking & Follow-up Status</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Urgent Status */}
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-sm border border-red-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-red-500 shadow-md">
+                        <AlertCircle className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-red-900">Urgent</h4>
+                        <p className="text-sm text-red-700">More than 7 days or never followed up</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-red-600">
+                        {analysisData.followUpStatus?.notFollowedUp?.count?.toLocaleString() || 0}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-full bg-blue-100">
-                    <FileText className="h-6 w-6 text-blue-600" />
+                  
+                  {analysisData.followUpStatus?.notFollowedUp?.quotations?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-red-200">
+                      <p className="text-xs font-semibold text-red-800 mb-2 uppercase tracking-wide">Quotation Numbers:</p>
+                      <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                        {analysisData.followUpStatus.notFollowedUp.quotations.map((q, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => navigate(`/quotations/details/${q.quotationId || q.quotationNumber}`)}
+                            className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium text-red-700 hover:bg-red-50 hover:shadow-sm transition-all border border-red-200 hover:border-red-300"
+                            title={`${q.customerName}${q.daysSinceFollowUp !== null ? ` - ${q.daysSinceFollowUp} days ago` : ' - Never followed up'}`}
+                          >
+                            {q.quotationNumber}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Warning Status */}
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl shadow-sm border border-amber-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-amber-500 shadow-md">
+                        <Clock className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-amber-900">Warning</h4>
+                        <p className="text-sm text-amber-700">3-7 days since last follow-up</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-amber-600">
+                        {analysisData.followUpStatus?.mediumWarning?.count?.toLocaleString() || 0}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {analysisData.followUpStatus?.mediumWarning?.quotations?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-amber-200">
+                      <p className="text-xs font-semibold text-amber-800 mb-2 uppercase tracking-wide">Quotation Numbers:</p>
+                      <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                        {analysisData.followUpStatus.mediumWarning.quotations.map((q, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => navigate(`/quotations/details/${q.quotationId || q.quotationNumber}`)}
+                            className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium text-amber-700 hover:bg-amber-50 hover:shadow-sm transition-all border border-amber-200 hover:border-amber-300"
+                            title={`${q.customerName} - ${q.daysSinceFollowUp} days ago`}
+                          >
+                            {q.quotationNumber}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Save Status */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-sm border border-green-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-green-500 shadow-md">
+                        <CheckCircle className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-green-900">Save</h4>
+                        <p className="text-sm text-green-700">Followed up within 3 days</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-green-600">
+                        {analysisData.followUpStatus?.upToDate?.count?.toLocaleString() || 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Not Followed Up</p>
-                    <p className="text-2xl font-bold text-red-600 mt-1">
-                      {analysisData.followUpStatus.notFollowedUp.count.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">Danger - needs immediate attention</p>
-                  </div>
-                  <div className="p-3 rounded-full bg-red-100">
-                    <AlertCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Medium Warning</p>
-                    <p className="text-2xl font-bold text-yellow-600 mt-1">
-                      {analysisData.followUpStatus.mediumWarning.count.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">3-7 days since last follow-up</p>
-                  </div>
-                  <div className="p-3 rounded-full bg-yellow-100">
-                    <Clock className="h-6 w-6 text-yellow-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Up to Date</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {analysisData.followUpStatus.upToDate.count.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">Followed up within 3 days</p>
-                  </div>
-                  <div className="p-3 rounded-full bg-green-100">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
+              {/* Currently Open */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 rounded-lg bg-blue-500 shadow-md">
+                        <FileText className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-blue-900">Currently Open</h4>
+                        <p className="text-sm text-blue-700">Total open quotations</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-blue-600">
+                        {analysisData.followUpStatus?.currentlyOpen?.count?.toLocaleString() || 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -589,8 +672,8 @@ const QuotationAnalysisPage = () => {
         {/* Body Type Frequency Treemap */}
         {Array.isArray(selectedSections) && selectedSections.includes('bodyTypeFrequency') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Body Type Frequency (RFQ & Quotation)</h3>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Body Type Frequency (RFQ & Quotation)</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               {analysisData.bodyTypeFrequency && analysisData.bodyTypeFrequency.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
                   <Treemap
@@ -661,8 +744,8 @@ const QuotationAnalysisPage = () => {
         {/* Quarterly Status Chart */}
         {Array.isArray(selectedSections) && selectedSections.includes('quarterlyStatus') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quotation Status by Quarter</h3>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Quotation Status by Quarter</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               {analysisData.quarterlyStatus && analysisData.quarterlyStatus.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
                   <RechartsBarChart data={analysisData.quarterlyStatus}>
@@ -695,8 +778,8 @@ const QuotationAnalysisPage = () => {
         {/* Status Overview Chart */}
         {Array.isArray(selectedSections) && selectedSections.includes('statusOverview') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quotation Status Overview</h3>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Quotation Status Overview</h3>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <ResponsiveContainer width="100%" height={300}>
               <RechartsPieChart>
                 <Pie
@@ -724,10 +807,10 @@ const QuotationAnalysisPage = () => {
         {/* Loss Rate Chart and Reasons */}
         {Array.isArray(selectedSections) && selectedSections.includes('lossAnalysis') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Loss Rate Analysis</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Loss Rate Analysis</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Loss Rate Chart */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="text-center mb-4">
                 <div className="text-3xl font-bold text-red-600">{analysisData.lossRate}%</div>
                 <div className="text-sm text-gray-500">Loss Rate</div>
@@ -758,7 +841,7 @@ const QuotationAnalysisPage = () => {
             </div>
 
             {/* Loss Reasons */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h4 className="text-md font-semibold text-gray-900 mb-4">Loss Reasons</h4>
               {lossReasonData.length > 0 ? (
                 <div className="space-y-3">
@@ -780,10 +863,10 @@ const QuotationAnalysisPage = () => {
         {/* Close Rate Chart and Reasons */}
         {Array.isArray(selectedSections) && selectedSections.includes('closeAnalysis') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Close Rate Analysis</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Close Rate Analysis</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Close Rate Chart */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="text-center mb-4">
                 <div className="text-3xl font-bold text-gray-600">{analysisData.closeRate}%</div>
                 <div className="text-sm text-gray-500">Close Rate</div>
@@ -814,7 +897,7 @@ const QuotationAnalysisPage = () => {
             </div>
 
             {/* Close Reasons */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h4 className="text-md font-semibold text-gray-900 mb-4">Close Reasons</h4>
               {closeReasonData.length > 0 ? (
                 <div className="space-y-3">
@@ -836,8 +919,8 @@ const QuotationAnalysisPage = () => {
         {/* Monthly Trends */}
         {Array.isArray(selectedSections) && selectedSections.includes('monthlyTrends') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Trends</h3>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Monthly Trends</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <ResponsiveContainer width="100%" height={300}>
                 <RechartsBarChart data={analysisData.monthlyStats}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -864,8 +947,8 @@ const QuotationAnalysisPage = () => {
         {/* Top Customers */}
         {Array.isArray(selectedSections) && selectedSections.includes('topCustomers') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Customers</h3>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Top Customers</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               {analysisData.topCustomers.length > 0 ? (
                 <div className="space-y-4">
                   {analysisData.topCustomers.map((customer, index) => (
@@ -916,8 +999,8 @@ const QuotationAnalysisPage = () => {
         {/* Recent Activity */}
         {Array.isArray(selectedSections) && selectedSections.includes('recentActivity') && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Recent Activity</h3>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               {analysisData.recentActivity.length > 0 ? (
                 <div className="space-y-3">
                   {analysisData.recentActivity.map((activity, index) => (
