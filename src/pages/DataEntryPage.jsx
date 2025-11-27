@@ -14,10 +14,10 @@ const DataEntryPage = () => {
       component: () => import('../components/data-entry/BodyTypeTab')
     },
     {
-      key: 'article',
-      label: 'Articles',
+      key: 'catalogue',
+      label: 'Catalogues',
       icon: FileText,
-      component: () => import('../components/data-entry/ArticleTab')
+      component: () => import('../components/data-entry/CatalogueTab')
     },
     {
       key: 'chassis',

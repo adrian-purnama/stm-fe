@@ -12,10 +12,15 @@ const ALLOWED_DOCUMENT_TYPES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp'
 ];
-const ALLOWED_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.xls,.xlsx';
-const ALLOWED_DOCUMENT_EXTENSION_LIST = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
+const ALLOWED_DOCUMENT_EXTENSIONS = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp';
+const ALLOWED_DOCUMENT_EXTENSION_LIST = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10MB
 
 const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreators, engineers, rfqToEdit }) => {
@@ -1683,7 +1688,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                       className="hidden"
                     />
                     <p className="text-xs text-gray-500">
-                      Allowed: PDF, Word, Excel. Max size {MAX_DOCUMENT_SIZE / (1024 * 1024)}MB each.
+                      Allowed: PDF, Word, Excel, Images (JPG, PNG, GIF, WEBP). Max size {MAX_DOCUMENT_SIZE / (1024 * 1024)}MB each.
                     </p>
                   </div>
 
