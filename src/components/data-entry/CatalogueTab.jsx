@@ -12,6 +12,9 @@ const initialFormState = {
   variantCategories: [],
   sizes: [],
   chassis: [],
+  frontImage: '',
+  carouselImages: [],
+  featured: false,
   leadTime: '',
   notes: '',
   shopCatalogueOverrides: {}
@@ -222,6 +225,9 @@ const CatalogueTab = () => {
             chassisDetails: Array.isArray(ch.chassisDetails) ? [...ch.chassisDetails] : []
           }))
           : [],
+        frontImage: freshCatalogue.frontImage || '',
+        carouselImages: Array.isArray(freshCatalogue.carouselImages) ? [...freshCatalogue.carouselImages] : [],
+        featured: freshCatalogue.featured === true,
         shopCatalogueOverrides: overrides,
         leadTime: freshCatalogue.leadTime || '',
         notes: freshCatalogue.notes || ''
@@ -270,12 +276,20 @@ const CatalogueTab = () => {
       return;
     }
 
+    if (!formData.frontImage || !formData.frontImage.trim()) {
+      toast.error('Front image is required');
+      return;
+    }
+
     const payload = {
       bodyType: formData.bodyType,
       article: formData.article || '',
       variantCategories: formData.variantCategories.filter(cat => cat.category && cat.values.length > 0),
       sizes: formData.sizes.filter(s => s.sizeType || s.sizeCustom),
       chassis: formData.chassis.filter(c => c.chassisType || (c.chassisDetails && c.chassisDetails.length > 0)),
+      frontImage: formData.frontImage || '',
+      carouselImages: formData.carouselImages.filter(img => img && img.trim()),
+      featured: formData.featured === true,
       leadTime: formData.leadTime || '',
       notes: formData.notes || ''
     };
@@ -308,6 +322,9 @@ const CatalogueTab = () => {
       variantCategories: formData.variantCategories.filter(cat => cat.category && cat.values.length > 0),
       sizes: formData.sizes.filter(s => s.sizeType || s.sizeCustom),
       chassis: formData.chassis.filter(c => c.chassisType || (c.chassisDetails && c.chassisDetails.length > 0)),
+      frontImage: formData.frontImage || '',
+      carouselImages: formData.carouselImages.filter(img => img && img.trim()),
+      featured: formData.featured === true,
       shopCatalogueOverrides: overridesArray,
       leadTime: formData.leadTime || '',
       notes: formData.notes || ''
@@ -776,6 +793,73 @@ const CatalogueForm = ({
       </div>
 
       <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Front Image *
+        </label>
+        <input
+          type="text"
+          value={formData.frontImage}
+          onChange={(e) => setFormData((prev) => ({ ...prev, frontImage: e.target.value }))}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="Enter front image URL or path"
+          required
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Carousel Images
+          </label>
+          <button
+            type="button"
+            onClick={() => setFormData((prev) => ({
+              ...prev,
+              carouselImages: [...(prev.carouselImages || []), '']
+            }))}
+            className="text-sm px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            <Plus className="h-4 w-4 inline mr-1" />
+            Add Image
+          </button>
+        </div>
+
+        {(formData.carouselImages || []).length === 0 ? (
+          <p className="text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg p-4 text-center">
+            No carousel images yet. Add images to display in the carousel.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {formData.carouselImages.map((image, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={image}
+                  onChange={(e) => {
+                    const updated = [...(formData.carouselImages || [])];
+                    updated[index] = e.target.value;
+                    setFormData((prev) => ({ ...prev, carouselImages: updated }));
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder="Enter carousel image URL or path"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = (formData.carouselImages || []).filter((_, idx) => idx !== index);
+                    setFormData((prev) => ({ ...prev, carouselImages: updated }));
+                  }}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
         <div className="flex items-center justify-between mb-2">
           <label className="block text-sm font-medium text-gray-700">
             Variant Categories
@@ -1037,6 +1121,21 @@ const CatalogueForm = ({
             }}
           />
         )}
+      </div>
+
+      <div>
+        <label className="flex items-center space-x-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={formData.featured === true}
+            onChange={(e) => setFormData((prev) => ({ ...prev, featured: e.target.checked }))}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Featured Catalogue</span>
+        </label>
+        <p className="text-xs text-gray-500 mt-1 ml-6">
+          Mark this catalogue as featured to highlight it in the catalogue viewer
+        </p>
       </div>
 
       <div>
@@ -1604,6 +1703,52 @@ const ViewCatalogue = ({ catalogue, onClose }) => {
             className="prose prose-sm max-w-none border border-gray-200 rounded-lg p-4 bg-gray-50"
             dangerouslySetInnerHTML={{ __html: catalogue.article }}
           />
+        </div>
+      )}
+
+      {catalogue.frontImage && (
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">Front Image</label>
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <img
+              src={catalogue.frontImage}
+              alt="Front image"
+              className="max-w-full h-auto rounded-lg"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'block';
+              }}
+            />
+            <p className="text-sm text-gray-500 mt-2" style={{ display: 'none' }}>
+              {catalogue.frontImage}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {catalogue.carouselImages && catalogue.carouselImages.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">
+            Carousel Images ({catalogue.carouselImages.length})
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {catalogue.carouselImages.map((image, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                <img
+                  src={image}
+                  alt={`Carousel image ${index + 1}`}
+                  className="w-full h-auto rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1 break-all" style={{ display: 'none' }}>
+                  {image}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
