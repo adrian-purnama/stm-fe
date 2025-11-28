@@ -85,6 +85,7 @@ const formatDiscountDescriptor = (item, breakdown) => {
 const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
   const [loading, setLoading] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
+  const [downloadMode, setDownloadMode] = useState('full'); // 'full' or 'minimal'
   const paymentTermsNote = useMemo(() => {
     const rfqPayment = quotationData?.rfq?.paymentTerms;
     const headerPayment = quotationData?.header?.paymentTerms;
@@ -109,7 +110,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
     setSelectedNotes(predefinedNotes.map((_, index) => index));
   }, [predefinedNotes]);
 
-  const handleDownload = async (offer = null, revision = null) => {
+  const handleDownload = async (offer = null, revision = null, mode = null) => {
     try {
       setLoading(true);
       const { header } = quotationData;
@@ -125,6 +126,9 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
         offerId = offer._id;
       }
       
+      // Use provided mode or default to current downloadMode state
+      const downloadModeToUse = mode || downloadMode;
+      
       // Build query parameters
       const params = new URLSearchParams();
       if (offerId) {
@@ -133,6 +137,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       if (selectedNotes && selectedNotes.length > 0) {
         params.append('selectedNotes', JSON.stringify(selectedNotes));
       }
+      // Add download mode parameter
+      params.append('includeHeaderFooter', downloadModeToUse === 'full' ? 'true' : 'false');
       
       // Call backend download endpoint - use axios directly for blob response
       const token = localStorage.getItem('asb-token');
@@ -157,7 +163,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       
       // Determine filename from response headers or generate default
       const contentDisposition = response.headers['content-disposition'];
-      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}.docx`;
+      const modeSuffix = downloadModeToUse === 'full' ? '' : '_NoHeaderFooter';
+      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}${modeSuffix}.docx`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/);
         if (filenameMatch) {
@@ -305,31 +312,66 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 Document Preview - {header.quotationNumber}
               </h1>
             </div>
-            <div className="flex items-center space-x-2">
-          <button
-                onClick={() => handleDownload()}
-                disabled={loading}
-                className="inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                All Offers
-          </button>
-            <button
-                onClick={() => handleDownload(currentOffer)}
-                disabled={loading}
-                className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                Current Offerssss
-            </button>
+            <div className="flex items-center space-x-4">
+              {/* Download Mode Selector */}
+              <div className="flex flex-col items-end">
+                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1 mb-1">
+                  <button
+                    onClick={() => setDownloadMode('full')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      downloadMode === 'full'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                    title="Download with header, footer, and watermark"
+                  >
+                    Full
+                  </button>
+                  <button
+                    onClick={() => setDownloadMode('minimal')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      downloadMode === 'minimal'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                    title="Download without header, footer, and watermark (for pre-printed paper)"
+                  >
+                    Minimal
+                  </button>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {downloadMode === 'full' 
+                    ? 'With header, footer & watermark' 
+                    : 'No header, footer & watermark'}
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleDownload()}
+                  disabled={loading}
+                  className="inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  All Offers
+                </button>
+                <button
+                  onClick={() => handleDownload(currentOffer)}
+                  disabled={loading}
+                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  Current Offer
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -405,6 +447,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                             onClick={() => handleDownload(offerGroup.original)}
                             disabled={loading}
                             className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
+                            title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
                           >
                             <Download className="w-3 h-3 mr-1" />
                             Download
@@ -443,6 +486,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                     onClick={() => handleDownload(offerGroup.original, revision)}
                                     disabled={loading}
                                     className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                                    title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
                                   >
                                     <Download className="w-3 h-3 mr-1" />
                                     Download
