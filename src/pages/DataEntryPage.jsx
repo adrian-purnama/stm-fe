@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import Navigation from '../components/common/Navigation';
 import LazyTabs from '../components/common/LazyTabs';
-import { Truck, Settings, Ruler, Sparkles, FileText } from 'lucide-react';
+import { Truck, Settings, Ruler, Sparkles, FileText, Building2 } from 'lucide-react';
 
 const DataEntryPage = () => {
 
@@ -36,6 +36,12 @@ const DataEntryPage = () => {
       label: 'Feature Type',
       icon: Sparkles,
       component: () => import('../components/data-entry/FeatureTypeTab')
+    },
+    {
+      key: 'company',
+      label: 'Companies',
+      icon: Building2,
+      component: () => import('../components/data-entry/CompanyTab')
     }
   ], []);
 
