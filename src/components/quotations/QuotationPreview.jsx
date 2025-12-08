@@ -135,9 +135,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       if (offerId) {
         params.append('offerId', offerId);
       }
-      if (selectedNotes && selectedNotes.length > 0) {
-        params.append('selectedNotes', JSON.stringify(selectedNotes));
-      }
+      // Always send selectedNotes, even if empty array (so backend knows which notes to exclude)
+      params.append('selectedNotes', JSON.stringify(selectedNotes || []));
       // Add download mode parameter
       params.append('includeHeaderFooter', downloadModeToUse === 'full' ? 'true' : 'false');
       // Add format parameter
@@ -159,9 +158,22 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
         }
       );
       
+      // Determine MIME type based on format
+      const getMimeType = (format) => {
+        switch (format) {
+          case 'pdf':
+            return 'application/pdf';
+          case 'doc':
+            return 'application/msword';
+          case 'docx':
+          default:
+            return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        }
+      };
+
       // Create blob URL and trigger download
       const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        type: getMimeType(downloadFormat)
       });
       
       // Determine filename from response headers or generate default
@@ -298,35 +310,40 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <button
-                onClick={onBack}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Details
-              </button>
-            </div>
-            <div className="flex items-center space-x-4">
-              <h1 className="text-lg font-semibold text-gray-900">
-                Document Preview - {header.quotationNumber}
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {/* Download Format Selector */}
-              <div className="flex flex-col items-end">
-                <label className="text-xs font-medium text-gray-700 mb-1">Format</label>
-                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+          {/* Top Row: Back Button and Title */}
+          <div className="flex items-center justify-between py-4 border-b border-gray-200">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Back to Details</span>
+              <span className="sm:hidden">Back</span>
+            </button>
+            <h1 className="text-base sm:text-lg font-semibold text-gray-900 text-center flex-1 mx-4">
+              <span className="hidden sm:inline">Document Preview - </span>
+              {header.quotationNumber}
+            </h1>
+            <div className="w-20 sm:w-24"></div> {/* Spacer for centering */}
+          </div>
+
+          {/* Download Controls Row */}
+          <div className="py-4 space-y-4">
+            {/* Format and Mode Selectors */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Format Selector */}
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">File Format</label>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setDownloadFormat('docx')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
                       downloadFormat === 'docx'
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-200'
                     }`}
                     title="Download as DOCX (Word Document)"
                   >
@@ -334,10 +351,10 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   </button>
                   <button
                     onClick={() => setDownloadFormat('doc')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
                       downloadFormat === 'doc'
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-200'
                     }`}
                     title="Download as DOC (Word 97-2003)"
                   >
@@ -345,10 +362,10 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   </button>
                   <button
                     onClick={() => setDownloadFormat('pdf')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
                       downloadFormat === 'pdf'
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-200'
                     }`}
                     title="Download as PDF"
                   >
@@ -357,16 +374,16 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 </div>
               </div>
               
-              {/* Download Mode Selector */}
-              <div className="flex flex-col items-end">
-                <label className="text-xs font-medium text-gray-700 mb-1">Mode</label>
-                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+              {/* Mode Selector */}
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">Document Mode</label>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setDownloadMode('full')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
                       downloadMode === 'full'
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-200'
                     }`}
                     title="Download with header, footer, and watermark"
                   >
@@ -374,67 +391,68 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   </button>
                   <button
                     onClick={() => setDownloadMode('minimal')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                    className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
                       downloadMode === 'minimal'
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-200'
                     }`}
                     title="Download without header, footer, and watermark (for pre-printed paper)"
                   >
                     Minimal
                   </button>
                 </div>
-                <span className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1.5 text-center">
                   {downloadMode === 'full' 
                     ? 'With header, footer & watermark' 
                     : 'No header, footer & watermark'}
-                </span>
+                </p>
               </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleDownload()}
-                  disabled={loading}
-                  className="inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  All Offers
-                </button>
-                <button
-                  onClick={() => handleDownload(currentOffer)}
-                  disabled={loading}
-                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  Current Offer
-                </button>
-              </div>
+            </div>
+
+            {/* Download Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => handleDownload()}
+                disabled={loading}
+                className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                <span>All Offers</span>
+              </button>
+              <button
+                onClick={() => handleDownload(currentOffer)}
+                disabled={loading}
+                className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                <span>Current Offer</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Offers and Revisions Section */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="bg-white rounded-lg shadow-sm border">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Offers & Revisions</h2>
-              <p className="text-sm text-gray-600 mt-1">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Offers & Revisions</h2>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">
                 Select and download specific offers or revisions
               </p>
-                        </div>
-            <div className="p-6">
-              <div className="space-y-6">
+            </div>
+            <div className="p-4 sm:p-6">
+              <div className="space-y-4 sm:space-y-6">
                 {offers.map((offerGroup, groupIndex) => {
                   const winningOfferId = quotationData?.header?.selectedOfferId?.toString?.() || '';
                   const selectedOfferItemIds = quotationData?.header?.selectedOfferItemIds?.map((id) =>
@@ -466,21 +484,21 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   };
 
                   return (
-                    <div key={groupIndex} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">
+                    <div key={groupIndex} className="border border-gray-200 rounded-lg p-4 sm:p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                             Offer {offerGroup.original?.offerNumber || `#${groupIndex + 1}`}
                           </h3>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">
                             {offerGroup.original?.offerItems?.length || 0} items
                           </p>
                           {buildWinningBadge(offerGroup.original)}
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2 sm:flex-shrink-0">
                           <button
                             onClick={() => setSelectedOffer(offerGroup.original)}
-                            className={`px-3 py-1 text-sm rounded-md ${
+                            className={`flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm rounded-lg transition-colors ${
                               selectedOffer?._id === offerGroup.original?._id
                                 ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                 : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
@@ -491,35 +509,35 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                           <button
                             onClick={() => handleDownload(offerGroup.original)}
                             disabled={loading}
-                            className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
+                            className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
                             title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
                           >
-                            <Download className="w-3 h-3 mr-1" />
-                            Download
+                            <Download className="w-3 h-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Download</span>
                           </button>
                         </div>
                       </div>
                       
                       {/* Revisions */}
                       {offerGroup.revisions && offerGroup.revisions.length > 0 && (
-                        <div className="ml-4 border-l-2 border-gray-200 pl-4">
-                          <h4 className="text-sm font-medium text-gray-700 mb-2">Revisions:</h4>
-                          <div className="space-y-2">
+                        <div className="ml-0 sm:ml-4 border-l-0 sm:border-l-2 border-gray-200 pl-0 sm:pl-4 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0">
+                          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-3">Revisions:</h4>
+                          <div className="space-y-3">
                             {offerGroup.revisions.map((revision, revIndex) => (
-                              <div key={revIndex} className="flex items-center justify-between bg-gray-50 rounded p-3">
-                                <div>
+                              <div key={revIndex} className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 rounded-lg p-3 sm:p-4 gap-3">
+                                <div className="flex-1">
                                   <p className="text-sm font-medium text-gray-900">
                                     Revision {revision.revisionNumber || `R${revIndex + 1}`}
                                   </p>
-                                  <p className="text-xs text-gray-600">
+                                  <p className="text-xs text-gray-600 mt-1">
                                     {revision.offerItems?.length || 0} items
                                   </p>
                                   {buildWinningBadge(revision)}
                                 </div>
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center gap-2 sm:flex-shrink-0">
                                   <button
                                     onClick={() => setSelectedOffer(revision)}
-                                    className={`px-2 py-1 text-xs rounded ${
+                                    className={`flex-1 sm:flex-none px-3 py-2 text-xs rounded-lg transition-colors ${
                                       selectedOffer?._id === revision._id
                                         ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                         : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200'
@@ -530,11 +548,11 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                   <button
                                     onClick={() => handleDownload(offerGroup.original, revision)}
                                     disabled={loading}
-                                    className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                                    className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
                                     title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
                                   >
-                                    <Download className="w-3 h-3 mr-1" />
-                                    Download
+                                    <Download className="w-3 h-3 sm:mr-1" />
+                                    <span className="hidden sm:inline">Download</span>
                                   </button>
                                 </div>
                               </div>
@@ -1014,37 +1032,37 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 </div>
 
           {/* Notes Configuration */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 order-1 lg:order-2">
             <div className="bg-white rounded-lg shadow-sm border">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Document Notes</h2>
-                <p className="text-sm text-gray-600 mt-1">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Document Notes</h2>
+                <p className="text-xs sm:text-sm text-gray-600 mt-1">
                   Select which notes to include in the document
                 </p>
-                          </div>
-              <div className="p-6">
+              </div>
+              <div className="p-4 sm:p-6">
                 <div className="space-y-3">
                   {predefinedNotes.map((note, index) => (
-                    <label key={index} className="flex items-start space-x-3 cursor-pointer">
+                    <label key={index} className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
                       <input
                         type="checkbox"
                         checked={selectedNotes.includes(index)}
                         onChange={() => toggleNote(index)}
                         className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <span className="text-sm text-gray-700">{note.text}</span>
+                      <span className="text-xs sm:text-sm text-gray-700 flex-1">{note.text}</span>
                     </label>
                   ))}
-                            </div>
-                          </div>
-                        </div>
+                </div>
+              </div>
+            </div>
 
             {/* Pricing Summary */}
-            <div className="bg-white rounded-lg shadow-sm border mt-6">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Pricing Summary</h2>
+            <div className="bg-white rounded-lg shadow-sm border mt-4 sm:mt-6">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Pricing Summary</h2>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <div className="space-y-4">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
