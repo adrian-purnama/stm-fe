@@ -86,6 +86,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
   const [loading, setLoading] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [downloadMode, setDownloadMode] = useState('full'); // 'full' or 'minimal'
+  const [downloadFormat, setDownloadFormat] = useState('docx'); // 'docx', 'doc', or 'pdf'
   const paymentTermsNote = useMemo(() => {
     const rfqPayment = quotationData?.rfq?.paymentTerms;
     const headerPayment = quotationData?.header?.paymentTerms;
@@ -139,6 +140,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       }
       // Add download mode parameter
       params.append('includeHeaderFooter', downloadModeToUse === 'full' ? 'true' : 'false');
+      // Add format parameter
+      params.append('format', downloadFormat);
       
       // Call backend download endpoint - use axios directly for blob response
       const token = localStorage.getItem('asb-token');
@@ -164,7 +167,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       // Determine filename from response headers or generate default
       const contentDisposition = response.headers['content-disposition'];
       const modeSuffix = downloadModeToUse === 'full' ? '' : '_NoHeaderFooter';
-      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}${modeSuffix}.docx`;
+      const formatExtension = downloadFormat === 'pdf' ? '.pdf' : downloadFormat === 'doc' ? '.doc' : '.docx';
+      let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}${modeSuffix}${formatExtension}`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/);
         if (filenameMatch) {
@@ -313,9 +317,50 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
+              {/* Download Format Selector */}
+              <div className="flex flex-col items-end">
+                <label className="text-xs font-medium text-gray-700 mb-1">Format</label>
+                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setDownloadFormat('docx')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      downloadFormat === 'docx'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                    title="Download as DOCX (Word Document)"
+                  >
+                    DOCX
+                  </button>
+                  <button
+                    onClick={() => setDownloadFormat('doc')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      downloadFormat === 'doc'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                    title="Download as DOC (Word 97-2003)"
+                  >
+                    DOC
+                  </button>
+                  <button
+                    onClick={() => setDownloadFormat('pdf')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      downloadFormat === 'pdf'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                    title="Download as PDF"
+                  >
+                    PDF
+                  </button>
+                </div>
+              </div>
+              
               {/* Download Mode Selector */}
               <div className="flex flex-col items-end">
-                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1 mb-1">
+                <label className="text-xs font-medium text-gray-700 mb-1">Mode</label>
+                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setDownloadMode('full')}
                     className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
@@ -339,7 +384,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     Minimal
                   </button>
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 mt-1">
                   {downloadMode === 'full' 
                     ? 'With header, footer & watermark' 
                     : 'No header, footer & watermark'}
