@@ -130,11 +130,10 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(new Set()); // Track which quotations are loading details
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pages: 1,
-    total: 0
-  });
+  const [loadingMore, setLoadingMore] = useState(false); // Track if loading more items
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [chips, setChips] = useState([]); // [{ type: 'status', value: 'open' }, ...]
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -208,7 +207,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
   const onRemoveChip = (idx) => {
     setChips((chips) => chips.filter((c, i) => i !== idx));
-    setPagination((p) => ({ ...p, current: 1 }));
+    setCurrentPage(1);
+    setQuotations([]);
+    setHasMore(true);
   };
 
   const onAddChipFromInput = () => {
@@ -298,24 +299,39 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
   const advancedFilterCount = advancedFilterChips.length;
 
+  // Initial load effect
+  useEffect(() => {
+    if (isInitialLoad) {
+      fetchQuotations(true);
+    }
+  }, []); // Only run on mount
+
   // Debounced search effect - only fetch after user stops typing
   useEffect(() => {
+    if (isInitialLoad) return; // Skip if still on initial load
+    
     const timeout = setTimeout(() => {
-      if (pagination && pagination.current) {
-        fetchQuotations();
-      }
+      fetchQuotations(true); // Reset and fetch first page
     }, 500); // 500ms debounce delay
 
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination?.current, chips, searchInput, advancedFilters]);
+  }, [chips, searchInput, advancedFilters]);
 
   // Fetch quotation headers only (fast initial load)
-  const fetchQuotations = async () => {
+  const fetchQuotations = async (reset = false) => {
     try {
-      // Only show loading spinner on initial load or when explicitly needed
-      if (isInitialLoad || pagination?.current === 1) {
+      // Determine which page to fetch
+      const pageToFetch = reset ? 1 : currentPage;
+      
+      // If resetting, clear existing quotations and reset page
+      if (reset) {
+        setQuotations([]);
+        setCurrentPage(1);
+        setHasMore(true);
         setLoading(true);
+      } else {
+        setLoadingMore(true);
       }
       
       // Build search string from chips and searchInput
@@ -328,7 +344,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       if (searchInput.trim()) search += ' ' + searchInput.trim();
       
       const params = {
-        page: pagination?.current || 1,
+        page: pageToFetch,
         limit: 10,
         filterMode,
         lightweight: 'true', // Request lightweight mode for fast header load
@@ -364,10 +380,21 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
       const response = await ApiHelper.get(apiEndpoint, { params });
       const headers = Array.isArray(response.data.data) ? response.data.data : [];
+      const paginationData = response.data.pagination || { current: 1, pages: 1, total: 0 };
       
-      // Set quotations with empty offers (details will load asynchronously)
-      setQuotations(headers);
-      setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
+      // Append or replace quotations based on reset flag
+      if (reset) {
+        setQuotations(headers);
+        setCurrentPage(2); // Next page to fetch will be 2
+      } else {
+        setQuotations(prev => [...prev, ...headers]);
+        setCurrentPage(prev => prev + 1); // Increment for next fetch
+      }
+      
+      // Update pagination state
+      setTotal(paginationData.total || 0);
+      const nextPage = paginationData.current + 1;
+      setHasMore(nextPage <= paginationData.pages);
       
       // Trigger async loading of full details for each quotation
       // Fetch header details and offers separately for faster perceived performance
@@ -390,6 +417,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       console.error('Error fetching quotations:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -525,15 +553,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     }
   };
 
-  // Reset pagination when filters change (but don't fetch yet - debounced fetch will handle it)
+  // Reset infinite scroll when filters change (but don't fetch yet - debounced fetch will handle it)
   useEffect(() => {
-    setPagination((prev) => ({ ...prev, current: 1 }));
-  }, [chips, advancedFilters]);
-
-  const handlePageChange = (page) => {
-    if (page < 1 || page > pagination.pages) return;
-    setPagination((prev) => ({ ...prev, current: page }));
-  };
+    setCurrentPage(1);
+    setQuotations([]);
+    setHasMore(true);
+  }, [chips, advancedFilters, searchInput]);
 
   const formatDate = (date) => {
     if (!date) return '-';
@@ -1193,54 +1218,35 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     }));
   };
 
-  const renderPagination = () => {
-    if (pagination.pages <= 1) return null;
+  // Infinite scroll: Load more when scrolling to bottom
+  useEffect(() => {
+    if (!hasMore || loadingMore || loading || isInitialLoad) return;
 
-    const pages = [];
-    for (let i = 1; i <= pagination.pages; i += 1) {
-      if (i === 1 || i === pagination.pages || (i >= (pagination.current || 1) - 1 && i <= (pagination.current || 1) + 1)) {
-        pages.push(
-          <button
-            key={i}
-            onClick={() => handlePageChange(i)}
-            className={`px-3 py-1 border rounded-md text-sm font-medium ${
-              i === (pagination.current || 1)
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            {i}
-          </button>
-        );
-      } else if (i === (pagination.current || 1) - 2 || i === (pagination.current || 1) + 2) {
-        pages.push(
-          <span key={`ellipsis-${i}`} className="px-2 text-gray-500">
-            ...
-          </span>
-        );
+    const handleIntersection = (entries) => {
+      if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        fetchQuotations(false); // Load next page
       }
-    }
+    };
 
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => handlePageChange((pagination.current || 1) - 1)}
-          disabled={(pagination.current || 1) === 1}
-          className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-600 disabled:opacity-50"
-        >
-          Previous
-        </button>
-        {pages}
-        <button
-          onClick={() => handlePageChange((pagination.current || 1) + 1)}
-          disabled={(pagination.current || 1) === pagination.pages}
-          className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-600 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-    );
-  };
+    const observer = new IntersectionObserver(handleIntersection, { threshold: 0.1 });
+
+    // Use a small delay to ensure sentinel is rendered
+    const timeout = setTimeout(() => {
+      const sentinel = document.getElementById('quotation-list-sentinel');
+      if (sentinel) {
+        observer.observe(sentinel);
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timeout);
+      const sentinel = document.getElementById('quotation-list-sentinel');
+      if (sentinel) {
+        observer.unobserve(sentinel);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loadingMore, loading, isInitialLoad, currentPage]);
 
   // Check if a quotation is loading details
   const isQuotationLoadingDetails = (quotationId) => {
@@ -2153,22 +2159,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         );
       })}
 
-      {renderPagination() && (
-        <div className="flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing
-            <span className="font-semibold ml-1 mr-1">
-              {((pagination.current || 1) - 1) * 10 + 1}
-            </span>
-            to
-            <span className="font-semibold ml-1 mr-1">
-              {Math.min((pagination.current || 1) * 10, pagination.total)}
-            </span>
-            of
-            <span className="font-semibold ml-1">{pagination.total}</span>
-            results
-          </div>
-          {renderPagination()}
+      {/* Infinite scroll sentinel - triggers load more when visible */}
+      {hasMore && (
+        <div id="quotation-list-sentinel" className="h-10 flex items-center justify-center">
+          {loadingMore && (
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500"></div>
+              <span>Loading more...</span>
+            </div>
+          )}
         </div>
       )}
 

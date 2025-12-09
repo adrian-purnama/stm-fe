@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import { formatPrice } from '../../utils/templates/documentGenerator';
 import toast from 'react-hot-toast';
 import { getDrawingAssetUrl, getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
+import { UserContext } from '../../utils/contexts/UserContext';
 import axios from 'axios';
 
 // Format file size in human readable format
@@ -83,10 +84,35 @@ const formatDiscountDescriptor = (item, breakdown) => {
 };
 
 const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
+  const { user } = useContext(UserContext);
   const [loading, setLoading] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [downloadMode, setDownloadMode] = useState('full'); // 'full' or 'minimal'
   const [downloadFormat, setDownloadFormat] = useState('docx'); // 'docx', 'doc', or 'pdf'
+  
+  // Check if user is a requester
+  const isRequester = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    // Check if user has quotation_requester permission
+    const hasRequesterPermission = user.permissions.some(perm => {
+      if (typeof perm === 'string') {
+        return perm === 'quotation_requester';
+      }
+      if (perm.name === 'quotation_requester') {
+        return true;
+      }
+      if (perm.type === 'multi' && perm.includes && Array.isArray(perm.includes)) {
+        return perm.includes.includes('quotation_requester');
+      }
+      return false;
+    });
+    
+    // Also check if user is the requester from header or RFQ
+    const isHeaderRequester = quotationData?.header?.requesterId?.toString() === user.id?.toString();
+    const isRfqRequester = quotationData?.rfq?.requesterId?.toString() === user.id?.toString();
+    
+    return hasRequesterPermission || isHeaderRequester || isRfqRequester;
+  }, [user, quotationData]);
   const paymentTermsNote = useMemo(() => {
     const rfqPayment = quotationData?.rfq?.paymentTerms;
     const headerPayment = quotationData?.header?.paymentTerms;
@@ -110,6 +136,13 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
   useEffect(() => {
     setSelectedNotes(predefinedNotes.map((_, index) => index));
   }, [predefinedNotes]);
+
+  // Automatically set mode to 'minimal' when PDF is selected
+  useEffect(() => {
+    if (downloadFormat === 'pdf' && downloadMode === 'full') {
+      setDownloadMode('minimal');
+    }
+  }, [downloadFormat, downloadMode]);
 
   const handleDownload = async (offer = null, revision = null, mode = null) => {
     try {
@@ -380,12 +413,15 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                 <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setDownloadMode('full')}
+                    disabled={downloadFormat === 'pdf'}
                     className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all ${
-                      downloadMode === 'full'
+                      downloadFormat === 'pdf'
+                        ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
+                        : downloadMode === 'full'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-gray-700 hover:bg-gray-200'
                     }`}
-                    title="Download with header, footer, and watermark"
+                    title={downloadFormat === 'pdf' ? 'Full mode not available for PDF' : 'Download with header, footer, and watermark'}
                   >
                     Full
                   </button>
@@ -402,7 +438,9 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1.5 text-center">
-                  {downloadMode === 'full' 
+                  {downloadFormat === 'pdf' 
+                    ? 'PDF only supports minimal mode (no header, footer & watermark)'
+                    : downloadMode === 'full' 
                     ? 'With header, footer & watermark' 
                     : 'No header, footer & watermark'}
                 </p>
@@ -917,8 +955,8 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                       return null;
                     })()}
                     
-                    {/* Notes Images Preview - After Drawings */}
-                    {(() => {
+                    {/* Notes Images Preview - After Drawings - Hidden for requesters */}
+                    {!isRequester && (() => {
                       const notesImages = currentOffer?.notesImages || [];
                       
                       if (notesImages.length > 0) {
