@@ -46,6 +46,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   const [editingItemIndex, setEditingItemIndex] = useState(-1);
 
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(null);
   const [quotationNumber, setQuotationNumber] = useState('');
   const [uploadingImages, setUploadingImages] = useState(false);
   const [notesImagesData, setNotesImagesData] = useState([]);
@@ -609,7 +611,15 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isSubmitting) {
+      return;
+    }
+    
+    setIsSubmitting(true);
     setLoading(true);
+    setSubmitProgress({ step: 'uploading', message: 'Uploading images...' });
 
     console.log('[DEBUG] Form submission started');
     console.log('[DEBUG] Current pendingImages:', pendingImages);
@@ -617,6 +627,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
 
     try {
       // Upload pending images first
+      setSubmitProgress({ step: 'uploading', message: 'Uploading images...' });
       const uploadedImageIds = await uploadPendingImages();
       const allNotesImages = [...formData.notesImages, ...uploadedImageIds];
       
@@ -643,11 +654,24 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('Notes images being sent:', allNotesImages);
         console.log('Uploaded image IDs:', uploadedImageIds);
 
-        await ApiHelper.post('/api/quotations', { headerData, offerData, rfqId });
-        toast.success('Quotation created successfully');
+        setSubmitProgress({ step: 'creating', message: 'Creating quotation...' });
+        const response = await ApiHelper.post('/api/quotations', { headerData, offerData, rfqId });
         
-        // Clear pending images since they've been uploaded
-        setPendingImages([]);
+        // Check response structure
+        if (response.data?.success === true || response.status === 201) {
+          setSubmitProgress({ step: 'success', message: 'Quotation created successfully!' });
+          toast.success('Quotation created successfully');
+          
+          // Clear pending images since they've been uploaded
+          setPendingImages([]);
+          
+          // Navigate or refresh
+          if (onSave) {
+            onSave({ stayInCurrentView });
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to create quotation');
+        }
       } else if (mode === 'new-offer') {
         // Create additional offer
         const offerData = {
@@ -665,14 +689,25 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('Offer data offerItems:', offerData.offerItems);
         console.log('Offer data offerItems length:', offerData.offerItems.length);
         
+        setSubmitProgress({ step: 'creating', message: 'Creating new offer...' });
         // Use quotation ID instead of quotation number
         const quotationId = quotation.header?._id || quotation._id;
         console.log('Using quotation ID:', quotationId);
-        await ApiHelper.post(`/api/quotations/${quotationId}/offers`, offerData);
-        toast.success('New offer created successfully');
+        const response = await ApiHelper.post(`/api/quotations/${quotationId}/offers`, offerData);
         
-        // Clear pending images since they've been uploaded
-        setPendingImages([]);
+        if (response.data?.success === true || response.status === 201) {
+          setSubmitProgress({ step: 'success', message: 'New offer created successfully!' });
+          toast.success('New offer created successfully');
+          
+          // Clear pending images since they've been uploaded
+          setPendingImages([]);
+          
+          if (onSave) {
+            onSave({ stayInCurrentView });
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to create offer');
+        }
       } else if (mode === 'revision') {
         // Create a revision of the current offer
         // For revisions, only send new images - backend will copy parent images
@@ -685,6 +720,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           parentOfferId: quotation.offer?._id || quotation._id
         };
 
+        setSubmitProgress({ step: 'creating', message: 'Creating revision...' });
         // Use quotation ID instead of quotation number
         const quotationId = quotation.header?._id || quotation._id;
         console.log('Creating revision with data:', offerData);
@@ -695,13 +731,16 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('Revision creation response:', response);
         console.log('Response data:', response.data);
         console.log('Response data.data:', response.data.data);
-        toast.success('Revision created successfully');
         
-        // Clear pending images since they've been uploaded
-        setPendingImages([]);
+        if (response.data?.success === true || response.status === 201) {
+          setSubmitProgress({ step: 'success', message: 'Revision created successfully!' });
+          toast.success('Revision created successfully');
+          
+          // Clear pending images since they've been uploaded
+          setPendingImages([]);
         
-        // After creating revision, switch to edit mode for the new revision
-        if (response.data.data && onSave) {
+          // After creating revision, switch to edit mode for the new revision
+          if (response.data.data && onSave) {
           // Always refresh notes images data for the new revision
           setRefreshingImages(true);
           try {
@@ -747,6 +786,9 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             newRevision: true
           });
           return; // Don't call the default onSave
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to create revision');
         }
       } else {
         // Edit existing offer
@@ -764,55 +806,110 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('Notes images being sent:', allNotesImages);
         console.log('Uploaded image IDs:', uploadedImageIds);
         console.log('Using quotation ID:', quotationId);
-        await ApiHelper.put(`/api/quotations/${quotationId}/offers/${offerId}`, offerData);
-        toast.success('Quotation updated successfully');
         
-        // Handle smart deletion of removed images
-        await handleSmartDeletionOfRemovedImages();
+        setSubmitProgress({ step: 'creating', message: 'Updating quotation...' });
+        const response = await ApiHelper.put(`/api/quotations/${quotationId}/offers/${offerId}`, offerData);
         
-        // Clear the removed images tracking since we've processed them
-        setRemovedImages([]);
+        if (response.data?.success === true || response.status === 200) {
+          setSubmitProgress({ step: 'success', message: 'Quotation updated successfully!' });
+          toast.success('Quotation updated successfully');
         
-        // Simple approach: just refresh from the API after a short delay
-        setTimeout(async () => {
-          setRefreshingImages(true);
-          try {
-            // Use the offer ID that was just updated
-            const offerId = quotation.offer?._id || quotation._id;
-            console.log('Refreshing images for offerId:', offerId, 'quotation:', quotation);
-            const response = await ApiHelper.get(`/api/notes-images/offer/${offerId}`);
-            console.log('Refresh response:', response);
-            
-            if (response.success && response.data && response.data.images) {
-              console.log('Setting refreshed images:', response.data.images);
-              setNotesImagesData(response.data.images);
-              setFormData(prev => ({
-                ...prev,
-                notesImages: response.data.images.map(img => img.id || img._id)
-              }));
-            } else {
-              console.log('No images returned from API, but keeping current state to avoid clearing');
-              // Don't clear the data if API returns empty - might be a timing issue
-              // The images should still be there from the save operation
+          // Handle smart deletion of removed images
+          await handleSmartDeletionOfRemovedImages();
+          
+          // Clear the removed images tracking since we've processed them
+          setRemovedImages([]);
+          
+          // Simple approach: just refresh from the API after a short delay
+          setTimeout(async () => {
+            setRefreshingImages(true);
+            try {
+              // Use the offer ID that was just updated
+              const offerId = quotation.offer?._id || quotation._id;
+              console.log('Refreshing images for offerId:', offerId, 'quotation:', quotation);
+              const response = await ApiHelper.get(`/api/notes-images/offer/${offerId}`);
+              console.log('Refresh response:', response);
+              
+              if (response.success && response.data && response.data.images) {
+                console.log('Setting refreshed images:', response.data.images);
+                setNotesImagesData(response.data.images);
+                setFormData(prev => ({
+                  ...prev,
+                  notesImages: response.data.images.map(img => img.id || img._id)
+                }));
+              } else {
+                console.log('No images returned from API, but keeping current state to avoid clearing');
+                // Don't clear the data if API returns empty - might be a timing issue
+                // The images should still be there from the save operation
+              }
+            } catch (error) {
+              console.error('Error refreshing notes images after update:', error);
+              // If refresh fails, at least keep the current state
+              console.log('Keeping current state due to refresh error');
+            } finally {
+              setRefreshingImages(false);
             }
-          } catch (error) {
-            console.error('Error refreshing notes images after update:', error);
-            // If refresh fails, at least keep the current state
-            console.log('Keeping current state due to refresh error');
-          } finally {
-            setRefreshingImages(false);
+          }, 1000); // 1 second delay to ensure server has processed everything
+          
+          // Clear pending images since they've been uploaded
+          setPendingImages([]);
+          
+          if (onSave) {
+            onSave({ stayInCurrentView });
           }
-        }, 1000); // 1 second delay to ensure server has processed everything
-        
-        // Clear pending images since they've been uploaded
-        setPendingImages([]);
+        } else {
+          throw new Error(response.data?.message || 'Failed to update quotation');
+        }
       }
-
-      onSave && onSave({ stayInCurrentView });
     } catch (error) {
-      toast.error(error.response?.data?.message || 'An error occurred');
+      console.error('Error submitting form:', error);
+      
+      // Check if quotation was actually created despite error
+      if (error.response?.status === 201 || error.response?.data?.success === true) {
+        setSubmitProgress({ step: 'success', message: 'Quotation created (some operations may have failed)' });
+        toast.success('Quotation created successfully (some operations may have failed)');
+        
+        if (onSave) {
+          onSave({ stayInCurrentView });
+        }
+      } else {
+        // Verify quotation doesn't exist before showing error
+        let quotationExists = false;
+        if (mode === 'create-quotation' || mode === 'create-from-rfq') {
+          const headerData = {
+            customerName: formData.customerName,
+            contactPerson: formData.contactPerson
+          };
+          
+          if (headerData?.customerName) {
+            try {
+              const checkResponse = await ApiHelper.get(
+                `/api/quotations?customerName=${encodeURIComponent(headerData.customerName)}`
+              );
+              if (checkResponse.data?.data?.some(q => 
+                q.customerName === headerData.customerName && 
+                (!rfqId || q.rfqId?._id === rfqId)
+              )) {
+                quotationExists = true;
+              }
+            } catch (checkError) {
+              // Ignore check errors
+            }
+          }
+        }
+        
+        if (quotationExists) {
+          setSubmitProgress({ step: 'warning', message: 'Quotation may have been created. Please refresh to verify.' });
+          toast.warning('Quotation may have been created. Please refresh to verify.');
+        } else {
+          setSubmitProgress({ step: 'error', message: error.response?.data?.message || 'Failed to create quotation' });
+          toast.error(error.response?.data?.message || 'An error occurred');
+        }
+      }
     } finally {
+      setIsSubmitting(false);
       setLoading(false);
+      setTimeout(() => setSubmitProgress(null), 3000);
     }
   };
 
@@ -1266,13 +1363,13 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={isSubmitting}
             data-tooltip-id="save-tooltip"
-            data-tooltip-content={loading ? 'Saving...' : 
+            data-tooltip-content={isSubmitting ? 'Submitting...' : 
               mode === 'create-quotation' ? 'Create new quotation' : 
               mode === 'new-offer' ? 'Create new offer' :
               mode === 'revision' ? 'Create revision' : 'Update quotation'}
-            className={`flex items-center px-4 py-2 text-white rounded-md disabled:opacity-50 ${
+            className={`flex items-center px-4 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
               mode === 'new-offer'
                 ? 'bg-green-600 hover:bg-green-700'
                 : mode === 'revision'
@@ -1280,12 +1377,29 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? 'Saving...' : 
-              mode === 'create-quotation' || mode === 'create-from-rfq' ? 'Create Quotation' : 
-              mode === 'new-offer' ? 'Create Offer' :
-              mode === 'revision' ? 'Create Revision' : 'Update Quotation'}
+            {isSubmitting ? (
+              <span className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                {submitProgress?.message || 'Submitting...'}
+              </span>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {mode === 'create-quotation' || mode === 'create-from-rfq' ? 'Create Quotation' : 
+                  mode === 'new-offer' ? 'Create Offer' :
+                  mode === 'revision' ? 'Create Revision' : 'Update Quotation'}
+              </>
+            )}
           </button>
+          {submitProgress && (
+            <div className="mt-2 text-sm">
+              {submitProgress.step === 'uploading' && <span className="text-blue-600">📤 {submitProgress.message}</span>}
+              {submitProgress.step === 'creating' && <span className="text-blue-600">⚙️ {submitProgress.message}</span>}
+              {submitProgress.step === 'success' && <span className="text-green-600">✅ {submitProgress.message}</span>}
+              {submitProgress.step === 'error' && <span className="text-red-600">❌ {submitProgress.message}</span>}
+              {submitProgress.step === 'warning' && <span className="text-yellow-600">⚠️ {submitProgress.message}</span>}
+            </div>
+          )}
         </div>
       </div>
 

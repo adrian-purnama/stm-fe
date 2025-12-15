@@ -18,6 +18,7 @@ import DrawingSpecificationsPage from './pages/DrawingSpecificationsPage'
 import DataEntryPage from './pages/DataEntryPage'
 import UserManagementPage from './pages/UserManagementPage'
 import PermissionManagementPage from './pages/RoleManagementPage'
+import QuotationEmergencyDiagnosticsPage from './pages/QuotationEmergencyDiagnosticsPage'
 import { UserContextProvider } from './utils/contexts/UserContext'
 
 function App() {
@@ -90,6 +91,14 @@ function App() {
           element={
             <ProtectedRoute>
               <QuotationAnalysisPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/quotations/emergency-diagnostics" 
+          element={
+            <ProtectedRoute>
+              <QuotationEmergencyDiagnosticsPage />
             </ProtectedRoute>
           } 
         />
