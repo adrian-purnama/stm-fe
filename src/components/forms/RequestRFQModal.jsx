@@ -5,6 +5,7 @@ import CustomDropdown from '../common/CustomDropdown';
 import PriceInput from '../common/PriceInput';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/api/ApiHelper';
+import DrawingSpecificationSelector from '../drawings/DrawingSpecificationSelector';
 
 const DEFAULT_PAYMENT_TERMS = 'Payment DP 50% sisa cash before delivery';
 const ALLOWED_DOCUMENT_TYPES = [
@@ -70,7 +71,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
   const [showDrawingSelector, setShowDrawingSelector] = useState(false);
   const [drawingSelectorItemIndex, setDrawingSelectorItemIndex] = useState(null);
 
-  // State for drawing selector filters
+  // State for drawing specification selector modal
   const [drawingSearchTerm, setDrawingSearchTerm] = useState('');
   const [selectedBodyTypeFilter, setSelectedBodyTypeFilter] = useState('');
   const [selectedChassisTypeFilter, setSelectedChassisTypeFilter] = useState('');
@@ -95,7 +96,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     }
   }, [isOpen]);
 
-  // Fetch size types for drawing selector
+  // Fetch size types for drawing selector (used only for legacy inline selector; kept for compatibility where referenced)
   const fetchSizeTypes = async () => {
     try {
       const response = await axiosInstance.get('/api/size-types/list');
@@ -138,69 +139,15 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
     }
   }, [isOpen, rfqToEdit]);
 
-  // Filter drawings based on search and filters
-  useEffect(() => {
-    if (!drawings || drawings.length === 0) {
-      setFilteredDrawings([]);
-      return;
-    }
-
-    let filtered = [...drawings];
-
-    // Filter by body type
-    if (selectedBodyTypeFilter) {
-      filtered = filtered.filter(d => {
-        const bodyTypeId = typeof d.bodyTypeId === 'object' ? d.bodyTypeId._id : d.bodyTypeId;
-        return bodyTypeId === selectedBodyTypeFilter;
-      });
-    }
-
-    // Filter by chassis type
-    if (selectedChassisTypeFilter) {
-      filtered = filtered.filter(d => {
-        const chassisTypeId = typeof d.chassisTypeId === 'object' ? d.chassisTypeId._id : d.chassisTypeId;
-        return chassisTypeId === selectedChassisTypeFilter;
-      });
-    }
-
-    // Filter by size type
-    if (selectedSizeTypeFilter) {
-      filtered = filtered.filter(d => {
-        const sizeTypeId = typeof d.sizeTypeId === 'object' ? d.sizeTypeId._id : d.sizeTypeId;
-        return sizeTypeId === selectedSizeTypeFilter;
-      });
-    }
-
-    // Filter by search term
-    if (drawingSearchTerm) {
-      const searchLower = drawingSearchTerm.toLowerCase();
-      filtered = filtered.filter(d => {
-        const drawingNumber = d.drawingNumber || '';
-        const chassisModel = d.chassisModel || '';
-        const bodyTypeName = typeof d.bodyTypeId === 'object' ? d.bodyTypeId?.name || '' : '';
-        const chassisTypeName = typeof d.chassisTypeId === 'object' ? d.chassisTypeId?.name || '' : '';
-
-        return drawingNumber.toLowerCase().includes(searchLower) ||
-          chassisModel.toLowerCase().includes(searchLower) ||
-          bodyTypeName.toLowerCase().includes(searchLower) ||
-          chassisTypeName.toLowerCase().includes(searchLower);
-      });
-    }
-
-    setFilteredDrawings(filtered);
-  }, [drawings, drawingSearchTerm, selectedBodyTypeFilter, selectedChassisTypeFilter, selectedSizeTypeFilter]);
-
   // Open drawing selector modal
   const openDrawingSelector = (itemIndex) => {
     setDrawingSelectorItemIndex(itemIndex);
     setShowDrawingSelector(true);
-    // Reset filters when opening
+    // Reset any local selector-related filters
     setDrawingSearchTerm('');
     setSelectedBodyTypeFilter('');
     setSelectedChassisTypeFilter('');
     setSelectedSizeTypeFilter('');
-    // Initialize filtered drawings to all drawings
-    setFilteredDrawings(drawings || []);
   };
 
   // Handle drawing selection from modal
@@ -2741,8 +2688,19 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         </form>
       </BaseModal>
 
-      <BaseModal
+      {/* DrawingSpecificationSelector already includes its own BaseModal, so we don't wrap it */}
+      <DrawingSpecificationSelector
         isOpen={showDrawingSelector}
+        value={
+          drawingSelectorItemIndex !== null
+            ? (
+              formData.items[drawingSelectorItemIndex]?.drawingSpecification ||
+              formData.items[drawingSelectorItemIndex]?.templateSourceId ||
+              ''
+            )
+            : ''
+        }
+        onChange={handleDrawingSelection}
         onClose={() => {
           setShowDrawingSelector(false);
           setDrawingSelectorItemIndex(null);
@@ -2751,158 +2709,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           setSelectedChassisTypeFilter('');
           setSelectedSizeTypeFilter('');
         }}
-        title="Select Drawing Specification"
-        size="lg"
-      >
-        <div className="space-y-4">
-          {/* Search and Filter Section */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by drawing number, chassis model, body type..."
-                value={drawingSearchTerm}
-                onChange={(e) => setDrawingSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Filter Dropdowns */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Body Type
-                </label>
-                <CustomDropdown
-                  options={[
-                    { value: '', label: 'All Body Types' },
-                    ...bodyTypes.map((type) => ({
-                      value: type._id,
-                      label: type.shortName ? `${type.name} (${type.shortName})` : type.name
-                    }))
-                  ]}
-                  value={selectedBodyTypeFilter}
-                  onChange={setSelectedBodyTypeFilter}
-                  placeholder="All Body Types"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Chassis Type
-                </label>
-                <CustomDropdown
-                  options={[
-                    { value: '', label: 'All Chassis Types' },
-                    ...chassisTypes.map((type) => ({
-                      value: type._id,
-                      label: type.shortName ? `${type.name} (${type.shortName})` : type.name
-                    }))
-                  ]}
-                  value={selectedChassisTypeFilter}
-                  onChange={setSelectedChassisTypeFilter}
-                  placeholder="All Chassis Types"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Size Type
-                </label>
-                <CustomDropdown
-                  options={[
-                    { value: '', label: 'All Size Types' },
-                    ...sizeTypes.map((type) => ({
-                      value: type._id,
-                      label: type.shortName ? `${type.name} (${type.shortName})` : type.name
-                    }))
-                  ]}
-                  value={selectedSizeTypeFilter}
-                  onChange={setSelectedSizeTypeFilter}
-                  placeholder="All Size Types"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Drawing Specifications List */}
-          <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-            {loadingDrawings ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              </div>
-            ) : filteredDrawings.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-gray-500">No drawing specifications found.</p>
-                {drawingSearchTerm || selectedBodyTypeFilter || selectedChassisTypeFilter || selectedSizeTypeFilter ? (
-                  <p className="text-sm text-gray-400 mt-2">Try adjusting your filters</p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {filteredDrawings.map((drawing) => {
-                  const bodyTypeName = typeof drawing.bodyTypeId === 'object'
-                    ? drawing.bodyTypeId?.name || 'Unknown'
-                    : 'Unknown';
-                  const chassisTypeName = typeof drawing.chassisTypeId === 'object'
-                    ? drawing.chassisTypeId?.name || 'Unknown'
-                    : 'Unknown';
-                  const sizeTypeName = typeof drawing.sizeTypeId === 'object'
-                    ? drawing.sizeTypeId?.name || 'Unknown'
-                    : 'Unknown';
-
-                  return (
-                    <div
-                      key={drawing._id}
-                      onClick={() => handleDrawingSelection(drawing)}
-                      className="p-4 cursor-pointer hover:bg-blue-50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 mb-1">
-                            {drawing.drawingNumber || 'Drawing'}
-                          </h3>
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <p>
-                              <span className="font-medium">Body:</span> {bodyTypeName}
-                              {drawing.chassisTypeId && (
-                                <> • <span className="font-medium">Chassis:</span> {chassisTypeName}</>
-                              )}
-                              {drawing.sizeTypeId && (
-                                <> • <span className="font-medium">Size:</span> {sizeTypeName}</>
-                              )}
-                            </p>
-                            {drawing.chassisModel && (
-                              <p><span className="font-medium">Model:</span> {drawing.chassisModel}</p>
-                            )}
-                            {drawing.dimension && (
-                              <p><span className="font-medium">Dimension:</span> {drawing.dimension}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                            Select
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Results Count */}
-          {!loadingDrawings && filteredDrawings.length > 0 && (
-            <p className="text-xs text-gray-500 text-center">
-              Showing {filteredDrawings.length} of {drawings.length} drawing{drawings.length !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
-      </BaseModal>
+      />
     </>
   );
 };

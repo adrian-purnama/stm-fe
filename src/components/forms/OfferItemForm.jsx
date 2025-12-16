@@ -841,82 +841,47 @@ const OfferItemForm = ({
               </>
             )}
 
-            {/* Drawing Mode: Show Drawing selector */}
+            {/* Drawing Mode: Show Drawing selector (using shared DrawingSpecificationSelector) */}
             {formData.templateMode === 'drawing' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Drawing *
                 </label>
-                <CustomDropdown
-                  options={drawings.map(d => ({
-                    value: d._id,
-                    label: `${d.drawingNumber || 'Drawing'} ${d.bodyTypeId?.name || ''}`
-                  }))}
-                  value={formData.templateSourceId || ''}
-                  onChange={async (value) => {
-                    handleInputChange('templateSourceModel', 'DrawingSpecification');
-                    handleInputChange('templateSourceId', value);
-                    handleInputChange('drawingSpecification', value);
-                    
-                    // Fetch full drawing details to ensure we have all data including customSpecifications
-                    try {
-                      const response = await axiosInstance.get(`/api/drawing-specifications/${value}`);
-                      const fullDrawing = response.data.data;
-                      
-                      // Populate body type
-                      if (fullDrawing.bodyTypeId) {
-                        handleInputChange('karoseri', fullDrawing.bodyTypeId.name || '');
-                        handleInputChange('bodyTypeId', fullDrawing.bodyTypeId._id);
-                      }
-                      // Populate chassis type
-                      if (fullDrawing.chassisTypeId) {
-                        handleInputChange('chassisTypeId', fullDrawing.chassisTypeId._id);
-                        handleInputChange('chassis', fullDrawing.chassisTypeId.name || '');
-                      }
-                      // Populate chassis model if available
-                      if (fullDrawing.chassisModel) {
-                        handleInputChange('chassisModel', fullDrawing.chassisModel);
-                      }
-                      // Override specifications with drawing's specifications
-                      if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
-                        handleInputChange('specifications', fullDrawing.customSpecifications);
-                      } else {
-                        // Clear specifications if drawing has none
-                        handleInputChange('specifications', []);
-                      }
-                      toast.success('Drawing template loaded with all details!');
-                    } catch (error) {
-                      console.error('Error fetching drawing details:', error);
-                      // Fallback to using the drawing from the list
-                      const selectedDrawing = drawings.find(d => d._id === value);
-                      if (selectedDrawing) {
-                        // Populate body type
-                        if (selectedDrawing.bodyTypeId) {
-                          handleInputChange('karoseri', selectedDrawing.bodyTypeId.name || '');
-                          handleInputChange('bodyTypeId', selectedDrawing.bodyTypeId._id);
-                        }
-                        // Populate chassis type
-                        if (selectedDrawing.chassisTypeId) {
-                          handleInputChange('chassisTypeId', selectedDrawing.chassisTypeId._id);
-                          handleInputChange('chassis', selectedDrawing.chassisTypeId.name || '');
-                        }
-                        // Populate chassis model if available
-                        if (selectedDrawing.chassisModel) {
-                          handleInputChange('chassisModel', selectedDrawing.chassisModel);
-                        }
-                        // Override specifications with drawing's specifications
-                        if (selectedDrawing.customSpecifications && selectedDrawing.customSpecifications.length > 0) {
-                          handleInputChange('specifications', selectedDrawing.customSpecifications);
-                        } else {
-                          handleInputChange('specifications', []);
-                        }
-                        toast.success('Drawing template loaded with all details!');
-                      }
-                    }
-                  }}
-                  placeholder="Select drawing"
-                  disabled={loadingDrawings}
-                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDrawingSelector(true)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-500" />
+                      <span className={selectedDrawingSpec ? 'text-gray-900' : 'text-gray-500'}>
+                        {selectedDrawingSpec
+                          ? `${selectedDrawingSpec.drawingNumber || 'Drawing'} ${selectedDrawingSpec.bodyTypeId?.name || ''}`
+                          : 'Click to select drawing'}
+                      </span>
+                    </div>
+                  </button>
+                  {selectedDrawingSpec && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleInputChange('drawingSpecification', null);
+                        handleInputChange('templateSourceId', null);
+                        handleInputChange('templateSourceModel', null);
+                        setSelectedDrawingSpec(null);
+                        toast.success('Drawing removed');
+                      }}
+                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove drawing"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Select an existing drawing to copy all specs, body type, and chassis info.
+                </p>
               </div>
             )}
 
@@ -1481,27 +1446,53 @@ const OfferItemForm = ({
         </div>
       )}
 
-      {/* Drawing Specification Selector Modal */}
+      {/* Drawing Specification Selector Modal (shared across modes) */}
       <DrawingSpecificationSelector
         isOpen={showDrawingSelector}
         value={formData.drawingSpecification?._id || formData.drawingSpecification}
         onChange={async (drawingSpec) => {
-          // Fetch full drawing details to ensure we have customSpecifications
+          // Always fetch full drawing details to ensure we have customSpecifications and master refs
           try {
             const response = await axiosInstance.get(`/api/drawing-specifications/${drawingSpec._id}`);
             const fullDrawing = response.data.data;
-            
+
             handleInputChange('drawingSpecification', fullDrawing._id);
             setSelectedDrawingSpec(fullDrawing);
             setShowDrawingSelector(false);
-            
-            // Override specifications with drawing's specifications if they exist
-            if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
-              handleInputChange('specifications', fullDrawing.customSpecifications);
-              toast.success('Drawing selected - specifications overridden with drawing specifications');
+
+            // If in drawing template mode, this is a hard copy-from-drawing:
+            // update templateSource*, karoseri, chassis, model, and specs.
+            if (formData.templateMode === 'drawing') {
+              handleInputChange('templateSourceModel', 'DrawingSpecification');
+              handleInputChange('templateSourceId', fullDrawing._id);
+
+              if (fullDrawing.bodyTypeId) {
+                handleInputChange('karoseri', fullDrawing.bodyTypeId.name || '');
+                handleInputChange('bodyTypeId', fullDrawing.bodyTypeId._id || fullDrawing.bodyTypeId);
+              }
+
+              if (fullDrawing.chassisTypeId) {
+                handleInputChange('chassisTypeId', fullDrawing.chassisTypeId._id || fullDrawing.chassisTypeId);
+                handleInputChange('chassis', fullDrawing.chassisTypeId.name || '');
+              }
+
+              if (fullDrawing.chassisModel) {
+                handleInputChange('chassisModel', fullDrawing.chassisModel);
+              }
+
+              if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
+                handleInputChange('specifications', fullDrawing.customSpecifications);
+              } else {
+                handleInputChange('specifications', []);
+              }
+
+              toast.success('Drawing template loaded with all details!');
             } else {
-              // Only show toast for manual/bodyType modes (not drawing mode which auto-fills)
-              if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
+              // Manual/bodyType modes: keep behavior optional and spec-focused
+              if (fullDrawing.customSpecifications && fullDrawing.customSpecifications.length > 0) {
+                handleInputChange('specifications', fullDrawing.customSpecifications);
+                toast.success('Drawing selected - specifications overridden with drawing specifications');
+              } else {
                 toast.success('Drawing selected (optional - other fields not changed)');
               }
             }
@@ -1511,13 +1502,39 @@ const OfferItemForm = ({
             handleInputChange('drawingSpecification', drawingSpec._id);
             setSelectedDrawingSpec(drawingSpec);
             setShowDrawingSelector(false);
-            
-            // Try to use customSpecifications from the drawing spec if available
-            if (drawingSpec.customSpecifications && drawingSpec.customSpecifications.length > 0) {
-              handleInputChange('specifications', drawingSpec.customSpecifications);
-              toast.success('Drawing selected - specifications overridden with drawing specifications');
+
+            if (formData.templateMode === 'drawing') {
+              handleInputChange('templateSourceModel', 'DrawingSpecification');
+              handleInputChange('templateSourceId', drawingSpec._id);
+
+              if (drawingSpec.bodyTypeId) {
+                const body = drawingSpec.bodyTypeId;
+                handleInputChange('karoseri', body.name || '');
+                handleInputChange('bodyTypeId', body._id || body);
+              }
+
+              if (drawingSpec.chassisTypeId) {
+                const chassisType = drawingSpec.chassisTypeId;
+                handleInputChange('chassisTypeId', chassisType._id || chassisType);
+                handleInputChange('chassis', chassisType.name || '');
+              }
+
+              if (drawingSpec.chassisModel) {
+                handleInputChange('chassisModel', drawingSpec.chassisModel);
+              }
+
+              if (drawingSpec.customSpecifications && drawingSpec.customSpecifications.length > 0) {
+                handleInputChange('specifications', drawingSpec.customSpecifications);
+              } else {
+                handleInputChange('specifications', []);
+              }
+
+              toast.success('Drawing template loaded with all details!');
             } else {
-              if (formData.templateMode === 'manual' || formData.templateMode === 'bodyType') {
+              if (drawingSpec.customSpecifications && drawingSpec.customSpecifications.length > 0) {
+                handleInputChange('specifications', drawingSpec.customSpecifications);
+                toast.success('Drawing selected - specifications overridden with drawing specifications');
+              } else {
                 toast.success('Drawing selected (optional - other fields not changed)');
               }
             }

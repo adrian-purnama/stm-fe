@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search,
   Upload,
@@ -25,6 +25,12 @@ const DrawingSpecificationSelector = ({
   const [drawings, setDrawings] = useState([]);
   const [loadingDrawings, setLoadingDrawings] = useState(false);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [totalDrawings, setTotalDrawings] = useState(0);
+  
   // State for master data
   const [bodyTypes, setBodyTypes] = useState([]);
   const [chassisTypes, setChassisTypes] = useState([]);
@@ -36,7 +42,6 @@ const DrawingSpecificationSelector = ({
   const [selectedBodyTypeFilter, setSelectedBodyTypeFilter] = useState('');
   const [selectedChassisTypeFilter, setSelectedChassisTypeFilter] = useState('');
   const [selectedSizeTypeFilter, setSelectedSizeTypeFilter] = useState('');
-  const [filteredDrawings, setFilteredDrawings] = useState([]);
   
   // State for modals
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -67,6 +72,9 @@ const DrawingSpecificationSelector = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileSize, setFileSize] = useState(null);
   const [imageFileSize, setImageFileSize] = useState(null);
+  
+  // Ref for scroll container
+  const scrollContainerRef = useRef(null);
 
   // Helper function to format file size
   const formatFileSize = (bytes) => {
@@ -182,77 +190,95 @@ const DrawingSpecificationSelector = ({
     }
   }, []);
 
-  // Load drawing specifications
-  const loadDrawings = useCallback(async () => {
+  // Load drawing specifications with pagination
+  const loadDrawings = useCallback(async (page = 1, append = false) => {
     try {
-      setLoadingDrawings(true);
-      const response = await axiosInstance.get('/api/drawing-specifications');
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setLoadingDrawings(true);
+      }
+
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', '20');
+      
+      // Add filters to API call (server-side filtering)
+      if (selectedBodyTypeFilter) {
+        params.append('bodyTypeId', selectedBodyTypeFilter);
+      }
+      if (selectedChassisTypeFilter) {
+        params.append('chassisTypeId', selectedChassisTypeFilter);
+      }
+      if (selectedSizeTypeFilter) {
+        params.append('sizeTypeId', selectedSizeTypeFilter);
+      }
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      const response = await axiosInstance.get(`/api/drawing-specifications?${params.toString()}`);
       if (response.data && response.data.success) {
         const drawingsData = response.data.data || [];
-        setDrawings(Array.isArray(drawingsData) ? drawingsData : []);
+        const paginationInfo = response.data.pagination || {};
+        
+        if (append) {
+          // Append new drawings to existing array
+          setDrawings(prev => [...prev, ...drawingsData]);
+        } else {
+          // Replace drawings array for initial load or filter change
+          setDrawings(Array.isArray(drawingsData) ? drawingsData : []);
+        }
+        
+        // Update pagination state
+        setTotalDrawings(paginationInfo.total || 0);
+        const totalPages = paginationInfo.pages || Math.ceil((paginationInfo.total || 0) / 20);
+        setHasMore(page < totalPages);
       } else {
-        setDrawings([]);
+        if (!append) {
+          setDrawings([]);
+        }
+        setHasMore(false);
       }
     } catch (error) {
       console.error('Error loading drawing specifications:', error);
-      toast.error('Failed to load drawing specifications');
-      setDrawings([]);
+      if (!append) {
+        toast.error('Failed to load drawing specifications');
+        setDrawings([]);
+      } else {
+        toast.error('Failed to load more drawings');
+      }
+      setHasMore(false);
     } finally {
-      setLoadingDrawings(false);
+      if (append) {
+        setIsLoadingMore(false);
+      } else {
+        setLoadingDrawings(false);
+      }
     }
-  }, []);
+  }, [selectedBodyTypeFilter, selectedChassisTypeFilter, selectedSizeTypeFilter, searchTerm]);
 
-  // Filter drawings based on search and filters
+  // Load more drawings function
+  const loadMoreDrawings = useCallback(async () => {
+    if (isLoadingMore || !hasMore || loadingDrawings) return;
+    
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadDrawings(nextPage, true);
+  }, [currentPage, hasMore, isLoadingMore, loadingDrawings, loadDrawings]);
+
+  // Reset pagination and reload when filters change
   useEffect(() => {
-    if (!drawings || drawings.length === 0) {
-      setFilteredDrawings([]);
-      return;
+    if (isOpen) {
+      setCurrentPage(1);
+      setHasMore(true);
+      setDrawings([]);
+      loadDrawings(1, false);
     }
+  }, [isOpen, selectedBodyTypeFilter, selectedChassisTypeFilter, selectedSizeTypeFilter, searchTerm, loadDrawings]);
 
-    let filtered = [...drawings];
-
-    // Filter by body type
-    if (selectedBodyTypeFilter) {
-      filtered = filtered.filter(d => {
-        const bodyTypeId = typeof d.bodyTypeId === 'object' ? d.bodyTypeId._id : d.bodyTypeId;
-        return bodyTypeId === selectedBodyTypeFilter;
-      });
-    }
-
-    // Filter by chassis type
-    if (selectedChassisTypeFilter) {
-      filtered = filtered.filter(d => {
-        const chassisTypeId = typeof d.chassisTypeId === 'object' ? d.chassisTypeId._id : d.chassisTypeId;
-        return chassisTypeId === selectedChassisTypeFilter;
-      });
-    }
-
-    // Filter by size type
-    if (selectedSizeTypeFilter) {
-      filtered = filtered.filter(d => {
-        const sizeTypeId = typeof d.sizeTypeId === 'object' ? d.sizeTypeId._id : d.sizeTypeId;
-        return sizeTypeId === selectedSizeTypeFilter;
-      });
-    }
-
-    // Filter by search term
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(d => {
-        const drawingNumber = d.drawingNumber || '';
-        const chassisModel = d.chassisModel || '';
-        const bodyTypeName = typeof d.bodyTypeId === 'object' ? d.bodyTypeId?.name || '' : '';
-        const chassisTypeName = typeof d.chassisTypeId === 'object' ? d.chassisTypeId?.name || '' : '';
-
-        return drawingNumber.toLowerCase().includes(searchLower) ||
-          chassisModel.toLowerCase().includes(searchLower) ||
-          bodyTypeName.toLowerCase().includes(searchLower) ||
-          chassisTypeName.toLowerCase().includes(searchLower);
-      });
-    }
-
-    setFilteredDrawings(filtered);
-  }, [drawings, searchTerm, selectedBodyTypeFilter, selectedChassisTypeFilter, selectedSizeTypeFilter]);
+  // Since filtering is now done server-side, filteredDrawings is just drawings
+  const filteredDrawings = drawings;
 
   // Add feature row
   const addFeature = () => {
@@ -442,8 +468,10 @@ const DrawingSpecificationSelector = ({
       setShowUploadModal(false);
       resetForm();
       
-      // Reload drawings and auto-select the new one
-      await loadDrawings();
+      // Reload drawings from page 1 and auto-select the new one
+      setCurrentPage(1);
+      setDrawings([]);
+      await loadDrawings(1, false);
       const newDrawing = response.data.data;
       // Reset filters to show the new drawing
       setSearchTerm('');
@@ -467,21 +495,52 @@ const DrawingSpecificationSelector = ({
     onClose();
   };
 
-  // Load data on component mount
+  // Load master data on component mount
   useEffect(() => {
     if (isOpen) {
       loadBodyTypes();
       loadChassisTypes();
       loadSizeTypes();
       loadFeatureTypes();
-      loadDrawings();
       // Reset filters when opening
       setSearchTerm('');
       setSelectedBodyTypeFilter('');
       setSelectedChassisTypeFilter('');
       setSelectedSizeTypeFilter('');
     }
-  }, [isOpen, loadBodyTypes, loadChassisTypes, loadSizeTypes, loadFeatureTypes, loadDrawings]);
+  }, [isOpen, loadBodyTypes, loadChassisTypes, loadSizeTypes, loadFeatureTypes]);
+
+  // Scroll detection for infinite scroll
+  useEffect(() => {
+    if (!isOpen || !scrollContainerRef.current) return;
+
+    const scrollContainer = scrollContainerRef.current;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const threshold = 100; // Load more when 100px from bottom
+      
+      if (scrollHeight - scrollTop - clientHeight < threshold) {
+        if (hasMore && !isLoadingMore && !loadingDrawings) {
+          loadMoreDrawings();
+        }
+      }
+    };
+
+    // Debounce scroll events
+    let timeoutId;
+    const debouncedHandleScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 100);
+    };
+
+    scrollContainer.addEventListener('scroll', debouncedHandleScroll);
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', debouncedHandleScroll);
+      clearTimeout(timeoutId);
+    };
+  }, [isOpen, hasMore, isLoadingMore, loadingDrawings, loadMoreDrawings]);
 
   return (
     <>
@@ -582,8 +641,8 @@ const DrawingSpecificationSelector = ({
           </div>
 
           {/* Drawing Specifications List */}
-          <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-            {loadingDrawings ? (
+          <div ref={scrollContainerRef} className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+            {loadingDrawings && filteredDrawings.length === 0 ? (
               <div className="flex justify-center items-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
               </div>
@@ -595,64 +654,81 @@ const DrawingSpecificationSelector = ({
                 ) : null}
               </div>
             ) : (
-              <div className="divide-y divide-gray-200">
-                {filteredDrawings.map((drawing) => {
-                  const bodyTypeName = typeof drawing.bodyTypeId === 'object'
-                    ? drawing.bodyTypeId?.name || 'Unknown'
-                    : 'Unknown';
-                  const chassisTypeName = typeof drawing.chassisTypeId === 'object'
-                    ? drawing.chassisTypeId?.name || 'Unknown'
-                    : 'Unknown';
-                  const sizeTypeName = typeof drawing.sizeTypeId === 'object'
-                    ? drawing.sizeTypeId?.name || 'Unknown'
-                    : 'Unknown';
+              <>
+                <div className="divide-y divide-gray-200">
+                  {filteredDrawings.map((drawing) => {
+                    const bodyTypeName = typeof drawing.bodyTypeId === 'object'
+                      ? drawing.bodyTypeId?.name || 'Unknown'
+                      : 'Unknown';
+                    const chassisTypeName = typeof drawing.chassisTypeId === 'object'
+                      ? drawing.chassisTypeId?.name || 'Unknown'
+                      : 'Unknown';
+                    const sizeTypeName = typeof drawing.sizeTypeId === 'object'
+                      ? drawing.sizeTypeId?.name || 'Unknown'
+                      : 'Unknown';
 
-                  return (
-                    <div
-                      key={drawing._id}
-                      onClick={() => handleSelect(drawing)}
-                      className="p-4 cursor-pointer hover:bg-blue-50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 mb-1">
-                            {drawing.drawingNumber || 'Drawing'}
-                          </h3>
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <p>
-                              <span className="font-medium">Body:</span> {bodyTypeName}
-                              {drawing.chassisTypeId && (
-                                <> • <span className="font-medium">Chassis:</span> {chassisTypeName}</>
+                    return (
+                      <div
+                        key={drawing._id}
+                        onClick={() => handleSelect(drawing)}
+                        className="p-4 cursor-pointer hover:bg-blue-50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900 mb-1">
+                              {drawing.drawingNumber || 'Drawing'}
+                            </h3>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <p>
+                                <span className="font-medium">Body:</span> {bodyTypeName}
+                                {drawing.chassisTypeId && (
+                                  <> • <span className="font-medium">Chassis:</span> {chassisTypeName}</>
+                                )}
+                                {drawing.sizeTypeId && (
+                                  <> • <span className="font-medium">Size:</span> {sizeTypeName}</>
+                                )}
+                              </p>
+                              {drawing.chassisModel && (
+                                <p><span className="font-medium">Model:</span> {drawing.chassisModel}</p>
                               )}
-                              {drawing.sizeTypeId && (
-                                <> • <span className="font-medium">Size:</span> {sizeTypeName}</>
+                              {drawing.dimension && (
+                                <p><span className="font-medium">Dimension:</span> {drawing.dimension}</p>
                               )}
-                            </p>
-                            {drawing.chassisModel && (
-                              <p><span className="font-medium">Model:</span> {drawing.chassisModel}</p>
-                            )}
-                            {drawing.dimension && (
-                              <p><span className="font-medium">Dimension:</span> {drawing.dimension}</p>
-                            )}
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                              Select
+                            </button>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                            Select
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Loading more indicator */}
+                {isLoadingMore && (
+                  <div className="flex justify-center items-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                    <span className="ml-2 text-sm text-gray-600">Loading more...</span>
+                  </div>
+                )}
+                
+                {/* No more results message */}
+                {!hasMore && filteredDrawings.length > 0 && (
+                  <div className="p-4 text-center">
+                    <p className="text-sm text-gray-500">No more drawings to load</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Results Count */}
           {!loadingDrawings && filteredDrawings.length > 0 && (
             <p className="text-xs text-gray-500 text-center">
-              Showing {filteredDrawings.length} of {drawings.length} drawing{drawings.length !== 1 ? 's' : ''}
+              Showing {filteredDrawings.length} of {totalDrawings} drawing{totalDrawings !== 1 ? 's' : ''}
             </p>
           )}
         </div>
