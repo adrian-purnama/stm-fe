@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Save, X, Edit3, FileText } from 'lucide-react';
+import { Plus, Trash2, Save, X, Edit3, FileText, ChevronUp, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PriceInput from '../common/PriceInput';
 import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
@@ -44,7 +44,13 @@ const OfferItemForm = ({
         templateMode: item?.templateMode || 'manual',
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId || null,
-        specifications: item?.specifications || []
+        specifications: (item?.specifications || []).map(spec => ({
+          ...spec,
+          items: (spec.items || []).map((item, index) => ({
+            ...item,
+            order: item.order !== undefined && item.order !== null ? item.order : index
+          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+        }))
       };
     } else if (lineOfBusinessType === 'service') {
       return {
@@ -175,7 +181,13 @@ const OfferItemForm = ({
         templateMode: item?.templateMode || 'manual',
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
-        specifications: item?.specifications || []
+        specifications: (item?.specifications || []).map(spec => ({
+          ...spec,
+          items: (spec.items || []).map((item, index) => ({
+            ...item,
+            order: item.order !== undefined && item.order !== null ? item.order : index
+          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+        }))
       };
       // Set the selected drawing spec if it exists
       if (item?.drawingSpecification) {
@@ -317,13 +329,19 @@ const OfferItemForm = ({
   const addItemToCategory = (categoryIndex, focusNewItem = false) => {
     setFormData(prev => {
       const currentItems = prev.specifications[categoryIndex]?.items || [];
-      const newItemIndex = currentItems.length;
+      // Calculate new order value (highest order + 1, or 0 if no items)
+      const maxOrder = currentItems.length > 0 
+        ? Math.max(...currentItems.map(item => item.order !== undefined ? item.order : 0), -1)
+        : -1;
+      const newOrder = maxOrder + 1;
+      
       const newSpecifications = prev.specifications.map((spec, index) => 
         index === categoryIndex ? {
           ...spec,
           items: [...spec.items, {
             name: '',
-            specification: ''
+            specification: '',
+            order: newOrder
           }]
         } : spec
       );
@@ -331,6 +349,7 @@ const OfferItemForm = ({
       // Focus on the new spec name field
       if (focusNewItem) {
         setTimeout(() => {
+          const newItemIndex = currentItems.length;
           const refKey = `spec-name-${categoryIndex}-${newItemIndex}`;
           if (specInputRefs.current[refKey]) {
             specInputRefs.current[refKey].focus();
@@ -364,6 +383,66 @@ const OfferItemForm = ({
         specifications: prev.specifications.filter((_, i) => i !== categoryIndex)
       }));
     }
+  };
+
+  const moveSpecificationItemUp = (categoryIndex, itemIndex) => {
+    if (itemIndex === 0) return; // Can't move first item up
+    
+    setFormData(prev => {
+      const spec = prev.specifications[categoryIndex];
+      if (!spec || !spec.items || itemIndex >= spec.items.length) return prev;
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...spec.items].sort((a, b) => {
+        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+      
+      // Swap items
+      const temp = sortedItems[itemIndex].order;
+      sortedItems[itemIndex].order = sortedItems[itemIndex - 1].order;
+      sortedItems[itemIndex - 1].order = temp;
+      
+      return {
+        ...prev,
+        specifications: prev.specifications.map((s, i) => 
+          i === categoryIndex ? {
+            ...s,
+            items: sortedItems
+          } : s
+        )
+      };
+    });
+  };
+
+  const moveSpecificationItemDown = (categoryIndex, itemIndex) => {
+    setFormData(prev => {
+      const spec = prev.specifications[categoryIndex];
+      if (!spec || !spec.items || itemIndex >= spec.items.length - 1) return prev; // Can't move last item down
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...spec.items].sort((a, b) => {
+        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+      
+      // Swap items
+      const temp = sortedItems[itemIndex].order;
+      sortedItems[itemIndex].order = sortedItems[itemIndex + 1].order;
+      sortedItems[itemIndex + 1].order = temp;
+      
+      return {
+        ...prev,
+        specifications: prev.specifications.map((s, i) => 
+          i === categoryIndex ? {
+            ...s,
+            items: sortedItems
+          } : s
+        )
+      };
+    });
   };
 
   const handleSave = () => {
@@ -463,7 +542,13 @@ const OfferItemForm = ({
         templateMode: item?.templateMode || 'manual',
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId || null,
-        specifications: item?.specifications || []
+        specifications: (item?.specifications || []).map(spec => ({
+          ...spec,
+          items: (spec.items || []).map((item, index) => ({
+            ...item,
+            order: item.order !== undefined && item.order !== null ? item.order : index
+          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+        }))
       };
     } else if (lineOfBusinessType === 'service') {
       resetData = {
@@ -1235,8 +1320,48 @@ const OfferItemForm = ({
               </div>
               
               <div className="space-y-2">
-                {spec.items && spec.items.map((item, specItemIndex) => (
-                  <div key={specItemIndex} className="flex items-center gap-2">
+                {spec.items && [...spec.items].sort((a, b) => {
+                  const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+                  const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+                  return orderA - orderB;
+                }).map((item, sortedIndex) => {
+                  // Find the original index for ref keys and operations
+                  const originalIndex = spec.items.findIndex((it, idx) => {
+                    // Match by order if available, otherwise by position
+                    if (item.order !== undefined && it.order === item.order) return true;
+                    return idx === sortedIndex && it === item;
+                  });
+                  const specItemIndex = originalIndex >= 0 ? originalIndex : sortedIndex;
+                  const sortedItems = [...spec.items].sort((a, b) => {
+                    const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+                    const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+                    return orderA - orderB;
+                  });
+                  const isFirst = sortedIndex === 0;
+                  const isLast = sortedIndex === sortedItems.length - 1;
+                  
+                  return (
+                  <div key={`${categoryIndex}-${specItemIndex}-${item.order || sortedIndex}`} className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => moveSpecificationItemUp(categoryIndex, sortedIndex)}
+                        disabled={isFirst}
+                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
+                        title="Move up"
+                      >
+                        <ChevronUp className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSpecificationItemDown(categoryIndex, sortedIndex)}
+                        disabled={isLast}
+                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
+                        title="Move down"
+                      >
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </div>
                     <input
                       ref={(el) => {
                         const refKey = `spec-name-${categoryIndex}-${specItemIndex}`;
@@ -1249,17 +1374,25 @@ const OfferItemForm = ({
                       type="text"
                       value={item.name || ''}
                       onChange={(e) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          specifications: prev.specifications.map((s, i) => 
-                            i === categoryIndex ? {
-                              ...s,
-                              items: s.items.map((it, j) => 
-                                j === specItemIndex ? { ...it, name: e.target.value } : it
-                              )
-                            } : s
-                          )
-                        }));
+                        setFormData(prev => {
+                          // Match item by order value (which should be unique after normalization)
+                          const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                          return {
+                            ...prev,
+                            specifications: prev.specifications.map((s, i) => 
+                              i === categoryIndex ? {
+                                ...s,
+                                items: s.items.map((it) => {
+                                  const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
+                                  if (itOrder === targetOrder) {
+                                    return { ...it, name: e.target.value };
+                                  }
+                                  return it;
+                                })
+                              } : s
+                            )
+                          };
+                        });
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -1287,17 +1420,25 @@ const OfferItemForm = ({
                       type="text"
                       value={item.specification || ''}
                       onChange={(e) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          specifications: prev.specifications.map((s, i) => 
-                            i === categoryIndex ? {
-                              ...s,
-                              items: s.items.map((it, j) => 
-                                j === specItemIndex ? { ...it, specification: e.target.value } : it
-                              )
-                            } : s
-                          )
-                        }));
+                        setFormData(prev => {
+                          // Match item by order value (which should be unique after normalization)
+                          const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                          return {
+                            ...prev,
+                            specifications: prev.specifications.map((s, i) => 
+                              i === categoryIndex ? {
+                                ...s,
+                                items: s.items.map((it) => {
+                                  const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
+                                  if (itOrder === targetOrder) {
+                                    return { ...it, specification: e.target.value };
+                                  }
+                                  return it;
+                                })
+                              } : s
+                            )
+                          };
+                        });
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -1311,13 +1452,22 @@ const OfferItemForm = ({
                     />
                     <button
                       type="button"
-                      onClick={() => removeSpecification(categoryIndex, specItemIndex)}
+                      onClick={() => {
+                        // Find the actual array index by order value
+                        const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                        const actualIndex = spec.items.findIndex((it) => {
+                          const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
+                          return itOrder === targetOrder;
+                        });
+                        removeSpecification(categoryIndex, actualIndex >= 0 ? actualIndex : sortedIndex);
+                      }}
                       className="text-red-600 hover:text-red-800"
+                      title="Remove specification"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                ))}
+                )})}
                 
                 <button
                   type="button"

@@ -122,14 +122,24 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       fallback;
   }, [quotationData]);
 
-  const predefinedNotes = useMemo(() => ([
+  const currentOffer = useMemo(() => {
+    if (selectedOffer) return selectedOffer;
+    const offers = quotationData?.offers || [];
+    if (offers && offers.length > 0) {
+      return offers[0]?.original || offers[0];
+    }
+    return null;
+  }, [selectedOffer, quotationData?.offers]);
+
+  const predefinedNotes = useMemo(() => [
     { text: paymentTermsNote, selected: true },
     { text: 'Loco Pabrik Cikande', selected: true },
     { text: 'Harga tidak mengikat bisa berubah sewaktu-waktu tanpa pemberitahuan terlebih dahulu.', selected: true },
     { text: 'DIMENSI KAROSERI diluar SKRB tidak diperuntukan untuk dijalan raya (OFF ROAD)', selected: true },
     { text: 'Uji Type yang terbit hanya untuk karoseri dengan ukuran standard Dishub. Ukuran Oversize STM tidak bertanggung jawab jika uji type tidak dapat terbit dari Dishub', selected: true },
-    { text: 'Tanpa acc keur', selected: true }
-  ]), [paymentTermsNote]);
+    { text: 'Tanpa acc keur', selected: true },
+    { text: 'Nilai PPN menyesuaikan ketentuan pemerintah saat terbit faktur pajak', selected: true }
+  ], [paymentTermsNote]);
 
   const [selectedNotes, setSelectedNotes] = useState([]);
 
@@ -210,16 +220,49 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       });
       
       // Determine filename from response headers or generate default
-      const contentDisposition = response.headers['content-disposition'];
+      const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition'];
       const modeSuffix = downloadModeToUse === 'full' ? '' : '_NoHeaderFooter';
       const formatExtension = downloadFormat === 'pdf' ? '.pdf' : downloadFormat === 'doc' ? '.doc' : '.docx';
       let filename = `Quotation_${header.quotationNumber.replace(/[/\\]/g, '_')}${modeSuffix}${formatExtension}`;
+      
+      console.log('[Frontend Download] Content-Disposition header:', contentDisposition);
+      console.log('[Frontend Download] Default filename:', filename);
+      
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
+        // Try to extract filename from Content-Disposition header
+        // First try filename* (UTF-8 encoded, RFC 5987 format)
+        const filenameStarMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+        if (filenameStarMatch) {
+          try {
+            const decoded = decodeURIComponent(filenameStarMatch[1]);
+            console.log('[Frontend Download] Extracted from filename*:', decoded);
+            filename = decoded;
+          } catch (e) {
+            console.warn('[Frontend Download] Failed to decode filename*:', e);
+          }
+        } else {
+          // Fallback to filename (quoted string format)
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch) {
+            console.log('[Frontend Download] Extracted from filename="...":', filenameMatch[1]);
+            filename = filenameMatch[1];
+          } else {
+            // Try unquoted filename
+            const filenameUnquotedMatch = contentDisposition.match(/filename=([^;]+)/);
+            if (filenameUnquotedMatch) {
+              const unquoted = filenameUnquotedMatch[1].trim();
+              console.log('[Frontend Download] Extracted from unquoted filename:', unquoted);
+              filename = unquoted;
+            } else {
+              console.warn('[Frontend Download] Could not extract filename from Content-Disposition, using default');
+            }
+          }
         }
+      } else {
+        console.warn('[Frontend Download] No Content-Disposition header found, using default filename');
       }
+      
+      console.log('[Frontend Download] Final filename to use:', filename);
       
       // Create download link and trigger download
       const url = window.URL.createObjectURL(blob);
@@ -300,14 +343,6 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       </div>
     );
   }
-
-  const currentOffer = useMemo(() => {
-    if (selectedOffer) return selectedOffer;
-    if (offers && offers.length > 0) {
-      return offers[0]?.original || offers[0];
-    }
-    return null;
-  }, [selectedOffer, offers]);
 
   const offerFinancials = useMemo(
     () => aggregateOfferFinancials(currentOffer?.offerItems || []),
@@ -780,9 +815,6 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
 
                             if (excludePPN) {
                               notes.push("Harga tersebut diatas Belum Termasuk PPN 11%");
-                              notes.push(
-                                "Nilai PPN menyesuaikan ketentuan pemerintah saat terbit faktur pajak"
-                              );
                             } else {
                               notes.push("Harga tersebut diatas Sudah Termasuk PPN 11%");
                             }

@@ -617,6 +617,12 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       return;
     }
     
+    // Check if there's an unsaved item being edited
+    if (editingItemIndex !== -1) {
+      toast.error('Please save or cancel the item you are currently editing before submitting the form.');
+      return;
+    }
+    
     setIsSubmitting(true);
     setLoading(true);
     setSubmitProgress({ step: 'uploading', message: 'Uploading images...' });
@@ -1084,7 +1090,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <span className="text-gray-600">Quantity:</span>
-                      <p className="font-medium">1</p>
+                      <p className="font-medium">{item.quantity || 1}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Base Price:</span>
@@ -1096,7 +1102,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                     </div>
                     <div>
                       <span className="text-gray-600">Total:</span>
-                      <p className="font-medium">{formatPriceWithCurrency(item.netto)}</p>
+                      <p className="font-medium">{formatPriceWithCurrency(item.netto * (item.quantity || 1))}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{(item.quantity || 1)} × {formatPriceWithCurrency(item.netto)}</p>
                     </div>
                   </div>
                 </div>
@@ -1137,7 +1144,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
                   {formatPriceWithCurrency(
-                    formData.offerItems.reduce((sum, item) => sum + item.price, 0)
+                    formData.offerItems.reduce((sum, item) => {
+                      const quantity = item.quantity || 1;
+                      return sum + (item.price * quantity);
+                    }, 0)
                   )}
                 </div>
                 <div className="text-sm text-gray-600">Total Base Price</div>
@@ -1145,7 +1155,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               <div className="text-center">
                 <div className="text-2xl font-bold text-purple-600">
                   {formatPriceWithCurrency(
-                    formData.offerItems.reduce((sum, item) => sum + item.netto, 0)
+                    formData.offerItems.reduce((sum, item) => {
+                      const quantity = item.quantity || 1;
+                      return sum + (item.netto * quantity);
+                    }, 0)
                   )}
                 </div>
                 <div className="text-sm text-gray-600">Total Netto Price</div>
