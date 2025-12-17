@@ -243,9 +243,9 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
         } else {
           // Fallback to filename (quoted string format)
           const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-          if (filenameMatch) {
+        if (filenameMatch) {
             console.log('[Frontend Download] Extracted from filename="...":', filenameMatch[1]);
-            filename = filenameMatch[1];
+          filename = filenameMatch[1];
           } else {
             // Try unquoted filename
             const filenameUnquotedMatch = contentDisposition.match(/filename=([^;]+)/);
@@ -668,7 +668,18 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     <div>
                       <p>Kepada Yth.</p>
                       <p>{header.customerName}</p>
-                      <p>{header.contactPerson?.gender === 'male' ? 'Bapak' : 'Ibu'} {header.contactPerson?.name}</p>
+                      <p>{(() => {
+                        const gender = String(header.contactPerson?.gender || '').trim().toLowerCase();
+                        const contactName = header.contactPerson?.name || '';
+                        if (gender === 'male' || gender === 'm') {
+                          return `Bapak ${contactName}`;
+                        } else if (gender === 'female' || gender === 'f') {
+                          return `Ibu ${contactName}`;
+                        } else {
+                          // Default if gender not specified or is 'Other' - just use the name
+                          return contactName;
+                        }
+                      })()}</p>
                       <p>Di tempat</p>
               </div>
 

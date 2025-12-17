@@ -14,7 +14,9 @@ import {
   Calculator,
   Ruler,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosInstance from '../utils/api/ApiHelper';
@@ -298,7 +300,24 @@ const DrawingSpecificationsPage = () => {
         formDataToSend.append('dimension', formData.dimension);
       }
       formDataToSend.append('features', JSON.stringify(formData.features));
-      formDataToSend.append('customSpecifications', JSON.stringify(formData.customSpecifications));
+      formDataToSend.append('customSpecifications', JSON.stringify((formData.customSpecifications || []).map((category) => {
+        // Normalize and sort items by order before sending
+        const normalizedItems = (category?.items || []).map((item, idx) => ({
+          ...item,
+          order: item.order !== undefined && item.order !== null ? item.order : idx
+        })).sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+        return {
+          category: category?.category?.trim() || '',
+          items: normalizedItems
+              .filter((item) => item && (item.name || item.specification))
+              .map((item) => ({
+                name: item?.name?.trim() || '',
+                specification: item?.specification?.trim() || '',
+                order: item.order !== undefined && item.order !== null ? item.order : 0
+              }))
+        };
+      })));
       
       // Append files only if provided
       if (uploadFile) {
@@ -371,17 +390,24 @@ const DrawingSpecificationsPage = () => {
             : feature?.featureId || '',
         spec: feature?.spec?.trim() || ''
       }))));
-      formDataToSend.append('customSpecifications', JSON.stringify((formData.customSpecifications || []).map((category) => ({
-        category: category?.category?.trim() || '',
-        items: Array.isArray(category?.items)
-          ? category.items
+      formDataToSend.append('customSpecifications', JSON.stringify((formData.customSpecifications || []).map((category) => {
+        // Normalize and sort items by order before sending
+        const normalizedItems = (category?.items || []).map((item, idx) => ({
+          ...item,
+          order: item.order !== undefined && item.order !== null ? item.order : idx
+        })).sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+        return {
+          category: category?.category?.trim() || '',
+          items: normalizedItems
               .filter((item) => item && (item.name || item.specification))
               .map((item) => ({
                 name: item?.name?.trim() || '',
-                specification: item?.specification?.trim() || ''
+                specification: item?.specification?.trim() || '',
+                order: item.order !== undefined && item.order !== null ? item.order : 0
               }))
-          : []
-      }))));
+        };
+      })));
       
       // Add file removal flags
       if (removeDrawingFile) {
@@ -501,32 +527,166 @@ const DrawingSpecificationsPage = () => {
 
   // Add custom specification item
   const addCustomSpecItem = (categoryIndex) => {
-    const updated = [...formData.customSpecifications];
-    updated[categoryIndex] = {
-      ...updated[categoryIndex],
-      items: [...(updated[categoryIndex].items || []), { name: '', specification: '' }]
-    };
-    setFormData({ ...formData, customSpecifications: updated });
+    setFormData(prev => {
+      const spec = prev.customSpecifications[categoryIndex];
+      if (!spec) return prev;
+      
+      // Normalize existing items to ensure they have order values
+      const normalizedItems = (spec.items || []).map((item, idx) => ({
+        ...item,
+        order: item.order !== undefined && item.order !== null ? item.order : idx
+      }));
+      
+      // Find the maximum order value
+      const maxOrder = normalizedItems.length > 0 
+        ? Math.max(...normalizedItems.map(item => item.order || 0))
+        : -1;
+      
+      // Add new item with order = maxOrder + 1
+      const newItem = { name: '', specification: '', order: maxOrder + 1 };
+      
+      return {
+        ...prev,
+        customSpecifications: prev.customSpecifications.map((s, i) => 
+          i === categoryIndex ? { ...s, items: [...normalizedItems, newItem] } : s
+        )
+      };
+    });
   };
 
   // Remove custom specification item
-  const removeCustomSpecItem = (categoryIndex, itemIndex) => {
-    const updated = [...formData.customSpecifications];
-    updated[categoryIndex] = {
-      ...updated[categoryIndex],
-      items: updated[categoryIndex].items.filter((_, i) => i !== itemIndex)
-    };
-    setFormData({ ...formData, customSpecifications: updated });
+  const removeCustomSpecItem = (categoryIndex, itemOrder) => {
+    setFormData(prev => {
+      const spec = prev.customSpecifications[categoryIndex];
+      if (!spec || !spec.items) return prev;
+      
+      // Find and remove item by order value
+      const updatedItems = spec.items.filter((item) => {
+        const itemOrderValue = item.order !== undefined && item.order !== null ? item.order : -1;
+        return itemOrderValue !== itemOrder;
+      });
+      
+      return {
+        ...prev,
+        customSpecifications: prev.customSpecifications.map((s, i) => 
+          i === categoryIndex ? { ...s, items: updatedItems } : s
+        )
+      };
+    });
+  };
+
+  // Move custom specification item up
+  const moveCustomSpecItemUp = (categoryIndex, sortedIndex) => {
+    if (sortedIndex === 0) return; // Can't move first item up
+    
+    setFormData(prev => {
+      const spec = prev.customSpecifications[categoryIndex];
+      if (!spec || !spec.items || sortedIndex >= spec.items.length) return prev;
+      
+      // Normalize order values first - ensure all items have order (like OfferItemForm)
+      const normalizedItems = spec.items.map((item, idx) => ({
+        ...item,
+        order: item.order !== undefined && item.order !== null ? item.order : idx
+      }));
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...normalizedItems].sort((a, b) => (a.order || 0) - (b.order || 0));
+      
+      if (sortedIndex >= sortedItems.length || sortedIndex === 0) return prev;
+      
+      // Swap order values - create new objects to trigger React re-render
+      const newItems = sortedItems.map((item, idx) => {
+        if (idx === sortedIndex) {
+          return { ...item, order: sortedItems[sortedIndex - 1].order };
+        } else if (idx === sortedIndex - 1) {
+          return { ...item, order: sortedItems[sortedIndex].order };
+        }
+        return item;
+      });
+      
+      // Re-sort and re-normalize order values to ensure sequential order (0, 1, 2, ...)
+      const finalItems = newItems
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((item, idx) => ({
+          ...item,
+          order: idx
+        }));
+      
+      return {
+        ...prev,
+        customSpecifications: prev.customSpecifications.map((s, i) => 
+          i === categoryIndex ? { ...s, items: finalItems } : s
+        )
+      };
+    });
+  };
+
+  // Move custom specification item down
+  const moveCustomSpecItemDown = (categoryIndex, sortedIndex) => {
+    setFormData(prev => {
+      const spec = prev.customSpecifications[categoryIndex];
+      if (!spec || !spec.items) return prev;
+      
+      // Normalize order values first - ensure all items have order (like OfferItemForm)
+      const normalizedItems = spec.items.map((item, idx) => ({
+        ...item,
+        order: item.order !== undefined && item.order !== null ? item.order : idx
+      }));
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...normalizedItems].sort((a, b) => (a.order || 0) - (b.order || 0));
+      
+      if (sortedIndex >= sortedItems.length - 1) return prev; // Can't move last item down
+      
+      // Swap order values - create new objects to trigger React re-render
+      const newItems = sortedItems.map((item, idx) => {
+        if (idx === sortedIndex) {
+          return { ...item, order: sortedItems[sortedIndex + 1].order };
+        } else if (idx === sortedIndex + 1) {
+          return { ...item, order: sortedItems[sortedIndex].order };
+        }
+        return item;
+      });
+      
+      // Re-sort and re-normalize order values to ensure sequential order (0, 1, 2, ...)
+      const finalItems = newItems
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((item, idx) => ({
+          ...item,
+          order: idx
+        }));
+      
+      return {
+        ...prev,
+        customSpecifications: prev.customSpecifications.map((s, i) => 
+          i === categoryIndex ? { ...s, items: finalItems } : s
+        )
+      };
+    });
   };
 
   // Update custom specification item
-  const updateCustomSpecItem = (categoryIndex, itemIndex, field, value) => {
-    const updated = [...formData.customSpecifications];
-    updated[categoryIndex].items[itemIndex] = {
-      ...updated[categoryIndex].items[itemIndex],
-      [field]: value
-    };
-    setFormData({ ...formData, customSpecifications: updated });
+  const updateCustomSpecItem = (categoryIndex, itemOrder, field, value) => {
+    setFormData(prev => {
+      const spec = prev.customSpecifications[categoryIndex];
+      if (!spec || !spec.items) return prev;
+      
+      // Find and update item by order value
+      const updatedItems = spec.items.map((item) => {
+        const itemOrderValue = item.order !== undefined && item.order !== null ? item.order : -1;
+        if (itemOrderValue === itemOrder) {
+          return { ...item, [field]: value };
+        }
+        return item;
+      });
+      
+      return {
+        ...prev,
+        customSpecifications: prev.customSpecifications.map((s, i) => 
+          i === categoryIndex ? { ...s, items: updatedItems } : s
+        )
+      };
+    });
   };
 
   // Reset form
@@ -552,6 +712,30 @@ const DrawingSpecificationsPage = () => {
   // Handle edit
   const handleEdit = (drawing) => {
     setSelectedDrawing(drawing);
+    
+    // Normalize custom specifications with order values, similar to OfferItemForm
+    // This ensures all items have order values and are sorted
+    const normalizedCustomSpecs = (drawing.customSpecifications || []).map((category) => {
+      const items = Array.isArray(category?.items)
+        ? category.items
+            .map((item, index) => ({
+              name: item?.name || '',
+              specification: item?.specification || '',
+              order: item?.order !== undefined && item?.order !== null ? item.order : index
+            }))
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map((item, index) => ({
+              ...item,
+              order: index // Re-normalize to ensure sequential order values (0, 1, 2, ...)
+            }))
+        : [];
+      
+      return {
+        category: category?.category || '',
+        items: items
+      };
+    });
+    
     setFormData({
       bodyTypeId: drawing.bodyTypeId?._id || drawing.bodyTypeId || '',
       chassisTypeId: drawing.chassisTypeId?._id || drawing.chassisTypeId || '',
@@ -562,15 +746,7 @@ const DrawingSpecificationsPage = () => {
         featureId: feature?.featureId?._id || feature?.featureId || '',
         spec: feature?.spec || ''
       })),
-      customSpecifications: (drawing.customSpecifications || []).map((category) => ({
-        category: category?.category || '',
-        items: Array.isArray(category?.items)
-          ? category.items.map((item) => ({
-              name: item?.name || '',
-              specification: item?.specification || ''
-            }))
-          : []
-      }))
+      customSpecifications: normalizedCustomSpecs
     });
     setShowEditModal(true);
   };
@@ -1039,7 +1215,14 @@ const DrawingSpecificationsPage = () => {
                 </button>
               </div>
               <div className="space-y-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                {formData.customSpecifications.map((spec, specIndex) => (
+                {formData.customSpecifications.map((spec, specIndex) => {
+                  // Normalize order values for backward compatibility - assign order based on index if missing
+                  const normalizedItems = (spec.items || []).map((item, idx) => ({
+                    ...item,
+                    order: item.order !== undefined && item.order !== null ? item.order : idx
+                  })).sort((a, b) => (a.order || 0) - (b.order || 0));
+                  
+                  return (
                   <div key={specIndex} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                     <div className="flex items-center justify-between mb-2">
               <input
@@ -1058,32 +1241,66 @@ const DrawingSpecificationsPage = () => {
                       </button>
                     </div>
                     <div className="space-y-2 ml-4">
-                      {spec.items && spec.items.map((item, itemIndex) => (
-                        <div key={itemIndex} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={item.name || ''}
-                            onChange={(e) => updateCustomSpecItem(specIndex, itemIndex, 'name', e.target.value)}
-                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Name"
-                          />
-                          <span className="text-gray-500">:</span>
-                          <input
-                            type="text"
-                            value={item.specification || ''}
-                            onChange={(e) => updateCustomSpecItem(specIndex, itemIndex, 'specification', e.target.value)}
-                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Specification"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeCustomSpecItem(specIndex, itemIndex)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
+                      {normalizedItems.map((item, sortedIndex) => {
+                        const isFirst = sortedIndex === 0;
+                        const isLast = sortedIndex === normalizedItems.length - 1;
+                        
+                        return (
+                          <div key={item.order !== undefined && item.order !== null ? item.order : sortedIndex} className="flex items-center gap-2">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => moveCustomSpecItemUp(specIndex, sortedIndex)}
+                                disabled={isFirst}
+                                className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
+                                title="Move up"
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveCustomSpecItemDown(specIndex, sortedIndex)}
+                                disabled={isLast}
+                                className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
+                                title="Move down"
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={item.name || ''}
+                              onChange={(e) => {
+                                const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                updateCustomSpecItem(specIndex, itemOrder, 'name', e.target.value);
+                              }}
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                              placeholder="Name"
+                            />
+                            <span className="text-gray-500">:</span>
+                            <input
+                              type="text"
+                              value={item.specification || ''}
+                              onChange={(e) => {
+                                const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                updateCustomSpecItem(specIndex, itemOrder, 'specification', e.target.value);
+                              }}
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                              placeholder="Specification"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                removeCustomSpecItem(specIndex, itemOrder);
+                              }}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
                       <button
                         type="button"
                         onClick={() => addCustomSpecItem(specIndex)}
@@ -1094,7 +1311,8 @@ const DrawingSpecificationsPage = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {formData.customSpecifications.length === 0 && (
                   <p className="text-sm text-gray-500 text-center py-4">No custom specifications added yet</p>
                 )}

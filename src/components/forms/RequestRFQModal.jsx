@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, X, Search, Paperclip, Download, Trash2 } from 'lucide-react';
+import { Plus, X, Search, Paperclip, Download, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import BaseModal from '../modals/BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
 import PriceInput from '../common/PriceInput';
@@ -331,6 +331,21 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
               item.templateMode = 'manual';
             }
           }
+
+          // Initialize order values for specification items if missing
+          if (item.specifications && Array.isArray(item.specifications)) {
+            item.specifications.forEach((spec) => {
+              if (spec.items && Array.isArray(spec.items)) {
+                spec.items.forEach((specItem, index) => {
+                  if (specItem.order === undefined || specItem.order === null) {
+                    specItem.order = index;
+                  }
+                });
+                // Sort items by order after assigning
+                spec.items.sort((a, b) => (a.order || 0) - (b.order || 0));
+              }
+            });
+          }
         }
 
         return item;
@@ -644,7 +659,8 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
         category: '',
         items: [{
           name: '',
-          specification: ''
+          specification: '',
+          order: 0
         }]
       };
       const updated = {
@@ -703,7 +719,8 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       const newItemIndex = currentItems.length;
       const newSpecItem = {
         name: '',
-        specification: ''
+        specification: '',
+        order: newItemIndex
       };
       const updated = {
         ...prev,
@@ -751,6 +768,70 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           : item
       )
     }));
+  };
+
+  const moveSpecificationItemUp = (itemIndex, categoryIndex, itemIndexInCategory) => {
+    if (itemIndexInCategory === 0) return; // Can't move first item up
+    
+    setFormData(prev => {
+      const spec = prev.items[itemIndex]?.specifications?.[categoryIndex];
+      if (!spec || !spec.items || itemIndexInCategory >= spec.items.length) return prev;
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...spec.items].sort((a, b) => {
+        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+      
+      // Swap items
+      const temp = sortedItems[itemIndexInCategory].order;
+      sortedItems[itemIndexInCategory].order = sortedItems[itemIndexInCategory - 1].order;
+      sortedItems[itemIndexInCategory - 1].order = temp;
+      
+      return {
+        ...prev,
+        items: prev.items.map((item, i) => 
+          i === itemIndex ? {
+            ...item,
+            specifications: item.specifications.map((s, si) => 
+              si === categoryIndex ? { ...s, items: sortedItems } : s
+            )
+          } : item
+        )
+      };
+    });
+  };
+
+  const moveSpecificationItemDown = (itemIndex, categoryIndex, itemIndexInCategory) => {
+    setFormData(prev => {
+      const spec = prev.items[itemIndex]?.specifications?.[categoryIndex];
+      if (!spec || !spec.items || itemIndexInCategory >= spec.items.length - 1) return prev; // Can't move last item down
+      
+      // Sort items by order to ensure correct ordering
+      const sortedItems = [...spec.items].sort((a, b) => {
+        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+      
+      // Swap items
+      const temp = sortedItems[itemIndexInCategory].order;
+      sortedItems[itemIndexInCategory].order = sortedItems[itemIndexInCategory + 1].order;
+      sortedItems[itemIndexInCategory + 1].order = temp;
+      
+      return {
+        ...prev,
+        items: prev.items.map((item, i) => 
+          i === itemIndex ? {
+            ...item,
+            specifications: item.specifications.map((s, si) => 
+              si === categoryIndex ? { ...s, items: sortedItems } : s
+            )
+          } : item
+        )
+      };
+    });
   };
 
   const updateSpecificationItem = (itemIndex, categoryIndex, itemSpecIndex, field, value) => {
@@ -2226,7 +2307,14 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                           </button>
                         </div>
 
-                        {item.specifications && item.specifications.map((spec, specIndex) => (
+                        {item.specifications && item.specifications.map((spec, specIndex) => {
+                          // Normalize order values for backward compatibility
+                          const normalizedItems = (spec.items || []).map((item, idx) => ({
+                            ...item,
+                            order: item.order !== undefined && item.order !== null ? item.order : idx
+                          })).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          
+                          return (
                           <div key={specIndex} className="border border-gray-200 rounded-md p-3 mb-2">
                             <div className="flex items-center justify-between mb-2">
                               <input
@@ -2262,67 +2350,130 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                             </div>
 
                             <div className="space-y-2">
-                              {spec.items && spec.items.map((specItem, specItemIndex) => (
-                                <div key={specItemIndex} className="flex items-center gap-2">
-                                  <input
-                                    ref={(el) => {
-                                      const refKey = `spec-name-${itemIndex}-${specIndex}-${specItemIndex}`;
-                                      if (el) {
-                                        specInputRefs.current[refKey] = el;
-                                      } else {
-                                        delete specInputRefs.current[refKey];
-                                      }
-                                    }}
-                                    type="text"
-                                    value={specItem.name || ''}
-                                    onChange={(e) => updateSpecificationItem(itemIndex, specIndex, specItemIndex, 'name', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        // Move focus to value field
-                                        const valueRefKey = `spec-value-${itemIndex}-${specIndex}-${specItemIndex}`;
-                                        if (specInputRefs.current[valueRefKey]) {
-                                          specInputRefs.current[valueRefKey].focus();
+                              {normalizedItems.map((specItem, sortedIndex) => {
+                                const isFirst = sortedIndex === 0;
+                                const isLast = sortedIndex === normalizedItems.length - 1;
+                                
+                                return (
+                                  <div key={specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex} className="flex items-center gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => moveSpecificationItemUp(itemIndex, specIndex, sortedIndex)}
+                                        disabled={isFirst}
+                                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
+                                        title="Move up"
+                                      >
+                                        <ChevronUp className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => moveSpecificationItemDown(itemIndex, specIndex, sortedIndex)}
+                                        disabled={isLast}
+                                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
+                                        title="Move down"
+                                      >
+                                        <ChevronDown className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                    <input
+                                      ref={(el) => {
+                                        const refKey = `spec-name-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                        if (el) {
+                                          specInputRefs.current[refKey] = el;
+                                        } else {
+                                          delete specInputRefs.current[refKey];
                                         }
-                                      }
-                                    }}
-                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Specification name"
-                                    disabled={loading}
-                                  />
-                                  <span className="text-gray-500">:</span>
-                                  <input
-                                    ref={(el) => {
-                                      const refKey = `spec-value-${itemIndex}-${specIndex}-${specItemIndex}`;
-                                      if (el) {
-                                        specInputRefs.current[refKey] = el;
-                                      } else {
-                                        delete specInputRefs.current[refKey];
-                                      }
-                                    }}
-                                    type="text"
-                                    value={specItem.specification || ''}
-                                    onChange={(e) => updateSpecificationItem(itemIndex, specIndex, specItemIndex, 'specification', e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        // Always add new item to current category and focus on its name field
-                                        addSpecificationItem(itemIndex, specIndex, true);
-                                      }
-                                    }}
-                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Specification value"
-                                    disabled={loading}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => removeSpecificationItem(itemIndex, specIndex, specItemIndex)}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ))}
+                                      }}
+                                      type="text"
+                                      value={specItem.name || ''}
+                                      onChange={(e) => {
+                                        // Find the original index by order value in normalized items
+                                        const originalIndex = normalizedItems.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalIndex !== -1) {
+                                          // Find in original spec.items array
+                                          const originalSpecIndex = spec.items.findIndex((item) => {
+                                            const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                            const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                            return itemOrder === specItemOrder;
+                                          });
+                                          if (originalSpecIndex !== -1) {
+                                            updateSpecificationItem(itemIndex, specIndex, originalSpecIndex, 'name', e.target.value);
+                                          }
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          // Move focus to value field
+                                          const valueRefKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                          if (specInputRefs.current[valueRefKey]) {
+                                            specInputRefs.current[valueRefKey].focus();
+                                          }
+                                        }
+                                      }}
+                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Specification name"
+                                      disabled={loading}
+                                    />
+                                    <span className="text-gray-500">:</span>
+                                    <input
+                                      ref={(el) => {
+                                        const refKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                        if (el) {
+                                          specInputRefs.current[refKey] = el;
+                                        } else {
+                                          delete specInputRefs.current[refKey];
+                                        }
+                                      }}
+                                      type="text"
+                                      value={specItem.specification || ''}
+                                      onChange={(e) => {
+                                        // Find the original index by order value in original spec.items array
+                                        const originalSpecIndex = spec.items.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalSpecIndex !== -1) {
+                                          updateSpecificationItem(itemIndex, specIndex, originalSpecIndex, 'specification', e.target.value);
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          // Always add new item to current category and focus on its name field
+                                          addSpecificationItem(itemIndex, specIndex, true);
+                                        }
+                                      }}
+                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Specification value"
+                                      disabled={loading}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Find the original index by order value
+                                        const originalIndex = spec.items.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalIndex !== -1) {
+                                          removeSpecificationItem(itemIndex, specIndex, originalIndex);
+                                        }
+                                      }}
+                                      className="text-red-600 hover:text-red-800"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
 
                               <button
                                 type="button"
@@ -2334,7 +2485,8 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
