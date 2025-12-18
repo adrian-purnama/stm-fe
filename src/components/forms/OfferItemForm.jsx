@@ -19,6 +19,22 @@ const OfferItemForm = ({
   onToggleSelect = null,
   lineOfBusinessType = 'karoseri'
 }) => {
+  // Helper function to normalize order values (0, 1, 2, ...)
+  const normalizeOrderValues = (items) => {
+    if (!items || items.length === 0) return [];
+    // Sort by current order (or index if no order)
+    const sorted = [...items].sort((a, b) => {
+      const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
+      const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
+      return orderA - orderB;
+    });
+    // Re-assign sequential order values
+    return sorted.map((item, index) => ({
+      ...item,
+      order: index
+    }));
+  };
+
   // Initialize formData based on lineOfBusinessType
   const getInitialFormData = () => {
     const baseData = {
@@ -46,10 +62,7 @@ const OfferItemForm = ({
         templateSourceId: item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
           ...spec,
-          items: (spec.items || []).map((item, index) => ({
-            ...item,
-            order: item.order !== undefined && item.order !== null ? item.order : index
-          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+          items: normalizeOrderValues(spec.items || [])
         }))
       };
     } else if (lineOfBusinessType === 'service') {
@@ -183,10 +196,7 @@ const OfferItemForm = ({
         templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
           ...spec,
-          items: (spec.items || []).map((item, index) => ({
-            ...item,
-            order: item.order !== undefined && item.order !== null ? item.order : index
-          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+          items: normalizeOrderValues(spec.items || [])
         }))
       };
       // Set the selected drawing spec if it exists
@@ -329,16 +339,14 @@ const OfferItemForm = ({
   const addItemToCategory = (categoryIndex, focusNewItem = false) => {
     setFormData(prev => {
       const currentItems = prev.specifications[categoryIndex]?.items || [];
-      // Calculate new order value (highest order + 1, or 0 if no items)
-      const maxOrder = currentItems.length > 0 
-        ? Math.max(...currentItems.map(item => item.order !== undefined ? item.order : 0), -1)
-        : -1;
-      const newOrder = maxOrder + 1;
+      // Normalize existing items first
+      const normalizedItems = normalizeOrderValues(currentItems);
+      const newOrder = normalizedItems.length;
       
       const newSpecifications = prev.specifications.map((spec, index) => 
         index === categoryIndex ? {
           ...spec,
-          items: [...spec.items, {
+          items: [...normalizedItems, {
             name: '',
             specification: '',
             order: newOrder
@@ -349,8 +357,7 @@ const OfferItemForm = ({
       // Focus on the new spec name field
       if (focusNewItem) {
         setTimeout(() => {
-          const newItemIndex = currentItems.length;
-          const refKey = `spec-name-${categoryIndex}-${newItemIndex}`;
+          const refKey = `spec-name-${categoryIndex}-${newOrder}`;
           if (specInputRefs.current[refKey]) {
             specInputRefs.current[refKey].focus();
           }
@@ -364,18 +371,32 @@ const OfferItemForm = ({
     });
   };
 
-  const removeSpecification = (categoryIndex, itemIndex = null) => {
-    if (itemIndex !== null) {
-      // Remove specific item from category
-      setFormData(prev => ({
-        ...prev,
-        specifications: prev.specifications.map((spec, i) => 
-          i === categoryIndex ? {
-            ...spec,
-            items: spec.items.filter((_, j) => j !== itemIndex)
-          } : spec
-        ).filter(spec => spec.items.length > 0) // Remove empty categories
-      }));
+  const removeSpecification = (categoryIndex, itemOrder = null) => {
+    if (itemOrder !== null) {
+      // Remove specific item from category by order value
+      setFormData(prev => {
+        const spec = prev.specifications[categoryIndex];
+        if (!spec || !spec.items) return prev;
+        
+        // Filter out the item with matching order, then normalize
+        const filteredItems = spec.items.filter(item => {
+          const itemOrderValue = item.order !== undefined && item.order !== null ? item.order : -1;
+          return itemOrderValue !== itemOrder;
+        });
+        
+        // Normalize order values after removal
+        const normalizedItems = normalizeOrderValues(filteredItems);
+        
+        return {
+          ...prev,
+          specifications: prev.specifications.map((s, i) => 
+            i === categoryIndex ? {
+              ...s,
+              items: normalizedItems
+            } : s
+          ).filter(s => s.items.length > 0) // Remove empty categories
+        };
+      });
     } else {
       // Remove entire category
       setFormData(prev => ({
@@ -385,60 +406,64 @@ const OfferItemForm = ({
     }
   };
 
-  const moveSpecificationItemUp = (categoryIndex, itemIndex) => {
-    if (itemIndex === 0) return; // Can't move first item up
-    
+  const moveSpecificationItemUp = (categoryIndex, itemOrder) => {
     setFormData(prev => {
       const spec = prev.specifications[categoryIndex];
-      if (!spec || !spec.items || itemIndex >= spec.items.length) return prev;
+      if (!spec || !spec.items) return prev;
       
-      // Sort items by order to ensure correct ordering
-      const sortedItems = [...spec.items].sort((a, b) => {
-        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
-        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
-        return orderA - orderB;
-      });
+      // Normalize and sort items by order
+      const normalizedItems = normalizeOrderValues(spec.items);
+      
+      // Find the item index by order
+      const itemIndex = normalizedItems.findIndex(item => item.order === itemOrder);
+      if (itemIndex <= 0) return prev; // Can't move first item up
       
       // Swap items
-      const temp = sortedItems[itemIndex].order;
-      sortedItems[itemIndex].order = sortedItems[itemIndex - 1].order;
-      sortedItems[itemIndex - 1].order = temp;
+      const temp = normalizedItems[itemIndex];
+      normalizedItems[itemIndex] = normalizedItems[itemIndex - 1];
+      normalizedItems[itemIndex - 1] = temp;
+      
+      // Re-normalize order values after swap
+      const renormalizedItems = normalizeOrderValues(normalizedItems);
       
       return {
         ...prev,
         specifications: prev.specifications.map((s, i) => 
           i === categoryIndex ? {
             ...s,
-            items: sortedItems
+            items: renormalizedItems
           } : s
         )
       };
     });
   };
 
-  const moveSpecificationItemDown = (categoryIndex, itemIndex) => {
+  const moveSpecificationItemDown = (categoryIndex, itemOrder) => {
     setFormData(prev => {
       const spec = prev.specifications[categoryIndex];
-      if (!spec || !spec.items || itemIndex >= spec.items.length - 1) return prev; // Can't move last item down
+      if (!spec || !spec.items) return prev;
       
-      // Sort items by order to ensure correct ordering
-      const sortedItems = [...spec.items].sort((a, b) => {
-        const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
-        const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
-        return orderA - orderB;
-      });
+      // Normalize and sort items by order
+      const normalizedItems = normalizeOrderValues(spec.items);
+      
+      // Find the item index by order
+      const itemIndex = normalizedItems.findIndex(item => item.order === itemOrder);
+      if (itemIndex < 0 || itemIndex >= normalizedItems.length - 1) return prev; // Can't move last item down
       
       // Swap items
-      const temp = sortedItems[itemIndex].order;
-      sortedItems[itemIndex].order = sortedItems[itemIndex + 1].order;
-      sortedItems[itemIndex + 1].order = temp;
+      const temp = normalizedItems[itemIndex];
+      normalizedItems[itemIndex] = normalizedItems[itemIndex + 1];
+      normalizedItems[itemIndex + 1] = temp;
+      
+      // Re-normalize order values after swap
+      const renormalizedItems = normalizeOrderValues(normalizedItems);
       
       return {
         ...prev,
         specifications: prev.specifications.map((s, i) => 
           i === categoryIndex ? {
             ...s,
-            items: sortedItems
+            items: renormalizedItems
           } : s
         )
       };
@@ -511,8 +536,17 @@ const OfferItemForm = ({
       return;
     }
     
-    console.log('OfferItemForm validation passed, calling onSave with:', formData);
-    onSave && onSave(formData);
+    // Normalize order values before saving
+    const normalizedFormData = {
+      ...formData,
+      specifications: formData.specifications?.map(spec => ({
+        ...spec,
+        items: normalizeOrderValues(spec.items || [])
+      })) || []
+    };
+    
+    console.log('OfferItemForm validation passed, calling onSave with:', normalizedFormData);
+    onSave && onSave(normalizedFormData);
     console.log('OfferItemForm onSave call completed');
   };
 
@@ -544,10 +578,7 @@ const OfferItemForm = ({
         templateSourceId: item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
           ...spec,
-          items: (spec.items || []).map((item, index) => ({
-            ...item,
-            order: item.order !== undefined && item.order !== null ? item.order : index
-          })).sort((a, b) => (a.order || 0) - (b.order || 0))
+          items: normalizeOrderValues(spec.items || [])
         }))
       };
     } else if (lineOfBusinessType === 'service') {
@@ -1320,154 +1351,132 @@ const OfferItemForm = ({
               </div>
               
               <div className="space-y-2">
-                {spec.items && [...spec.items].sort((a, b) => {
-                  const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
-                  const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
-                  return orderA - orderB;
-                }).map((item, sortedIndex) => {
-                  // Find the original index for ref keys and operations
-                  const originalIndex = spec.items.findIndex((it, idx) => {
-                    // Match by order if available, otherwise by position
-                    if (item.order !== undefined && it.order === item.order) return true;
-                    return idx === sortedIndex && it === item;
-                  });
-                  const specItemIndex = originalIndex >= 0 ? originalIndex : sortedIndex;
-                  const sortedItems = [...spec.items].sort((a, b) => {
-                    const orderA = a.order !== undefined && a.order !== null ? a.order : Number.MAX_SAFE_INTEGER;
-                    const orderB = b.order !== undefined && b.order !== null ? b.order : Number.MAX_SAFE_INTEGER;
-                    return orderA - orderB;
-                  });
-                  const isFirst = sortedIndex === 0;
-                  const isLast = sortedIndex === sortedItems.length - 1;
-                  
-                  return (
-                  <div key={`${categoryIndex}-${specItemIndex}-${item.order || sortedIndex}`} className="flex items-center gap-2">
-                    <div className="flex flex-col gap-0.5">
+                {(() => {
+                  // Normalize items first to ensure all have order values
+                  const normalizedItems = normalizeOrderValues(spec.items || []);
+                  return normalizedItems.map((item, sortedIndex) => {
+                    const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                    const isFirst = sortedIndex === 0;
+                    const isLast = sortedIndex === normalizedItems.length - 1;
+                    
+                    return (
+                    <div key={`${categoryIndex}-${itemOrder}`} className="flex items-center gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveSpecificationItemUp(categoryIndex, itemOrder)}
+                          disabled={isFirst}
+                          className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
+                          title="Move up"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSpecificationItemDown(categoryIndex, itemOrder)}
+                          disabled={isLast}
+                          className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
+                          title="Move down"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <input
+                        ref={(el) => {
+                          const refKey = `spec-name-${categoryIndex}-${itemOrder}`;
+                          if (el) {
+                            specInputRefs.current[refKey] = el;
+                          } else {
+                            delete specInputRefs.current[refKey];
+                          }
+                        }}
+                        type="text"
+                        value={item.name || ''}
+                        onChange={(e) => {
+                          setFormData(prev => {
+                            return {
+                              ...prev,
+                              specifications: prev.specifications.map((s, i) => 
+                                i === categoryIndex ? {
+                                  ...s,
+                                  items: s.items.map((it) => {
+                                    const itOrder = it.order !== undefined && it.order !== null ? it.order : -1;
+                                    if (itOrder === itemOrder) {
+                                      return { ...it, name: e.target.value };
+                                    }
+                                    return it;
+                                  })
+                                } : s
+                              )
+                            };
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Move focus to value field
+                            const valueRefKey = `spec-value-${categoryIndex}-${itemOrder}`;
+                            if (specInputRefs.current[valueRefKey]) {
+                              specInputRefs.current[valueRefKey].focus();
+                            }
+                          }
+                        }}
+                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Specification name"
+                      />
+                      <span className="text-gray-500">:</span>
+                      <input
+                        ref={(el) => {
+                          const refKey = `spec-value-${categoryIndex}-${itemOrder}`;
+                          if (el) {
+                            specInputRefs.current[refKey] = el;
+                          } else {
+                            delete specInputRefs.current[refKey];
+                          }
+                        }}
+                        type="text"
+                        value={item.specification || ''}
+                        onChange={(e) => {
+                          setFormData(prev => {
+                            return {
+                              ...prev,
+                              specifications: prev.specifications.map((s, i) => 
+                                i === categoryIndex ? {
+                                  ...s,
+                                  items: s.items.map((it) => {
+                                    const itOrder = it.order !== undefined && it.order !== null ? it.order : -1;
+                                    if (itOrder === itemOrder) {
+                                      return { ...it, specification: e.target.value };
+                                    }
+                                    return it;
+                                  })
+                                } : s
+                              )
+                            };
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Always add new item to current category and focus on its name field
+                            addItemToCategory(categoryIndex, true);
+                          }
+                        }}
+                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Specification value"
+                      />
                       <button
                         type="button"
-                        onClick={() => moveSpecificationItemUp(categoryIndex, sortedIndex)}
-                        disabled={isFirst}
-                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
-                        title="Move up"
+                        onClick={() => removeSpecification(categoryIndex, itemOrder)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Remove specification"
                       >
-                        <ChevronUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSpecificationItemDown(categoryIndex, sortedIndex)}
-                        disabled={isLast}
-                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
-                        title="Move down"
-                      >
-                        <ChevronDown className="h-3 w-3" />
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
-                    <input
-                      ref={(el) => {
-                        const refKey = `spec-name-${categoryIndex}-${specItemIndex}`;
-                        if (el) {
-                          specInputRefs.current[refKey] = el;
-                        } else {
-                          delete specInputRefs.current[refKey];
-                        }
-                      }}
-                      type="text"
-                      value={item.name || ''}
-                      onChange={(e) => {
-                        setFormData(prev => {
-                          // Match item by order value (which should be unique after normalization)
-                          const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
-                          return {
-                            ...prev,
-                            specifications: prev.specifications.map((s, i) => 
-                              i === categoryIndex ? {
-                                ...s,
-                                items: s.items.map((it) => {
-                                  const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
-                                  if (itOrder === targetOrder) {
-                                    return { ...it, name: e.target.value };
-                                  }
-                                  return it;
-                                })
-                              } : s
-                            )
-                          };
-                        });
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          // Move focus to value field
-                          const valueRefKey = `spec-value-${categoryIndex}-${specItemIndex}`;
-                          if (specInputRefs.current[valueRefKey]) {
-                            specInputRefs.current[valueRefKey].focus();
-                          }
-                        }
-                      }}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Specification name"
-                    />
-                    <span className="text-gray-500">:</span>
-                    <input
-                      ref={(el) => {
-                        const refKey = `spec-value-${categoryIndex}-${specItemIndex}`;
-                        if (el) {
-                          specInputRefs.current[refKey] = el;
-                        } else {
-                          delete specInputRefs.current[refKey];
-                        }
-                      }}
-                      type="text"
-                      value={item.specification || ''}
-                      onChange={(e) => {
-                        setFormData(prev => {
-                          // Match item by order value (which should be unique after normalization)
-                          const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
-                          return {
-                            ...prev,
-                            specifications: prev.specifications.map((s, i) => 
-                              i === categoryIndex ? {
-                                ...s,
-                                items: s.items.map((it) => {
-                                  const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
-                                  if (itOrder === targetOrder) {
-                                    return { ...it, specification: e.target.value };
-                                  }
-                                  return it;
-                                })
-                              } : s
-                            )
-                          };
-                        });
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          // Always add new item to current category and focus on its name field
-                          addItemToCategory(categoryIndex, true);
-                        }
-                      }}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Specification value"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Find the actual array index by order value
-                        const targetOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
-                        const actualIndex = spec.items.findIndex((it) => {
-                          const itOrder = it.order !== undefined && it.order !== null ? it.order : sortedIndex;
-                          return itOrder === targetOrder;
-                        });
-                        removeSpecification(categoryIndex, actualIndex >= 0 ? actualIndex : sortedIndex);
-                      }}
-                      className="text-red-600 hover:text-red-800"
-                      title="Remove specification"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )})}
+                    );
+                  });
+                })()}
                 
                 <button
                   type="button"

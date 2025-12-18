@@ -2376,17 +2376,17 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                                         <ChevronDown className="h-3 w-3" />
                                       </button>
                                     </div>
-                                    <input
-                                      ref={(el) => {
+                                  <input
+                                    ref={(el) => {
                                         const refKey = `spec-name-${itemIndex}-${specIndex}-${sortedIndex}`;
-                                        if (el) {
-                                          specInputRefs.current[refKey] = el;
-                                        } else {
-                                          delete specInputRefs.current[refKey];
-                                        }
-                                      }}
-                                      type="text"
-                                      value={specItem.name || ''}
+                                      if (el) {
+                                        specInputRefs.current[refKey] = el;
+                                      } else {
+                                        delete specInputRefs.current[refKey];
+                                      }
+                                    }}
+                                    type="text"
+                                    value={specItem.name || ''}
                                       onChange={(e) => {
                                         // Find the original index by order value in normalized items
                                         const originalIndex = normalizedItems.findIndex((item) => {
@@ -2406,32 +2406,32 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                                           }
                                         }
                                       }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          // Move focus to value field
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        // Move focus to value field
                                           const valueRefKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
-                                          if (specInputRefs.current[valueRefKey]) {
-                                            specInputRefs.current[valueRefKey].focus();
-                                          }
+                                        if (specInputRefs.current[valueRefKey]) {
+                                          specInputRefs.current[valueRefKey].focus();
                                         }
-                                      }}
-                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Specification name"
-                                      disabled={loading}
-                                    />
-                                    <span className="text-gray-500">:</span>
-                                    <input
-                                      ref={(el) => {
+                                      }
+                                    }}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Specification name"
+                                    disabled={loading}
+                                  />
+                                  <span className="text-gray-500">:</span>
+                                  <input
+                                    ref={(el) => {
                                         const refKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
-                                        if (el) {
-                                          specInputRefs.current[refKey] = el;
-                                        } else {
-                                          delete specInputRefs.current[refKey];
-                                        }
-                                      }}
-                                      type="text"
-                                      value={specItem.specification || ''}
+                                      if (el) {
+                                        specInputRefs.current[refKey] = el;
+                                      } else {
+                                        delete specInputRefs.current[refKey];
+                                      }
+                                    }}
+                                    type="text"
+                                    value={specItem.specification || ''}
                                       onChange={(e) => {
                                         // Find the original index by order value in original spec.items array
                                         const originalSpecIndex = spec.items.findIndex((item) => {
@@ -2443,19 +2443,19 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                                           updateSpecificationItem(itemIndex, specIndex, originalSpecIndex, 'specification', e.target.value);
                                         }
                                       }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          // Always add new item to current category and focus on its name field
-                                          addSpecificationItem(itemIndex, specIndex, true);
-                                        }
-                                      }}
-                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Specification value"
-                                      disabled={loading}
-                                    />
-                                    <button
-                                      type="button"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        // Always add new item to current category and focus on its name field
+                                        addSpecificationItem(itemIndex, specIndex, true);
+                                      }
+                                    }}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Specification value"
+                                    disabled={loading}
+                                  />
+                                  <button
+                                    type="button"
                                       onClick={() => {
                                         // Find the original index by order value
                                         const originalIndex = spec.items.findIndex((item) => {
@@ -2467,11 +2467,11 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                                           removeSpecificationItem(itemIndex, specIndex, originalIndex);
                                         }
                                       }}
-                                      className="text-red-600 hover:text-red-800"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </div>
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
                                 );
                               })}
 
