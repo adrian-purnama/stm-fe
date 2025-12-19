@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ApiHelper from '../utils/api/ApiHelper';
 import toast from 'react-hot-toast';
-import { AlertTriangle, RefreshCw, Database, FileText, Package, AlertCircle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Database, FileText, Package, AlertCircle, Eye, X } from 'lucide-react';
 
 const QuotationEmergencyDiagnosticsPage = () => {
   const [loading, setLoading] = useState(false);
@@ -9,6 +9,7 @@ const QuotationEmergencyDiagnosticsPage = () => {
   const [expandedSections, setExpandedSections] = useState({});
   const [rebuilding, setRebuilding] = useState({});
   const [rebuildProgress, setRebuildProgress] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState(null);
 
   const fetchDiagnostics = async () => {
     setLoading(true);
@@ -416,13 +417,23 @@ const QuotationEmergencyDiagnosticsPage = () => {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-500">{formatDate(issue.header.createdAt)}</td>
                             <td className="px-4 py-3 text-sm">
-                              <button
-                                onClick={() => handleRebuild(issue.header.quotationNumber)}
-                                disabled={rebuilding[issue.header.quotationNumber]}
-                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {rebuilding[issue.header.quotationNumber] ? 'Rebuilding...' : 'Rebuild'}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setSelectedDetail({ type: 'mainIssue', data: issue })}
+                                  className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 flex items-center gap-1"
+                                  title="View Details"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  Details
+                                </button>
+                                <button
+                                  onClick={() => handleRebuild(issue.header.quotationNumber)}
+                                  disabled={rebuilding[issue.header.quotationNumber]}
+                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {rebuilding[issue.header.quotationNumber] ? 'Rebuilding...' : 'Rebuild'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -462,6 +473,7 @@ const QuotationEmergencyDiagnosticsPage = () => {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Offer ID (Invalid)</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -472,6 +484,16 @@ const QuotationEmergencyDiagnosticsPage = () => {
                             <td className="px-4 py-3 text-sm text-red-600 font-mono">{item.quotationOfferId || 'NULL'}</td>
                             <td className="px-4 py-3 text-sm text-gray-900">{item.price?.toLocaleString() || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm text-gray-500">{formatDate(item.createdAt)}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <button
+                                onClick={() => setSelectedDetail({ type: 'orphanedItem', data: item })}
+                                className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 flex items-center gap-1"
+                                title="View Details"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Details
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -509,6 +531,7 @@ const QuotationEmergencyDiagnosticsPage = () => {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Offer Number</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Header ID (Invalid)</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -518,6 +541,16 @@ const QuotationEmergencyDiagnosticsPage = () => {
                             <td className="px-4 py-3 text-sm text-gray-900">{offer.offerNumber}</td>
                             <td className="px-4 py-3 text-sm text-red-600 font-mono">{offer.quotationHeaderId || 'NULL'}</td>
                             <td className="px-4 py-3 text-sm text-gray-500">{formatDate(offer.createdAt)}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <button
+                                onClick={() => setSelectedDetail({ type: 'orphanedOffer', data: offer })}
+                                className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 flex items-center gap-1"
+                                title="View Details"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Details
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -530,6 +563,32 @@ const QuotationEmergencyDiagnosticsPage = () => {
 
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {selectedDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {selectedDetail.type === 'mainIssue' && 'Quotation Details'}
+                {selectedDetail.type === 'orphanedItem' && 'Orphaned Item Details'}
+                {selectedDetail.type === 'orphanedOffer' && 'Orphaned Offer Details'}
+              </h3>
+              <button
+                onClick={() => setSelectedDetail(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <pre className="bg-gray-50 p-4 rounded-md text-xs overflow-x-auto">
+                {JSON.stringify(selectedDetail.data, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

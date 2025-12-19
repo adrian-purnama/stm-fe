@@ -388,9 +388,9 @@ const OfferItemForm = ({
         const normalizedItems = normalizeOrderValues(filteredItems);
         
         return {
-          ...prev,
+        ...prev,
           specifications: prev.specifications.map((s, i) => 
-            i === categoryIndex ? {
+          i === categoryIndex ? {
               ...s,
               items: normalizedItems
             } : s
@@ -1381,24 +1381,24 @@ const OfferItemForm = ({
                           <ChevronDown className="h-3 w-3" />
                         </button>
                       </div>
-                      <input
-                        ref={(el) => {
+                    <input
+                      ref={(el) => {
                           const refKey = `spec-name-${categoryIndex}-${itemOrder}`;
-                          if (el) {
-                            specInputRefs.current[refKey] = el;
-                          } else {
-                            delete specInputRefs.current[refKey];
-                          }
-                        }}
-                        type="text"
-                        value={item.name || ''}
-                        onChange={(e) => {
+                        if (el) {
+                          specInputRefs.current[refKey] = el;
+                        } else {
+                          delete specInputRefs.current[refKey];
+                        }
+                      }}
+                      type="text"
+                      value={item.name || ''}
+                      onChange={(e) => {
                           setFormData(prev => {
                             return {
-                              ...prev,
-                              specifications: prev.specifications.map((s, i) => 
-                                i === categoryIndex ? {
-                                  ...s,
+                          ...prev,
+                          specifications: prev.specifications.map((s, i) => 
+                            i === categoryIndex ? {
+                              ...s,
                                   items: s.items.map((it) => {
                                     const itOrder = it.order !== undefined && it.order !== null ? it.order : -1;
                                     if (itOrder === itemOrder) {
@@ -1406,43 +1406,43 @@ const OfferItemForm = ({
                                     }
                                     return it;
                                   })
-                                } : s
-                              )
+                            } : s
+                          )
                             };
                           });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            // Move focus to value field
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Move focus to value field
                             const valueRefKey = `spec-value-${categoryIndex}-${itemOrder}`;
-                            if (specInputRefs.current[valueRefKey]) {
-                              specInputRefs.current[valueRefKey].focus();
-                            }
+                          if (specInputRefs.current[valueRefKey]) {
+                            specInputRefs.current[valueRefKey].focus();
                           }
-                        }}
-                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Specification name"
-                      />
-                      <span className="text-gray-500">:</span>
-                      <input
-                        ref={(el) => {
+                        }
+                      }}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Specification name"
+                    />
+                    <span className="text-gray-500">:</span>
+                    <input
+                      ref={(el) => {
                           const refKey = `spec-value-${categoryIndex}-${itemOrder}`;
-                          if (el) {
-                            specInputRefs.current[refKey] = el;
-                          } else {
-                            delete specInputRefs.current[refKey];
-                          }
-                        }}
-                        type="text"
-                        value={item.specification || ''}
-                        onChange={(e) => {
+                        if (el) {
+                          specInputRefs.current[refKey] = el;
+                        } else {
+                          delete specInputRefs.current[refKey];
+                        }
+                      }}
+                      type="text"
+                      value={item.specification || ''}
+                      onChange={(e) => {
                           setFormData(prev => {
                             return {
-                              ...prev,
-                              specifications: prev.specifications.map((s, i) => 
-                                i === categoryIndex ? {
-                                  ...s,
+                          ...prev,
+                          specifications: prev.specifications.map((s, i) => 
+                            i === categoryIndex ? {
+                              ...s,
                                   items: s.items.map((it) => {
                                     const itOrder = it.order !== undefined && it.order !== null ? it.order : -1;
                                     if (itOrder === itemOrder) {
@@ -1450,30 +1450,30 @@ const OfferItemForm = ({
                                     }
                                     return it;
                                   })
-                                } : s
-                              )
+                            } : s
+                          )
                             };
                           });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            // Always add new item to current category and focus on its name field
-                            addItemToCategory(categoryIndex, true);
-                          }
-                        }}
-                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Specification value"
-                      />
-                      <button
-                        type="button"
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Always add new item to current category and focus on its name field
+                          addItemToCategory(categoryIndex, true);
+                        }
+                      }}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Specification value"
+                    />
+                    <button
+                      type="button"
                         onClick={() => removeSpecification(categoryIndex, itemOrder)}
-                        className="text-red-600 hover:text-red-800"
+                      className="text-red-600 hover:text-red-800"
                         title="Remove specification"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                     );
                   });
                 })()}

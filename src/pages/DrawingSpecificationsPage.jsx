@@ -398,7 +398,7 @@ const DrawingSpecificationsPage = () => {
         })).sort((a, b) => (a.order || 0) - (b.order || 0));
         
         return {
-          category: category?.category?.trim() || '',
+        category: category?.category?.trim() || '',
           items: normalizedItems
               .filter((item) => item && (item.name || item.specification))
               .map((item) => ({
@@ -1267,38 +1267,38 @@ const DrawingSpecificationsPage = () => {
                                 <ChevronDown className="h-3 w-3" />
                               </button>
                             </div>
-                            <input
-                              type="text"
-                              value={item.name || ''}
+                          <input
+                            type="text"
+                            value={item.name || ''}
                               onChange={(e) => {
                                 const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
                                 updateCustomSpecItem(specIndex, itemOrder, 'name', e.target.value);
                               }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                              placeholder="Name"
-                            />
-                            <span className="text-gray-500">:</span>
-                            <input
-                              type="text"
-                              value={item.specification || ''}
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Name"
+                          />
+                          <span className="text-gray-500">:</span>
+                          <input
+                            type="text"
+                            value={item.specification || ''}
                               onChange={(e) => {
                                 const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
                                 updateCustomSpecItem(specIndex, itemOrder, 'specification', e.target.value);
                               }}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                              placeholder="Specification"
-                            />
-                            <button
-                              type="button"
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Specification"
+                          />
+                          <button
+                            type="button"
                               onClick={() => {
                                 const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
                                 removeCustomSpecItem(specIndex, itemOrder);
                               }}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                         );
                       })}
                       <button
