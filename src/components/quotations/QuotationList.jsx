@@ -399,12 +399,13 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       // Trigger async loading of full details for each quotation
       // Fetch header details and offers separately for faster perceived performance
       headers.forEach(quotation => {
-        const quotationNumber = quotation.header.quotationNumber || quotation.header._id?.toString();
-        if (quotationNumber) {
+        // Pass the full header object instead of just quotationNumber string
+        // This allows functions to use _id when available, avoiding URL encoding issues
+        if (quotation.header) {
             // Fetch full header details (populated user fields, customer info, etc.)
-            fetchQuotationHeader(quotationNumber);
+            fetchQuotationHeader(quotation.header);
             // Fetch offers
-            fetchQuotationDetails(quotationNumber);
+            fetchQuotationDetails(quotation.header);
         }
       });
       
@@ -965,10 +966,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         }
       }
 
-      await ApiHelper.patch(
-        `/api/quotations/${encodeURIComponent(header.quotationNumber)}/status`,
-        payload
-      );
+      // Prefer using _id when available to avoid URL encoding issues
+      const quotationId = header._id || header.quotationNumber;
+      const statusUrl = header._id 
+        ? `/api/quotations/${quotationId}/status`
+        : `/api/quotations/${encodeURIComponent(quotationId)}/status`;
+      await ApiHelper.patch(statusUrl, payload);
 
       // Update local state with new status
       setQuotations(prev => 
@@ -1028,9 +1031,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
   const handleFollowUpQuotation = async (header) => {
     try {
-      await ApiHelper.patch(
-        `/api/quotations/${encodeURIComponent(header.quotationNumber)}/follow-up`
-      );
+      // Prefer using _id when available to avoid URL encoding issues
+      const quotationId = header._id || header.quotationNumber;
+      const followUpUrl = header._id 
+        ? `/api/quotations/${quotationId}/follow-up`
+        : `/api/quotations/${encodeURIComponent(quotationId)}/follow-up`;
+      await ApiHelper.patch(followUpUrl);
       toast.success('Follow-up date recorded');
       fetchQuotations();
     } catch (error) {
@@ -1039,10 +1045,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     }
   };
 
-  const handleDeleteOffer = async (offer, quotationNumber) => {
+  const handleDeleteOffer = async (offer, header) => {
     if (window.confirm(`Are you sure you want to delete offer ${offer.offerNumber}?`)) {
       try {
-        await ApiHelper.delete(`/api/quotations/${encodeURIComponent(quotationNumber)}/offers/${offer._id}`);
+        // Prefer using _id when available to avoid URL encoding issues
+        const quotationId = header?._id || header?.quotationNumber;
+        const url = header?._id 
+          ? `/api/quotations/${quotationId}/offers/${offer._id}`
+          : `/api/quotations/${encodeURIComponent(quotationId)}/offers/${offer._id}`;
+        await ApiHelper.delete(url);
         toast.success('Quotation offer deleted successfully');
         fetchQuotations();
         onDelete && onDelete(offer);
@@ -1055,7 +1066,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const handleDeleteQuotation = async (header) => {
     if (window.confirm(`Are you sure you want to delete the entire quotation ${header.quotationNumber}? This will delete all offers within this quotation.`)) {
       try {
-        await ApiHelper.delete(`/api/quotations/${encodeURIComponent(header.quotationNumber)}`);
+        // Prefer using _id when available to avoid URL encoding issues
+        const quotationId = header._id || header.quotationNumber;
+        const url = header._id 
+          ? `/api/quotations/${quotationId}`
+          : `/api/quotations/${encodeURIComponent(quotationId)}`;
+        await ApiHelper.delete(url);
         toast.success('Quotation deleted successfully');
         fetchQuotations();
         onDelete && onDelete(header);
@@ -1092,11 +1108,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     // Clear the input immediately
     setProgressInputs(prev => ({ ...prev, [quotationNumber]: '' }));
 
+    // Find the quotation header to get _id if available
+    const quotation = quotations.find(q => q.header.quotationNumber === quotationNumber);
+    const header = quotation?.header;
+
     try {
-      await ApiHelper.post(
-        `/api/quotations/${encodeURIComponent(quotationNumber)}/progress`,
-        { progress: newProgressEntry }
-      );
+      // Prefer using _id when available to avoid URL encoding issues
+      const quotationId = header?._id || quotationNumber;
+      const progressUrl = header?._id 
+        ? `/api/quotations/${quotationId}/progress`
+        : `/api/quotations/${encodeURIComponent(quotationId)}/progress`;
+      await ApiHelper.post(progressUrl, { progress: newProgressEntry });
       toast.success('Progress added successfully');
     } catch (error) {
       // Revert optimistic update on error
@@ -1160,11 +1182,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       return newQuotations;
     });
 
+    // Find the quotation header to get _id if available
+    const quotation = quotations.find(q => q.header.quotationNumber === quotationNumber);
+    const header = quotation?.header;
+
     try {
-      await ApiHelper.put(
-        `/api/quotations/${encodeURIComponent(quotationNumber)}/progress/${index}`,
-        { progress: trimmedText }
-      );
+      // Prefer using _id when available to avoid URL encoding issues
+      const quotationId = header?._id || quotationNumber;
+      const progressUrl = header?._id 
+        ? `/api/quotations/${quotationId}/progress/${index}`
+        : `/api/quotations/${encodeURIComponent(quotationId)}/progress/${index}`;
+      await ApiHelper.put(progressUrl, { progress: trimmedText });
       toast.success('Progress updated successfully');
       setEditingProgress(prev => {
         const newState = { ...prev };
@@ -1218,10 +1246,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       return newQuotations;
     });
 
+    // Find the quotation header to get _id if available
+    const quotation = quotations.find(q => q.header.quotationNumber === quotationNumber);
+    const header = quotation?.header;
+
     try {
-      await ApiHelper.delete(
-        `/api/quotations/${encodeURIComponent(quotationNumber)}/progress/${index}`
-      );
+      // Prefer using _id when available to avoid URL encoding issues
+      const quotationId = header?._id || quotationNumber;
+      const progressUrl = header?._id 
+        ? `/api/quotations/${quotationId}/progress/${index}`
+        : `/api/quotations/${encodeURIComponent(quotationId)}/progress/${index}`;
+      await ApiHelper.delete(progressUrl);
       toast.success('Progress deleted successfully');
     } catch (error) {
       // Revert optimistic update on error
@@ -1934,7 +1969,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                     <Plus className="h-4 w-4" />
                                   </button>
                                   <button
-                                          onClick={() => handleDeleteOffer(offerGroup, header.quotationNumber)}
+                                          onClick={() => handleDeleteOffer(offerGroup, header)}
                                           data-tooltip-id={`offer-delete-${offerGroup._id}`}
                                     data-tooltip-content="Delete offer"
                                     className="text-red-600 hover:text-red-900 p-1"
@@ -2021,7 +2056,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                       </button>
                                     )}
                                     <button
-                                      onClick={() => handleDeleteOffer(offerGroup.original, header.quotationNumber)}
+                                      onClick={() => handleDeleteOffer(offerGroup.original, header)}
                                       data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
                                       data-tooltip-content="Delete offer"
                                       className="text-red-600 hover:text-red-900 p-1"
@@ -2093,7 +2128,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                           </button>
                                         )}
                                         <button
-                                          onClick={() => handleDeleteOffer(revision, header.quotationNumber)}
+                                          onClick={() => handleDeleteOffer(revision, header)}
                                           data-tooltip-id={`offer-delete-${revision._id}`}
                                           data-tooltip-content="Delete revision"
                                           className="text-red-600 hover:text-red-900 p-1"
