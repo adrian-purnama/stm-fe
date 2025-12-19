@@ -424,13 +424,39 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   // Fetch full header details for a quotation (async background fetch)
   const fetchQuotationHeader = async (quotationIdentifier) => {
     try {
-      const quotationNumber = typeof quotationIdentifier === 'object' 
-        ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
-        : quotationIdentifier;
+      // Prefer using _id when available to avoid URL encoding issues with slashes
+      let url;
+      let quotationNumber;
+      
+      if (typeof quotationIdentifier === 'object' && quotationIdentifier._id) {
+        // Use by-id endpoint when _id is available (avoids encoding issues)
+        url = `/api/quotations/by-id/${quotationIdentifier._id}`;
+        quotationNumber = quotationIdentifier.quotationNumber || quotationIdentifier._id.toString();
+      } else {
+        // Fall back to quotationNumber (must encode properly)
+        quotationNumber = typeof quotationIdentifier === 'object' 
+          ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
+          : quotationIdentifier;
+        url = `${apiEndpoint}/${encodeURIComponent(quotationNumber)}/header`;
+      }
       
       // Fetch full header details with populated fields
-      const response = await ApiHelper.get(`${apiEndpoint}/${encodeURIComponent(quotationNumber)}/header`);
-      const fullHeader = response.data.data || {};
+      const response = await ApiHelper.get(url);
+      
+      // Handle different response structures
+      let fullHeader = {};
+      if (typeof quotationIdentifier === 'object' && quotationIdentifier._id) {
+        // by-id endpoint returns full quotation object
+        const quotationData = response.data.data;
+        if (quotationData && quotationData.header) {
+          fullHeader = quotationData.header;
+        } else if (quotationData) {
+          fullHeader = quotationData;
+        }
+      } else {
+        // /header endpoint returns header object directly
+        fullHeader = response.data.data || {};
+      }
       
       // Update the quotation header in state with full details
       setQuotations(prev => {
@@ -440,7 +466,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           
           const matches = quoteNumber === compareNumber || 
                           q.header.quotationNumber === compareNumber ||
-                          (q.header._id && q.header._id.toString() === compareNumber);
+                          (q.header._id && q.header._id.toString() === compareNumber) ||
+                          (typeof quotationIdentifier === 'object' && quotationIdentifier._id && 
+                           q.header._id && q.header._id.toString() === quotationIdentifier._id.toString());
           
           if (matches) {
             return {
@@ -448,7 +476,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               header: {
                 ...q.header,
                 ...fullHeader, // Merge full header data (customerName, populated user fields, etc.)
-                _id: q.header._id // Preserve existing _id
+                _id: q.header._id || fullHeader._id // Preserve existing _id or use from response
               }
             };
           }
@@ -472,17 +500,41 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         : quotationIdentifier;
       setLoadingDetails(prev => new Set(prev).add(loadingKey));
       
-      // Ensure we have quotationNumber (not _id) for the endpoint
+      // Prefer using _id when available to avoid URL encoding issues with slashes
+      let url;
+      if (typeof quotationIdentifier === 'object' && quotationIdentifier._id) {
+        // Use by-id endpoint when _id is available (avoids encoding issues)
+        url = `/api/quotations/by-id/${quotationIdentifier._id}`;
+      } else {
+        // Fall back to quotationNumber (must encode properly)
+        const quotationNumber = typeof quotationIdentifier === 'object' 
+          ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
+          : quotationIdentifier;
+        url = `${apiEndpoint}/${encodeURIComponent(quotationNumber)}/offers`;
+      }
+      
+      // Fetch full details for this quotation
+      const response = await ApiHelper.get(url);
+      let fetchedOffers = [];
+      
+      // Handle different response structures
+      if (typeof quotationIdentifier === 'object' && quotationIdentifier._id) {
+        // by-id endpoint returns full quotation object with offers array
+        const quotationData = response.data.data;
+        if (quotationData && quotationData.offers) {
+          fetchedOffers = Array.isArray(quotationData.offers) ? quotationData.offers : [];
+        } else if (quotationData && Array.isArray(quotationData)) {
+          fetchedOffers = quotationData;
+        }
+      } else {
+        // /offers endpoint returns offers array directly
+        fetchedOffers = response.data.data || [];
+      }
+      
+      // Debug logging
       const quotationNumber = typeof quotationIdentifier === 'object' 
         ? (quotationIdentifier.quotationNumber || quotationIdentifier.toString())
         : quotationIdentifier;
-      
-      // Fetch full details for this quotation using the offers endpoint
-      // This endpoint returns the grouped offer structure we need
-      const response = await ApiHelper.get(`${apiEndpoint}/${encodeURIComponent(quotationNumber)}/offers`);
-      const fetchedOffers = response.data.data || [];
-      
-      // Debug logging
       console.log(`[QuotationList] Fetched offers for ${quotationNumber}:`, {
         offersCount: fetchedOffers.length,
         offers: fetchedOffers,
@@ -496,7 +548,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       }
       
       // Update the quotation in state with full details
-      // Match by quotationNumber since that's what we're using as identifier
+      // Match by quotationNumber or _id
       setQuotations(prev => {
         const updated = prev.map(q => {
           const quoteNumber = q.header.quotationNumber || q.header._id?.toString();
@@ -505,7 +557,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           // Try multiple matching strategies
           const matches = quoteNumber === compareNumber || 
                           q.header.quotationNumber === compareNumber ||
-                          (q.header._id && q.header._id.toString() === compareNumber);
+                          (q.header._id && q.header._id.toString() === compareNumber) ||
+                          (typeof quotationIdentifier === 'object' && quotationIdentifier._id && 
+                           q.header._id && q.header._id.toString() === quotationIdentifier._id.toString());
           
           if (matches) {
             console.log(`[QuotationList] Updating quotation ${quoteNumber} with ${fetchedOffers.length} offer groups`);
@@ -520,7 +574,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         // Debug: Log if no match was found
         const foundMatch = updated.some(q => {
           const quoteNumber = q.header.quotationNumber || q.header._id?.toString();
-          return (quoteNumber === quotationNumber.toString() || q.header.quotationNumber === quotationNumber.toString());
+          const compareId = typeof quotationIdentifier === 'object' && quotationIdentifier._id 
+            ? quotationIdentifier._id.toString() 
+            : null;
+          return (quoteNumber === quotationNumber.toString() || 
+                  q.header.quotationNumber === quotationNumber.toString() ||
+                  (compareId && q.header._id && q.header._id.toString() === compareId));
         });
         
         if (!foundMatch && prev.length > 0) {
