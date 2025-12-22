@@ -1,9 +1,20 @@
 import React from 'react';
-import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, GitCompare, Download } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Clock, Users, FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, GitCompare, Download, Eye, X as XIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
 import useSmartBackNavigation from '../../hooks/useSmartBackNavigation';
 import BaseModal from '../modals/BaseModal';
+
+// Check if document is an image (moved outside component to avoid dependency issues)
+const isImageDocument = (docEntry) => {
+  const mimeType = docEntry.file?.mimeType || docEntry.mimeType || '';
+  const fileName = docEntry.file?.originalName || docEntry.originalName || '';
+  const imageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  const imageExtensions = ['.jpg', '.jpeg', '.png'];
+  
+  return imageMimeTypes.includes(mimeType.toLowerCase()) || 
+         imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+};
 
 const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
   const goBack = useSmartBackNavigation('/quotations');
@@ -13,6 +24,10 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
   const [approvalAction, setApprovalAction] = React.useState(null); // 'approve' or 'reject'
   const [approvalNotes, setApprovalNotes] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [imagePreviews, setImagePreviews] = React.useState({}); // { documentId: previewUrl }
+  const [loadingImages, setLoadingImages] = React.useState({}); // { documentId: true/false }
+  const [showImageModal, setShowImageModal] = React.useState({ documentId: null, url: null });
+  const imageUrlsRef = React.useRef(new Set()); // Track all blob URLs for cleanup
 
   const toggleItemExpansion = (itemIndex) => {
     setExpandedItems(prev => ({
@@ -57,6 +72,87 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
+
+  // Load image preview automatically
+  const loadImagePreview = React.useCallback(async (docEntry, forceReload = false) => {
+    const documentId = docEntry._id || docEntry.file?.fileId || docEntry.fileId;
+    if (!documentId) {
+      return null;
+    }
+
+    // Skip if already loaded (unless forcing reload)
+    if (imagePreviews[documentId] && !forceReload) {
+      return imagePreviews[documentId];
+    }
+
+    // Revoke old URL if reloading
+    if (forceReload && imagePreviews[documentId]) {
+      window.URL.revokeObjectURL(imagePreviews[documentId]);
+    }
+
+    try {
+      setLoadingImages(prev => ({ ...prev, [documentId]: true }));
+      
+      const response = await ApiHelper.get(`/api/rfq/documents/${documentId}/download`, {
+        responseType: 'blob'
+      });
+      
+      // Ensure response.data is a Blob
+      let blob;
+      if (response.data instanceof Blob) {
+        blob = response.data;
+      } else {
+        const mimeType = docEntry.file?.mimeType || docEntry.mimeType || 'image/jpeg';
+        blob = new Blob([response.data], { type: mimeType });
+      }
+      
+      const previewUrl = window.URL.createObjectURL(blob);
+      imageUrlsRef.current.add(previewUrl); // Track URL for cleanup
+      setImagePreviews(prev => ({ ...prev, [documentId]: previewUrl }));
+      return previewUrl;
+    } catch (error) {
+      console.error('Error loading image preview:', error);
+      // Remove failed preview from state
+      setImagePreviews(prev => {
+        const newState = { ...prev };
+        delete newState[documentId];
+        return newState;
+      });
+      return null;
+    } finally {
+      setLoadingImages(prev => {
+        const newState = { ...prev };
+        delete newState[documentId];
+        return newState;
+      });
+    }
+  }, [imagePreviews]);
+
+  // Automatically load image previews when documents are available
+  React.useEffect(() => {
+    if (rfq?.documents && rfq.documents.length > 0) {
+      rfq.documents.forEach((docEntry) => {
+        if (isImageDocument(docEntry)) {
+          loadImagePreview(docEntry);
+        }
+      });
+    }
+  }, [rfq?.documents, loadImagePreview]);
+
+  // Cleanup object URLs on unmount only
+  React.useEffect(() => {
+    return () => {
+      // Cleanup all tracked blob URLs on component unmount
+      imageUrlsRef.current.forEach(url => {
+        try {
+          window.URL.revokeObjectURL(url);
+        } catch (e) {
+          // Ignore errors when revoking URLs
+        }
+      });
+      imageUrlsRef.current.clear();
+    };
+  }, []); // Empty dependency array - only run on unmount
 
   const handleDownloadRfqDocument = async (docEntry) => {
     try {
@@ -684,30 +780,112 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Supporting Documents</h3>
           {rfq.documents && rfq.documents.length > 0 ? (
             <div className="space-y-3">
-              {rfq.documents.map((docEntry) => (
-                <div
-                  key={docEntry._id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
-                >
-                    <div className="flex flex-col">
-                      <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
-                      <span className="text-xs text-gray-500">
-                        {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
-                        {docEntry.uploadedBy && (
-                          <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
-                        )}
-                      </span>
-                    </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadRfqDocument(docEntry)}
-                    className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+              {rfq.documents.map((docEntry) => {
+                const documentId = docEntry._id || docEntry.file?.fileId || docEntry.fileId;
+                const isImage = isImageDocument(docEntry);
+                const hasPreview = imagePreviews[documentId];
+                const isLoading = loadingImages[documentId];
+                
+                return (
+                  <div
+                    key={docEntry._id}
+                    className={`rounded-lg border border-gray-200 bg-gray-50 overflow-hidden ${isImage ? 'p-0' : 'px-4 py-3'}`}
                   >
-                    <Download size={14} />
-                    Download
-                  </button>
-                </div>
-              ))}
+                    {isImage ? (
+                      <div className="flex flex-col">
+                        {/* Image Preview Section */}
+                        <div className="p-4 pb-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
+                              <span className="text-xs text-gray-500">
+                                {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
+                                {docEntry.uploadedBy && (
+                                  <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
+                                )}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadRfqDocument(docEntry)}
+                              className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                            >
+                              <Download size={14} />
+                              Download
+                            </button>
+                          </div>
+                          
+                          {/* Thumbnail Preview */}
+                          {isLoading ? (
+                            <div className="mt-3 flex items-center justify-center py-8 bg-gray-100 rounded-lg border border-gray-200">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+                                <span className="text-xs text-gray-500">Loading preview...</span>
+                              </div>
+                            </div>
+                          ) : hasPreview ? (
+                            <div className="mt-3 relative group">
+                              <img
+                                src={imagePreviews[documentId]}
+                                alt={docEntry.file?.originalName || docEntry.originalName}
+                                className="w-full h-auto max-h-64 object-contain rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const previewUrl = imagePreviews[documentId];
+                                  // Verify URL is still valid, reload if needed
+                                  if (previewUrl) {
+                                    setShowImageModal({ documentId, url: previewUrl });
+                                  } else {
+                                    // Reload if URL is missing
+                                    const newUrl = await loadImagePreview(docEntry, true);
+                                    if (newUrl) {
+                                      setShowImageModal({ documentId, url: newUrl });
+                                    } else {
+                                      toast.error('Failed to load image preview');
+                                    }
+                                  }
+                                }}
+                                onError={async () => {
+                                  // Try to reload the image
+                                  const newUrl = await loadImagePreview(docEntry, true);
+                                  if (!newUrl) {
+                                    toast.error('Failed to load image preview');
+                                  }
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center pointer-events-none">
+                                <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Click to enlarge</span>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Non-image document */
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
+                          <span className="text-xs text-gray-500">
+                            {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
+                            {docEntry.uploadedBy && (
+                              <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
+                            )}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadRfqDocument(docEntry)}
+                          className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                        >
+                          <Download size={14} />
+                          Download
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-gray-500">No documents attached.</p>
@@ -924,6 +1102,82 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
           </div>
         </BaseModal>
       )}
+
+      {/* Image Preview Modal */}
+      <BaseModal
+        isOpen={!!showImageModal.documentId && !!showImageModal.url}
+        onClose={() => {
+          setShowImageModal({ documentId: null, url: null });
+        }}
+        title={showImageModal.documentId ? (rfq.documents?.find(doc => (doc._id || doc.file?.fileId || doc.fileId) === showImageModal.documentId)?.file?.originalName || 'Image Preview') : 'Image Preview'}
+        size="lg"
+      >
+          <div className="space-y-4">
+            <div className="relative flex items-center justify-center bg-gray-100 rounded-lg p-4 max-h-[70vh] overflow-auto">
+              {showImageModal.url ? (
+                <img
+                  src={showImageModal.url}
+                  alt="Preview"
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                  onError={async () => {
+                    // Try to reload the image
+                    if (showImageModal.documentId) {
+                      const docEntry = rfq.documents?.find(doc => (doc._id || doc.file?.fileId || doc.fileId) === showImageModal.documentId);
+                      if (docEntry) {
+                        const newUrl = await loadImagePreview(docEntry, true);
+                        if (newUrl) {
+                          setShowImageModal({ documentId: showImageModal.documentId, url: newUrl });
+                        } else {
+                          toast.error('Failed to load image');
+                          setShowImageModal({ documentId: null, url: null });
+                        }
+                      } else {
+                        toast.error('Failed to load image');
+                        setShowImageModal({ documentId: null, url: null });
+                      }
+                    } else {
+                      toast.error('Failed to load image');
+                      setShowImageModal({ documentId: null, url: null });
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+                    <span className="text-sm text-gray-500">Loading image...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {showImageModal.documentId && (
+              <>
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      const docEntry = rfq.documents?.find(doc => (doc._id || doc.file?.fileId || doc.fileId) === showImageModal.documentId);
+                      if (docEntry) {
+                        handleDownloadRfqDocument(docEntry);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Download size={16} />
+                    Download
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowImageModal({ documentId: null, url: null });
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </BaseModal>
     </div>
   );
 };

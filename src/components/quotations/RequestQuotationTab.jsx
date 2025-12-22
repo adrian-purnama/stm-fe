@@ -205,6 +205,8 @@ const RequestQuotationTab = () => {
     if (searchInput.trim()) search += ' ' + searchInput.trim();
     
     // Build query params
+    // Always use 'requester' scope to show only RFQs created by the current user
+    // This ensures RequestQuotationTab only displays user's own RFQs, even if they have all_quotation_viewer permission
     const params = { page, limit: 20, search, viewScope: 'requester' };
     
     // Apply meeting filter if selected

@@ -273,11 +273,15 @@ const DrawingSpecificationsPage = () => {
         }
       }
 
-      // Validate JPG file type if provided
+      // Validate image/document file type if provided
       if (uploadImageFile) {
         const imageFileName = uploadImageFile.name.toLowerCase();
-        if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
-          toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
+        const isValidType = imageFileName.endsWith('.jpg') || 
+                           imageFileName.endsWith('.jpeg') || 
+                           imageFileName.endsWith('.png') || 
+                           imageFileName.endsWith('.pdf');
+        if (!isValidType) {
+          toast.error('Invalid file type for quotation image. Only JPG/JPEG/PNG/PDF files are allowed.');
           return;
         }
       }
@@ -356,22 +360,7 @@ const DrawingSpecificationsPage = () => {
         toast.error('Body type is required');
         return;
       }
-      if (!formData.chassisTypeId) {
-        toast.error('Chassis type is required');
-        return;
-      }
-      if (!formData.chassisModel.trim()) {
-        toast.error('Chassis model is required');
-        return;
-      }
-      if (!formData.sizeTypeId) {
-        toast.error('Size type is required');
-        return;
-      }
-      if (!formData.dimension || !formData.dimension.trim()) {
-        toast.error('Dimension is required');
-        return;
-      }
+      // chassisTypeId, chassisModel, sizeTypeId, and dimension are optional
       
       setUploading(true);
       setUploadProgress(0);
@@ -1440,20 +1429,34 @@ const DrawingSpecificationsPage = () => {
                 {/* Existing Quotation Image */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quotation Image (JPG) - For Quotation Display
+                    Quotation Image/Document (JPG/PNG/PDF) - For Quotation Display
                   </label>
                   {!removeQuotationImage && selectedDrawing.quotationImage && selectedDrawing.quotationImage.fileId ? (
                     <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1">
-                          <img 
-                            src={getDrawingAssetUrl(selectedDrawing._id, selectedDrawing.quotationImage.fileId, false)}
-                            alt={selectedDrawing.quotationImage.originalName}
-                            className="w-16 h-16 object-cover rounded border"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                            }}
-                          />
+                          {(() => {
+                            const fileName = (selectedDrawing.quotationImage.originalName || '').toLowerCase();
+                            const isPDF = fileName.endsWith('.pdf');
+                            const isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png');
+                            
+                            if (isPDF) {
+                              return <FileText className="w-16 h-16 text-red-600" />;
+                            } else if (isImage) {
+                              return (
+                                <img 
+                                  src={getDrawingAssetUrl(selectedDrawing._id, selectedDrawing.quotationImage.fileId, false)}
+                                  alt={selectedDrawing.quotationImage.originalName}
+                                  className="w-16 h-16 object-cover rounded border"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                              );
+                            } else {
+                              return <FileText className="w-16 h-16 text-gray-400" />;
+                            }
+                          })()}
                           <div className="flex-1">
                             <p className="text-sm font-medium text-gray-700">
                               {selectedDrawing.quotationImage.originalName}
@@ -1523,28 +1526,32 @@ const DrawingSpecificationsPage = () => {
                           }
                         }}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        accept=".jpg,.jpeg,image/jpeg"
+                        accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                       />
                       {uploadImageFile && (
                         <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
-                              {uploadImageFile.type.startsWith('image/') && (
+                              {uploadImageFile.type.startsWith('image/') ? (
                                 <img 
                                   src={URL.createObjectURL(uploadImageFile)} 
                                   alt={uploadImageFile.name}
                                   className="w-16 h-16 object-cover rounded border"
                                 />
+                              ) : uploadImageFile.type === 'application/pdf' ? (
+                                <FileText className="w-16 h-16 text-red-600" />
+                              ) : (
+                                <FileText className="w-16 h-16 text-gray-400" />
                               )}
                               <div className="flex-1">
                                 <p className="text-sm font-medium text-blue-900">
-                                  New image: {uploadImageFile.name}
+                                  New file: {uploadImageFile.name}
                                 </p>
                                 <p className="text-xs text-blue-700 mt-1">
                                   Original size: {imageFileSize?.formatted || formatFileSize(uploadImageFile.size)}
                                 </p>
                                 <p className="text-xs text-blue-600 mt-1 font-medium">
-                                  This will replace the existing image
+                                  This will replace the existing file
                                 </p>
                               </div>
                             </div>
@@ -1562,7 +1569,7 @@ const DrawingSpecificationsPage = () => {
                         </div>
                       )}
                       <p className="mt-1 text-xs text-gray-500">
-                        Select a new image to replace the existing one. Only JPG/JPEG files are allowed.
+                        Select a new file to replace the existing one. Only JPG/JPEG/PNG/PDF files are allowed.
                       </p>
                     </div>
                   )}
@@ -1622,10 +1629,10 @@ const DrawingSpecificationsPage = () => {
                   </p>
                 </div>
 
-                {/* JPG Image Upload */}
+                {/* Image/Document Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quotation Image (JPG) <span className="text-gray-500 text-xs font-normal">(Optional - For Quotation Display)</span>
+                    Quotation Image/Document (JPG/PNG/PDF) <span className="text-gray-500 text-xs font-normal">(Optional - For Quotation Display)</span>
                   </label>
                   <input
                     type="file"
@@ -1642,17 +1649,21 @@ const DrawingSpecificationsPage = () => {
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    accept=".jpg,.jpeg,image/jpeg"
+                    accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                   />
                   {uploadImageFile && (
                     <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        {uploadImageFile.type.startsWith('image/') && (
+                        {uploadImageFile.type.startsWith('image/') ? (
                           <img 
                             src={URL.createObjectURL(uploadImageFile)} 
                             alt={uploadImageFile.name}
                             className="w-16 h-16 object-cover rounded border"
                           />
+                        ) : uploadImageFile.type === 'application/pdf' ? (
+                          <FileText className="w-16 h-16 text-red-600" />
+                        ) : (
+                          <FileText className="w-16 h-16 text-gray-400" />
                         )}
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-700">
@@ -1666,7 +1677,7 @@ const DrawingSpecificationsPage = () => {
                     </div>
                   )}
                   <p className="mt-1 text-xs text-gray-500">
-                    Only JPG/JPEG files are allowed. This image will be used in quotations.
+                    Only JPG/JPEG/PNG/PDF files are allowed. This file will be used in quotations.
                   </p>
                 </div>
 
@@ -1867,7 +1878,7 @@ const DrawingSpecificationsPage = () => {
               {selectedDrawing.quotationImage && selectedDrawing.quotationImage.fileId && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quotation Image (JPG)
+                    Quotation Image/Document (JPG/PNG/PDF)
                   </label>
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-2">

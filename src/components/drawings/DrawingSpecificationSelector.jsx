@@ -414,7 +414,7 @@ const DrawingSpecificationSelector = ({
         return;
       }
       if (!uploadImageFile) {
-        toast.error('Quotation image (JPG) upload is required for quotation display.');
+        toast.error('Quotation image/document (JPG/PNG/PDF) upload is required for quotation display.');
         return;
       }
 
@@ -425,10 +425,14 @@ const DrawingSpecificationSelector = ({
         return;
       }
 
-      // Validate JPG file type
+      // Validate image/document file type
       const imageFileName = uploadImageFile.name.toLowerCase();
-      if (!imageFileName.endsWith('.jpg') && !imageFileName.endsWith('.jpeg')) {
-        toast.error('Invalid file type for quotation image. Only JPG/JPEG files are allowed.');
+      const isValidType = imageFileName.endsWith('.jpg') || 
+                         imageFileName.endsWith('.jpeg') || 
+                         imageFileName.endsWith('.png') || 
+                         imageFileName.endsWith('.pdf');
+      if (!isValidType) {
+        toast.error('Invalid file type for quotation image. Only JPG/JPEG/PNG/PDF files are allowed.');
         return;
       }
 
@@ -1030,10 +1034,10 @@ const DrawingSpecificationSelector = ({
             </p>
           </div>
 
-          {/* JPG Image Upload */}
+          {/* Image/Document Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quotation Image (JPG) * - For Quotation Display
+              Quotation Image/Document (JPG/PNG/PDF) * - For Quotation Display
             </label>
             <input
               type="file"
@@ -1050,18 +1054,22 @@ const DrawingSpecificationSelector = ({
                 }
               }}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              accept=".jpg,.jpeg,image/jpeg"
+              accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
               required
             />
             {uploadImageFile && (
               <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  {uploadImageFile.type.startsWith('image/') && (
+                  {uploadImageFile.type.startsWith('image/') ? (
                     <img 
                       src={URL.createObjectURL(uploadImageFile)} 
                       alt={uploadImageFile.name}
                       className="w-16 h-16 object-cover rounded border"
                     />
+                  ) : uploadImageFile.type === 'application/pdf' ? (
+                    <FileText className="w-16 h-16 text-red-600" />
+                  ) : (
+                    <FileText className="w-16 h-16 text-gray-400" />
                   )}
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-700">
@@ -1075,7 +1083,7 @@ const DrawingSpecificationSelector = ({
               </div>
             )}
             <p className="mt-1 text-xs text-gray-500">
-              Only JPG/JPEG files are allowed. This image will be used in quotations.
+              Only JPG/JPEG/PNG/PDF files are allowed. This file will be used in quotations.
             </p>
           </div>
 

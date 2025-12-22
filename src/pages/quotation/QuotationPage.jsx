@@ -203,7 +203,7 @@ const QuotationPage = () => {
       }
     );
 
-    // Admin/Viewer Role Tab
+    // Admin/Viewer Role Tabs
     tabList.push({
       key: 'all-quotations',
       label: 'All Quotations',
@@ -231,6 +231,14 @@ const QuotationPage = () => {
       }
     });
 
+    tabList.push({
+      key: 'all-rfq',
+      label: 'All RFQ',
+      icon: FileText,
+      permissionKey: 'all_quotation_viewer',
+      component: () => import('../../components/quotations/AllRFQTab')
+    });
+
     return tabList;
   }, [handleView, handlePreview, handleEdit, handleCreate, handleDelete]);
 
@@ -256,6 +264,8 @@ const QuotationPage = () => {
         return 'Manage quotations you have created (edit, add revisions, add offers)';
       case 'all-quotations':
         return 'View all quotations in the system';
+      case 'all-rfq':
+        return 'View all RFQ requests in the system';
       default:
         return 'Manage your quotation workflow';
     }
