@@ -7,13 +7,11 @@ import {
   DollarSign, 
   FileText, 
   Calendar,
-  Users,
   Target,
   ArrowLeft,
   Download,
   Filter,
   PieChart,
-  Activity,
   AlertCircle,
   CheckCircle,
   XCircle,
@@ -58,8 +56,6 @@ const QuotationAnalysisPage = () => {
       close: {}
     },
     monthlyStats: [],
-    topCustomers: [],
-    recentActivity: [],
     timePeriodSummary: {
       startDate: '',
       endDate: '',
@@ -101,9 +97,7 @@ const QuotationAnalysisPage = () => {
     { id: 'statusOverview', title: 'Status Overview', icon: PieChart, color: 'purple' },
     { id: 'lossAnalysis', title: 'Loss Analysis', icon: TrendingDown, color: 'red' },
     { id: 'closeAnalysis', title: 'Close Analysis', icon: XCircle, color: 'gray' },
-    { id: 'monthlyTrends', title: 'Monthly Trends', icon: BarChart3, color: 'indigo' },
-    { id: 'topCustomers', title: 'Top Customers', icon: Users, color: 'emerald' },
-    { id: 'recentActivity', title: 'Recent Activity', icon: Activity, color: 'orange' }
+    { id: 'monthlyTrends', title: 'Monthly Trends', icon: BarChart3, color: 'indigo' }
   ];
 
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('year-to-date');
@@ -123,9 +117,7 @@ const QuotationAnalysisPage = () => {
     'statusOverview',
     'lossAnalysis',
     'closeAnalysis',
-    'monthlyTrends',
-    'topCustomers',
-    'recentActivity'
+    'monthlyTrends'
   ]);
 
   // Load user preferences on component mount
@@ -138,27 +130,36 @@ const QuotationAnalysisPage = () => {
     if (sections && typeof sections === 'object' && !Array.isArray(sections)) {
       // Convert old object format to new array format
       sections = [
+        'rfqStats',
         'keyMetrics',
+        'bodyTypeFrequency',
+        'quarterlyStatus',
         'followUpStatus', 
         'statusOverview',
         'lossAnalysis',
         'closeAnalysis',
-        'monthlyTrends',
-        'topCustomers',
-        'recentActivity'
+        'monthlyTrends'
       ];
     } else if (!sections || !Array.isArray(sections)) {
       // Default to all sections if no preferences or invalid format
       sections = [
+        'rfqStats',
         'keyMetrics',
+        'bodyTypeFrequency',
+        'quarterlyStatus',
         'followUpStatus', 
         'statusOverview',
         'lossAnalysis',
         'closeAnalysis',
-        'monthlyTrends',
-        'topCustomers',
-        'recentActivity'
+        'monthlyTrends'
       ];
+    }
+    
+    // Filter out removed sections (topCustomers, recentActivity) from saved preferences
+    if (Array.isArray(sections)) {
+      sections = sections.filter(section => 
+        section !== 'topCustomers' && section !== 'recentActivity'
+      );
     }
     
     setSelectedSections(sections);
@@ -224,16 +225,97 @@ const QuotationAnalysisPage = () => {
       setLoading(true);
       const dateRange = getDateRange();
       
+      // Validate date range
+      if (!dateRange.startDate || !dateRange.endDate) {
+        console.error('Invalid date range:', dateRange);
+        toast.error('Invalid date range. Please select a valid time period.');
+        return;
+      }
+      
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
       };
 
       const response = await ApiHelper.get('/api/quotations/analysis/overview', { params });
-      setAnalysisData(response.data.data);
+      
+      // Validate response structure
+      if (!response || !response.data) {
+        console.error('Invalid response structure:', response);
+        toast.error('Invalid response from server');
+        return;
+      }
+      
+      // Check if request was successful
+      if (response.data.success === false) {
+        const errorMessage = response.data.message || 'Failed to load analysis data';
+        console.error('API returned error:', response.data);
+        toast.error(errorMessage);
+        return;
+      }
+      
+      // Validate data exists
+      if (!response.data.data) {
+        console.error('No data in response:', response.data);
+        toast.error('No data received from server');
+        return;
+      }
+      
+      // Set analysis data with safe defaults
+      const receivedData = response.data.data;
+      setAnalysisData({
+        totalQuotations: receivedData.totalQuotations || 0,
+        winRate: receivedData.winRate || 0,
+        lossRate: receivedData.lossRate || 0,
+        closeRate: receivedData.closeRate || 0,
+        statusBreakdown: receivedData.statusBreakdown || {
+          open: { count: 0 },
+          win: { count: 0 },
+          loss: { count: 0 },
+          close: { count: 0 }
+        },
+        reasonAnalytics: receivedData.reasonAnalytics || { loss: {}, close: {} },
+        monthlyStats: receivedData.monthlyStats || [],
+        timePeriodSummary: receivedData.timePeriodSummary || {
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          period: selectedTimePeriod
+        },
+        followUpStatus: receivedData.followUpStatus || {
+          currentlyOpen: { count: 0 },
+          notFollowedUp: { count: 0 },
+          mediumWarning: { count: 0 },
+          upToDate: { count: 0 }
+        },
+        rfqStats: receivedData.rfqStats || {
+          total: 0,
+          approved: 0,
+          rejected: 0,
+          pending: 0
+        },
+        bodyTypeFrequency: receivedData.bodyTypeFrequency || [],
+        quarterlyStatus: receivedData.quarterlyStatus || []
+      });
     } catch (err) {
       console.error('Error fetching analysis data:', err);
-      toast.error('Failed to load analysis data');
+      
+      // Extract error message from different error formats
+      let errorMessage = 'Failed to load analysis data';
+      if (err.response) {
+        // Server responded with error status
+        errorMessage = err.response.data?.message || err.response.data?.error || errorMessage;
+        console.error('Error response:', err.response.data);
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMessage = 'No response from server. Please check your connection.';
+        console.error('No response received:', err.request);
+      } else {
+        // Error setting up request
+        errorMessage = err.message || errorMessage;
+        console.error('Request setup error:', err.message);
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -242,6 +324,13 @@ const QuotationAnalysisPage = () => {
   const handleExportReport = async () => {
     try {
       const dateRange = getDateRange();
+      
+      // Validate date range
+      if (!dateRange.startDate || !dateRange.endDate) {
+        toast.error('Invalid date range. Please select a valid time period.');
+        return;
+      }
+      
       const response = await ApiHelper.get('/api/quotations/analysis/export', {
         params: { 
           format: 'csv',
@@ -251,7 +340,34 @@ const QuotationAnalysisPage = () => {
         responseType: 'blob'
       });
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Check response status and content type
+      const contentType = response.headers['content-type'] || '';
+      
+      // If content type is JSON, it's likely an error response
+      if (contentType.includes('application/json')) {
+        try {
+          const text = await response.data.text();
+          const errorData = JSON.parse(text);
+          const errorMessage = errorData.message || 'Failed to export report';
+          console.error('Export error:', errorData);
+          toast.error(errorMessage);
+          return;
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          toast.error('Failed to export report. Invalid response format.');
+          return;
+        }
+      }
+      
+      // Verify it's a CSV blob
+      if (!(response.data instanceof Blob)) {
+        console.error('Invalid response type:', typeof response.data);
+        toast.error('Failed to export report. Invalid response format.');
+        return;
+      }
+      
+      // Create download link for blob
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `quotation-analysis-${new Date().toISOString().split('T')[0]}.csv`);
@@ -261,8 +377,46 @@ const QuotationAnalysisPage = () => {
       window.URL.revokeObjectURL(url);
       
       toast.success('Report exported successfully');
-    } catch {
-      toast.error('Failed to export report');
+    } catch (err) {
+      console.error('Error exporting report:', err);
+      
+      // Extract error message from different error formats
+      let errorMessage = 'Failed to export report';
+      if (err.response) {
+        // Check content type to determine if it's JSON error or blob
+        const contentType = err.response.headers?.['content-type'] || '';
+        
+        if (contentType.includes('application/json')) {
+          // JSON error response
+          errorMessage = err.response.data?.message || err.response.data?.error || errorMessage;
+        } else if (err.response.data instanceof Blob) {
+          // Blob that might contain error JSON
+          try {
+            const text = await err.response.data.text();
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.message || errorMessage;
+          } catch {
+            // If can't parse, use status-based message
+            errorMessage = `Export failed with status ${err.response.status}`;
+          }
+        } else {
+          // Regular error response
+          errorMessage = err.response.data?.message || err.response.data?.error || errorMessage;
+        }
+        console.error('Error response:', {
+          status: err.response.status,
+          data: err.response.data,
+          headers: err.response.headers
+        });
+      } else if (err.request) {
+        errorMessage = 'No response from server. Please check your connection.';
+        console.error('No response received:', err.request);
+      } else {
+        errorMessage = err.message || errorMessage;
+        console.error('Request setup error:', err.message);
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -301,6 +455,7 @@ const QuotationAnalysisPage = () => {
     value: data.count
   }));
 
+  // eslint-disable-next-line no-unused-vars
   const StatCard = ({ title, value, icon: Icon, color = 'blue', subtitle }) => {
     const colorClasses = {
       blue: 'bg-blue-50 border-blue-200 text-blue-600',
@@ -669,73 +824,41 @@ const QuotationAnalysisPage = () => {
           </div>
         )}
 
-        {/* Body Type Frequency Treemap */}
+        {/* Body Type Frequency Bar Chart */}
         {Array.isArray(selectedSections) && selectedSections.includes('bodyTypeFrequency') && (
           <div className="mb-8">
             <h3 className="text-xl font-semibold text-gray-900 mb-6">Body Type Frequency (RFQ & Quotation)</h3>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              {analysisData.bodyTypeFrequency && analysisData.bodyTypeFrequency.length > 0 ? (
+              {analysisData.bodyTypeFrequency && Array.isArray(analysisData.bodyTypeFrequency) && analysisData.bodyTypeFrequency.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
-                  <Treemap
-                    data={analysisData.bodyTypeFrequency}
-                    dataKey="total"
-                    ratio={4/3}
-                    stroke="#fff"
-                    fill="#8884d8"
-                    content={({ x, y, width, height, index, payload }) => {
-                      if (!payload || !payload.name) {
-                        return null;
-                      }
-                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-                      const color = colors[index % colors.length];
-                      return (
-                        <g>
-                          <rect
-                            x={x}
-                            y={y}
-                            width={width}
-                            height={height}
-                            style={{
-                              fill: color,
-                              stroke: '#fff',
-                              strokeWidth: 2
-                            }}
-                          />
-                          <text
-                            x={x + width / 2}
-                            y={y + height / 2 - 10}
-                            textAnchor="middle"
-                            fill="#fff"
-                            fontSize={14}
-                            fontWeight="bold"
-                          >
-                            {payload.name || 'Unknown'}
-                          </text>
-                          <text
-                            x={x + width / 2}
-                            y={y + height / 2 + 10}
-                            textAnchor="middle"
-                            fill="#fff"
-                            fontSize={12}
-                          >
-                            RFQ: {payload.rfq || 0} | Qtn: {payload.quotation || 0}
-                          </text>
-                          <text
-                            x={x + width / 2}
-                            y={y + height / 2 + 25}
-                            textAnchor="middle"
-                            fill="#fff"
-                            fontSize={11}
-                          >
-                            Total: {payload.total || 0}
-                          </text>
-                        </g>
-                      );
-                    }}
-                  />
+                  <RechartsBarChart data={analysisData.bodyTypeFrequency}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                    />
+                    <YAxis 
+                      label={{ value: 'Count', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="rfq" fill="#3B82F6" name="RFQ" />
+                    <Bar dataKey="quotation" fill="#10B981" name="Quotation" />
+                    <Bar dataKey="total" fill="#8B5CF6" name="Total" />
+                  </RechartsBarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-gray-500 text-center py-8">No body type data available</p>
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-500 mb-2">No body type data available</p>
+                  <p className="text-xs text-gray-400">
+                    {analysisData.bodyTypeFrequency 
+                      ? 'Body type data is empty. Make sure RFQs and Quotations have bodyTypeId assigned.'
+                      : 'Body type frequency data not loaded.'}
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -944,93 +1067,6 @@ const QuotationAnalysisPage = () => {
           </div>
         )}
 
-        {/* Top Customers */}
-        {Array.isArray(selectedSections) && selectedSections.includes('topCustomers') && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Top Customers</h3>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              {analysisData.topCustomers.length > 0 ? (
-                <div className="space-y-4">
-                  {analysisData.topCustomers.map((customer, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                          <span className="text-sm font-semibold text-blue-600">#{index + 1}</span>
-                        </div>
-                        <div>
-                          <h4 className="font-medium text-gray-900">{customer.name}</h4>
-                          <p className="text-sm text-gray-500">
-                            {customer.quotations} quotation{customer.quotations !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-gray-500">Win:</span>
-                            <span className="text-sm font-medium text-green-600">
-                              {customer.statusBreakdown.win}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-gray-500">Loss:</span>
-                            <span className="text-sm font-medium text-red-600">
-                              {customer.statusBreakdown.loss}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900">
-                            {customer.quotations > 0 ? Math.round((customer.statusBreakdown.win / customer.quotations) * 100) : 0}%
-                          </div>
-                          <div className="text-xs text-gray-500">Win Rate</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-8">No customer data available</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Recent Activity */}
-        {Array.isArray(selectedSections) && selectedSections.includes('recentActivity') && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Recent Activity</h3>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              {analysisData.recentActivity.length > 0 ? (
-                <div className="space-y-3">
-                  {analysisData.recentActivity.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-2 h-2 rounded-full ${
-                          activity.type === 'win' ? 'bg-green-500' :
-                          activity.type === 'loss' ? 'bg-red-500' :
-                          activity.type === 'close' ? 'bg-gray-500' :
-                          'bg-blue-500'
-                        }`}></div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{activity.description}</p>
-                          <p className="text-xs text-gray-500 capitalize">
-                            Status: {activity.type}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">{activity.date}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-8">No recent activity found</p>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
