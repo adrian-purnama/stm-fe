@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import {
   Search,
   Eye,
@@ -33,6 +33,7 @@ import {
   getSectionPreferences,
   PREFERENCE_SECTIONS 
 } from '../../utils/helpers/UserPreferences';
+import { UserContext } from '../../utils/contexts/UserContext';
 
 const statusOptions = [
   { value: '', label: 'All Status' },
@@ -126,6 +127,62 @@ const deriveSpkTypeFromCode = (code) => {
 };
 
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
+  const { user } = useContext(UserContext);
+  
+  // Helper function to check if user can edit/delete a quotation
+  const canEditQuotation = useCallback((header) => {
+    if (!user || !user.permissions) return false;
+    
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    
+    // Check if user has edit permissions
+    const hasEditPermission = permissions.includes('quotation_edit') ||
+                              permissions.includes('quotation_admin') ||
+                              permissions.includes('admin') ||
+                              permissions.includes('manager');
+    
+    // Check if user is the creator
+    const creatorId = header?.creatorId?._id || header?.creatorId || header?.createdBy?._id || header?.createdBy;
+    const userId = user.id || user._id;
+    const isCreator = creatorId && userId && (
+      creatorId.toString() === userId.toString() ||
+      (typeof creatorId === 'object' && creatorId.toString() === userId.toString())
+    );
+    
+    return hasEditPermission || isCreator;
+  }, [user]);
+  
+  // Helper function to check if user can delete a quotation
+  const canDeleteQuotation = useCallback((header) => {
+    if (!user || !user.permissions) return false;
+    
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    
+    // Check if user has delete permissions
+    const hasDeletePermission = permissions.includes('quotation_delete') ||
+                                 permissions.includes('quotation_admin') ||
+                                 permissions.includes('admin') ||
+                                 permissions.includes('manager');
+    
+    // Check if user is the creator
+    const creatorId = header?.creatorId?._id || header?.creatorId || header?.createdBy?._id || header?.createdBy;
+    const userId = user.id || user._id;
+    const isCreator = creatorId && userId && (
+      creatorId.toString() === userId.toString() ||
+      (typeof creatorId === 'object' && creatorId.toString() === userId.toString())
+    );
+    
+    return hasDeletePermission || isCreator;
+  }, [user]);
+  
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -1728,8 +1785,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     <Eye className="h-4 w-4" />
                     <span className="hidden text-xs sm:inline">Preview</span>
                   </button>
-                {/* Action buttons - conditional based on actionMode */}
-                {actionMode === 'full' && (
+                {/* Action buttons - conditional based on actionMode and permissions */}
+                {actionMode === 'full' && canEditQuotation(header) && (
                   <>
                     <button
                       onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.NEW_OFFER, header })}
@@ -1758,16 +1815,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                       <Clock className="h-4 w-4" />
                       <span className="hidden text-xs sm:inline">Follow-up</span>
                       </button>
-                      <button
-                        onClick={() => handleDeleteQuotation(header)}
-                        data-tooltip-id={`delete-quotation-${header._id}`}
-                        data-tooltip-content="Delete entire quotation"
-                        className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="hidden text-xs sm:inline">Delete</span>
-                    </button>
                   </>
+                )}
+                {actionMode === 'full' && canDeleteQuotation(header) && (
+                  <button
+                    onClick={() => handleDeleteQuotation(header)}
+                    data-tooltip-id={`delete-quotation-${header._id}`}
+                    data-tooltip-content="Delete entire quotation"
+                    className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden text-xs sm:inline">Delete</span>
+                  </button>
                 )}
                 </div>
               </div>
@@ -1958,8 +2017,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                     >
                                       <FileDown className="h-4 w-4" />
                                     </button>
-                                    {/* Offer action buttons - conditional based on actionMode */}
-                                    {actionMode === 'full' && (
+                                    {/* Offer action buttons - conditional based on actionMode and permissions */}
+                                    {actionMode === 'full' && canEditQuotation(header) && (
                                       <>
                                         <button
                                           onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
@@ -1977,6 +2036,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                   >
                                     <Plus className="h-4 w-4" />
                                   </button>
+                                </>
+                              )}
+                                    {actionMode === 'full' && canDeleteQuotation(header) && (
                                   <button
                                           onClick={() => handleDeleteOffer(offerGroup, header)}
                                           data-tooltip-id={`offer-delete-${offerGroup._id}`}
@@ -1985,8 +2047,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
-                                </>
-                              )}
+                                    )}
                             </div>
                 </div>
                               </div>
@@ -2043,8 +2104,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                 >
                                   <FileDown className="h-4 w-4" />
                                 </button>
-                                {/* Offer action buttons - conditional based on actionMode */}
-                                {actionMode === 'full' && (
+                                {/* Offer action buttons - conditional based on actionMode and permissions */}
+                                {actionMode === 'full' && canEditQuotation(header) && (
                                   <>
                                     <button
                                       onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
@@ -2064,15 +2125,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                         <Plus className="h-4 w-4" />
                                       </button>
                                     )}
-                                    <button
-                                      onClick={() => handleDeleteOffer(offerGroup.original, header)}
-                                      data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
-                                      data-tooltip-content="Delete offer"
-                                      className="text-red-600 hover:text-red-900 p-1"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
                                   </>
+                                )}
+                                {actionMode === 'full' && canDeleteQuotation(header) && (
+                                  <button
+                                    onClick={() => handleDeleteOffer(offerGroup.original, header)}
+                                    data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
+                                    data-tooltip-content="Delete offer"
+                                    className="text-red-600 hover:text-red-900 p-1"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -2115,8 +2178,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                     >
                                       <Eye className="h-4 w-4" />
                                     </button>
-                                    {/* Revision action buttons - conditional based on actionMode */}
-                                    {actionMode === 'full' && (
+                                    {/* Revision action buttons - conditional based on actionMode and permissions */}
+                                    {actionMode === 'full' && canEditQuotation(header) && (
                                       <>
                                         <button
                                           onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
@@ -2136,15 +2199,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                             <Plus className="h-4 w-4" />
                                           </button>
                                         )}
-                                        <button
-                                          onClick={() => handleDeleteOffer(revision, header)}
-                                          data-tooltip-id={`offer-delete-${revision._id}`}
-                                          data-tooltip-content="Delete revision"
-                                          className="text-red-600 hover:text-red-900 p-1"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </button>
                                       </>
+                                    )}
+                                    {actionMode === 'full' && canDeleteQuotation(header) && (
+                                      <button
+                                        onClick={() => handleDeleteOffer(revision, header)}
+                                        data-tooltip-id={`offer-delete-${revision._id}`}
+                                        data-tooltip-content="Delete revision"
+                                        className="text-red-600 hover:text-red-900 p-1"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -2171,7 +2236,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     {quotationData.header.progress && quotationData.header.progress.length > 0 ? (
                       quotationData.header.progress.map((progressItem, index) => (
                         <div key={index} className="group flex items-center justify-between bg-white p-2 rounded border border-gray-200 text-sm">
-                          {editingProgress[`${header.quotationNumber}-${index}`] !== undefined ? (
+                          {editingProgress[`${header.quotationNumber}-${index}`] !== undefined && canEditQuotation(header) ? (
                             <div className="flex items-center space-x-2 flex-1">
                               <input
                                 type="text"
@@ -2206,22 +2271,26 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                           ) : (
                             <>
                               <span className="text-gray-700 flex-1">{progressItem}</span>
-                              <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => handleEditProgress(header.quotationNumber, index, progressItem)}
-                                  className="p-1 text-blue-600 hover:text-blue-700"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProgress(header.quotationNumber, index)}
-                                  className="p-1 text-red-600 hover:text-red-700"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
+                              {canEditQuotation(header) && (
+                                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => handleEditProgress(header.quotationNumber, index, progressItem)}
+                                    className="p-1 text-blue-600 hover:text-blue-700"
+                                    title="Edit"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </button>
+                                  {canDeleteQuotation(header) && (
+                                    <button
+                                      onClick={() => handleDeleteProgress(header.quotationNumber, index)}
+                                      className="p-1 text-red-600 hover:text-red-700"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
@@ -2231,30 +2300,32 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     )}
                   </div>
 
-                  {/* Add Progress Input */}
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={progressInputs[header.quotationNumber] || ''}
-                      onChange={(e) => setProgressInputs(prev => ({
-                        ...prev,
-                        [header.quotationNumber]: e.target.value
-                      }))}
-                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      placeholder="Add progress..."
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleAddProgress(header.quotationNumber);
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => handleAddProgress(header.quotationNumber)}
-                      className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                    >
-                      Add
-                    </button>
-                  </div>
+                  {/* Add Progress Input - Only show if user can edit */}
+                  {canEditQuotation(header) && (
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={progressInputs[header.quotationNumber] || ''}
+                        onChange={(e) => setProgressInputs(prev => ({
+                          ...prev,
+                          [header.quotationNumber]: e.target.value
+                        }))}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Add progress..."
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddProgress(header.quotationNumber);
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => handleAddProgress(header.quotationNumber)}
+                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
