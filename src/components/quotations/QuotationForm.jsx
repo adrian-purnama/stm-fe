@@ -209,9 +209,15 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
   }, [processedQuotation]);
 
   // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
-  // Exception: If user is the creator of the quotation, they can edit it even with only viewer permissions
+  // Exception 1: If user is creating a NEW quotation, they should be able to create it even with only viewer permissions
+  // Exception 2: If user is the creator of an existing quotation, they can edit it even with only viewer permissions
   const isViewerOnly = useMemo(() => {
     if (!user || !user.permissions) return false;
+    
+    // Allow creation of new quotations - viewer-only restriction doesn't apply when creating
+    if (mode === 'create-quotation' || mode === 'create-from-rfq') {
+      return false;
+    }
     
     const permissions = user.permissions.map(perm => {
       if (typeof perm === 'string') return perm;
@@ -254,7 +260,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     
     // User has viewer permission but no edit/delete/admin permissions and is not the creator
     return true;
-  }, [user, processedQuotation]);
+  }, [user, processedQuotation, mode]);
 
   useEffect(() => {
     console.log('[DEBUG] useEffect triggered with:', { processedQuotation, activeOffer, mode, rfqId });
