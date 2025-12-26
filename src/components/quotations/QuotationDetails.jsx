@@ -668,48 +668,98 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
           updated.spkYear = currentMeta.year;
         }
 
-        if (!updated.selectedOfferId) {
-          const defaultOfferId = (() => {
-            if (!offers.length) return '';
-            const first = offers[0];
-            if (first.original) {
-              return first.original._id?.toString?.() ?? first.original._id ?? '';
+        // Count total offers (original + revisions)
+        const totalOffers = offers.reduce((count, offerGroup) => {
+          if (offerGroup.original) {
+            return count + 1 + (offerGroup.revisions?.length || 0);
+          }
+          return count + 1;
+        }, 0);
+
+        const defaultOfferId = (() => {
+          if (!offers.length) return '';
+          const first = offers[0];
+          if (first.original) {
+            return first.original._id?.toString?.() ?? first.original._id ?? '';
+          }
+          return first._id?.toString?.() ?? first._id ?? '';
+        })();
+
+        const targetOfferId = updated.selectedOfferId || defaultOfferId;
+
+        // Find the target offer and its items
+        let targetOfferItems = [];
+        offers.forEach((offerGroup) => {
+          const inspectOffer = (offer) => {
+            if (!offer) return;
+            const offerIdStr = offer._id?.toString?.() ?? offer._id;
+            const targetIdStr = targetOfferId?.toString?.() ?? targetOfferId;
+            if (offerIdStr === targetIdStr) {
+              targetOfferItems = offer.offerItems || [];
             }
-            return first._id?.toString?.() ?? first._id ?? '';
-          })();
+          };
 
-          const acceptedSelection = (() => {
-            let foundOfferId = '';
-            let foundItemIds = [];
+          if (offerGroup.original) {
+            inspectOffer(offerGroup.original);
+          } else {
+            inspectOffer(offerGroup);
+          }
+          (offerGroup.revisions || []).forEach(inspectOffer);
+        });
 
-            offers.forEach((offerGroup) => {
-              const inspectOffer = (offer) => {
-                if (!offer) return;
-                const acceptedItems = (offer.offerItems || []).filter((item) => item.isAccepted);
-                if (acceptedItems.length && !foundOfferId) {
-                  foundOfferId = offer._id?.toString?.() ?? offer._id;
-                  foundItemIds = acceptedItems.map((item) => item._id?.toString?.() ?? item._id);
-                }
-              };
+        // Check for previously accepted items
+        const acceptedSelection = (() => {
+          let foundOfferId = '';
+          let foundItemIds = [];
 
-              if (offerGroup.original) {
-                inspectOffer(offerGroup.original);
-              } else {
-                inspectOffer(offerGroup);
+          offers.forEach((offerGroup) => {
+            const inspectOffer = (offer) => {
+              if (!offer) return;
+              const acceptedItems = (offer.offerItems || []).filter((item) => item.isAccepted);
+              if (acceptedItems.length && !foundOfferId) {
+                foundOfferId = offer._id?.toString?.() ?? offer._id;
+                foundItemIds = acceptedItems.map((item) => item._id?.toString?.() ?? item._id);
               }
-              (offerGroup.revisions || []).forEach(inspectOffer);
-            });
-
-            return {
-              offerId: foundOfferId,
-              itemIds: foundItemIds
             };
-          })();
 
+            if (offerGroup.original) {
+              inspectOffer(offerGroup.original);
+            } else {
+              inspectOffer(offerGroup);
+            }
+            (offerGroup.revisions || []).forEach(inspectOffer);
+          });
+
+          return {
+            offerId: foundOfferId,
+            itemIds: foundItemIds
+          };
+        })();
+
+        // Auto-select logic based on case
+        if (!updated.selectedOfferId) {
           updated.selectedOfferId =
-            acceptedSelection.offerId || defaultOfferId || updated.selectedOfferId;
-          if (!updated.selectedItemIds.length) {
-            updated.selectedItemIds = acceptedSelection.itemIds;
+            acceptedSelection.offerId || targetOfferId || updated.selectedOfferId;
+        }
+
+        // Case 1: 1 offer, 1 item - auto-select both offer and item
+        if (totalOffers === 1 && targetOfferItems.length === 1) {
+          updated.selectedOfferId = targetOfferId;
+          updated.selectedItemIds = [targetOfferItems[0]._id?.toString?.() ?? targetOfferItems[0]._id];
+        }
+        // Case 2: 1 offer, multiple items - auto-select offer, leave items for user selection
+        else if (totalOffers === 1 && targetOfferItems.length > 1) {
+          updated.selectedOfferId = targetOfferId;
+          // Keep existing selectedItemIds if any (from acceptedSelection), otherwise leave empty for user to select
+          if (!updated.selectedItemIds || !updated.selectedItemIds.length) {
+            updated.selectedItemIds = acceptedSelection.itemIds || [];
+          }
+        }
+        // Case 3: Multiple offers - use existing logic (user must select)
+        else {
+          // Keep existing selectedItemIds if any (from acceptedSelection)
+          if (!updated.selectedItemIds || !updated.selectedItemIds.length) {
+            updated.selectedItemIds = acceptedSelection.itemIds || [];
           }
         }
       }
@@ -728,7 +778,7 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
   const handleStatusUpdate = async () => {
     try {
       setStatusUpdateLoading(true);
-      const {
+      let {
         status,
         reason,
         selectedOfferId,
@@ -795,10 +845,21 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
           (offerGroup.revisions || []).forEach(inspectOffer);
         });
 
-        if (selectedOfferItems.length > 1 && (selectedItemIds?.length || 0) === 0) {
+        // Auto-select single item if 1 offer 1 item case and no items selected
+        let finalSelectedItemIds = selectedItemIds || [];
+        if (selectedOfferItems.length === 1 && (!finalSelectedItemIds || finalSelectedItemIds.length === 0)) {
+          finalSelectedItemIds = [selectedOfferItems[0]._id?.toString?.() ?? selectedOfferItems[0]._id];
+        }
+
+        // Validation: only require selection if multiple items and none selected
+        if (selectedOfferItems.length > 1 && (finalSelectedItemIds?.length || 0) === 0) {
           toast.error('Please select at least one winning item');
+          setStatusUpdateLoading(false);
           return;
         }
+
+        // Update selectedItemIds for payload
+        selectedItemIds = finalSelectedItemIds;
       }
 
       let finalReason = reason;
@@ -1533,9 +1594,18 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                 }
 
                 // Filter to show only winning items
-                const winningItems = (actualWinningOffer.offerItems || []).filter(item => 
-                  headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.includes(item._id)
-                );
+                const allItems = actualWinningOffer.offerItems || [];
+                const winningItems = allItems.filter(item => {
+                  // If no selectedOfferItemIds but there's only 1 item, treat it as winning (fallback for auto-selected case)
+                  if (!headerState.selectedOfferItemIds || !headerState.selectedOfferItemIds.length) {
+                    return allItems.length === 1;
+                  }
+                  const itemIdStr = item._id?.toString?.() ?? item._id;
+                  return headerState.selectedOfferItemIds.some(id => {
+                    const idStr = id?.toString?.() ?? id;
+                    return idStr === itemIdStr;
+                  });
+                });
 
                 return (
                   <div key={actualWinningOffer._id} className="border border-green-200 rounded-lg overflow-hidden bg-green-50">
@@ -1901,16 +1971,31 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
               </h3>
               <div className="space-y-4">
                 {(headerState.status?.type === 'win' 
-                  ? activeOffer.offerItems.filter(item => 
-                      headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.includes(item._id)
-                    )
+                  ? activeOffer.offerItems.filter(item => {
+                      const allItems = activeOffer.offerItems || [];
+                      // If no selectedOfferItemIds but there's only 1 item, treat it as winning (fallback for auto-selected case)
+                      if (!headerState.selectedOfferItemIds || !headerState.selectedOfferItemIds.length) {
+                        return allItems.length === 1;
+                      }
+                      const itemIdStr = item._id?.toString?.() ?? item._id;
+                      return headerState.selectedOfferItemIds.some(id => {
+                        const idStr = id?.toString?.() ?? id;
+                        return idStr === itemIdStr;
+                      });
+                    })
                   : activeOffer.offerItems
                 ).map((item, index) => {
                   const itemNumber = item.itemNumber || index + 1;
+                  const itemIdStr = item._id?.toString?.() ?? item._id;
+                  const allItems = activeOffer.offerItems || [];
                   const isWinner =
                     headerState.status?.type === 'win' &&
-                    headerState.selectedOfferItemIds &&
-                    headerState.selectedOfferItemIds.includes(item._id);
+                    (headerState.selectedOfferItemIds && headerState.selectedOfferItemIds.length
+                      ? headerState.selectedOfferItemIds.some(id => {
+                          const idStr = id?.toString?.() ?? id;
+                          return idStr === itemIdStr;
+                        })
+                      : allItems.length === 1); // Fallback: if only 1 item and no selection, it's the winner
                   const isService = lineOfBusinessType === 'service';
                   const isSparepart = lineOfBusinessType === 'sparepart';
                   const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
@@ -2340,52 +2425,94 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
             let selectedOfferItems = [];
             
             offers.forEach((offerGroup) => {
-              if (offerGroup.original && offerGroup.original._id === statusForm.selectedOfferId) {
-                selectedOfferItems = offerGroup.original.offerItems || [];
-              } else if (offerGroup.revisions) {
-                const revision = offerGroup.revisions.find(rev => rev._id === statusForm.selectedOfferId);
+              const offerIdStr = statusForm.selectedOfferId?.toString?.() ?? statusForm.selectedOfferId;
+              if (offerGroup.original) {
+                const originalIdStr = offerGroup.original._id?.toString?.() ?? offerGroup.original._id;
+                if (originalIdStr === offerIdStr) {
+                  selectedOfferItems = offerGroup.original.offerItems || [];
+                }
+              }
+              if (offerGroup.revisions) {
+                const revision = offerGroup.revisions.find(rev => {
+                  const revIdStr = rev._id?.toString?.() ?? rev._id;
+                  return revIdStr === offerIdStr;
+                });
                 if (revision) {
                   selectedOfferItems = revision.offerItems || [];
                 }
               }
             });
+
+            // Count total offers for determining if we need to show selection UI
+            const totalOffers = offers.reduce((count, offerGroup) => {
+              if (offerGroup.original) {
+                return count + 1 + (offerGroup.revisions?.length || 0);
+              }
+              return count + 1;
+            }, 0);
+
+            // Case 1: 1 offer, 1 item - show info but item is auto-selected (checkbox checked and disabled)
+            if (totalOffers === 1 && selectedOfferItems.length === 1) {
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <div className="text-sm text-blue-800">
+                    <strong>Auto-selected:</strong> This quotation has 1 offer with 1 item, which has been automatically selected.
+                  </div>
+                  <div className="mt-2 text-xs text-blue-600">
+                    Item: {selectedOfferItems[0].karoseri} - {selectedOfferItems[0].chassis}
+                  </div>
+                </div>
+              );
+            }
             
+            // Case 2: 1 offer, multiple items OR Case 3: Multiple offers - show item selection UI
             return selectedOfferItems.length > 1 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Winning Items * ({selectedOfferItems.length} items available)
                 </label>
                 <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3 space-y-2">
-                  {selectedOfferItems.map((item, index) => (
-                    <label key={item._id || index} className="flex items-center space-x-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={statusForm.selectedItemIds?.includes(item._id) || false}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setStatusForm(prev => ({
-                              ...prev,
-                              selectedItemIds: [...(prev.selectedItemIds || []), item._id]
-                            }));
-                          } else {
-                            setStatusForm(prev => ({
-                              ...prev,
-                              selectedItemIds: (prev.selectedItemIds || []).filter(id => id !== item._id)
-                            }));
-                          }
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis}
+                  {selectedOfferItems.map((item, index) => {
+                    const itemIdStr = item._id?.toString?.() ?? item._id;
+                    const isChecked = statusForm.selectedItemIds?.some(id => {
+                      const idStr = id?.toString?.() ?? id;
+                      return idStr === itemIdStr;
+                    }) || false;
+                    
+                    return (
+                      <label key={item._id || index} className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setStatusForm(prev => ({
+                                ...prev,
+                                selectedItemIds: [...(prev.selectedItemIds || []), item._id]
+                              }));
+                            } else {
+                              setStatusForm(prev => ({
+                                ...prev,
+                                selectedItemIds: (prev.selectedItemIds || []).filter(id => {
+                                  const idStr = id?.toString?.() ?? id;
+                                  return idStr !== itemIdStr;
+                                })
+                              }));
+                            }
+                          }}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900">
+                            Item {item.itemNumber || (index + 1)}: {item.karoseri} - {item.chassis}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {formatPriceWithCurrency(item.netto)}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {formatPriceWithCurrency(item.netto)}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
                 <div className="mt-2 text-sm text-gray-600">
                   Selected: {statusForm.selectedItemIds?.length || 0} of {selectedOfferItems.length} items

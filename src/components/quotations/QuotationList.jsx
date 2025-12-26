@@ -1819,9 +1819,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                       }
 
                       // Filter to show only winning items
-                      const winningItems = (actualWinningOffer.offerItems || []).filter(item => 
-                        header.selectedOfferItemIds && header.selectedOfferItemIds.includes(item._id)
-                      );
+                      const allItems = actualWinningOffer.offerItems || [];
+                      const winningItems = allItems.filter(item => {
+                        // If no selectedOfferItemIds but there's only 1 item, treat it as winning (fallback for auto-selected case)
+                        if (!header.selectedOfferItemIds || !header.selectedOfferItemIds.length) {
+                          return allItems.length === 1;
+                        }
+                        const itemIdStr = item._id?.toString?.() ?? item._id;
+                        return header.selectedOfferItemIds.some(id => {
+                          const idStr = id?.toString?.() ?? id;
+                          return idStr === itemIdStr;
+                        });
+                      });
 
                       return (
                         <div key={actualWinningOffer._id} className="border border-green-200 rounded-lg overflow-hidden bg-green-50">

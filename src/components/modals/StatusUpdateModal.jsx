@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Save } from 'lucide-react';
 import BaseModal from './BaseModal';
 import CustomDropdown from '../common/CustomDropdown';
@@ -14,13 +14,26 @@ const StatusUpdateModal = ({ isOpen, onClose, quotation, onUpdate }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Get quotation identifier (_id or quotationNumber) from quotation object (handle different structures)
+  const quotationIdentifier = useMemo(() => {
+    if (!quotation) return null;
+    // Prefer quotationNumber if available, otherwise use _id
+    // Try different possible structures
+    return quotation.quotationNumber || 
+           quotation.header?.quotationNumber || 
+           quotation.header?._id ||
+           quotation._id ||
+           null;
+  }, [quotation]);
+
   // Initialize form data with current quotation status when modal opens
   useEffect(() => {
     if (quotation && isOpen) {
+      const status = quotation.status || quotation.header?.status;
       setFormData({
         status: {
-          type: quotation.status?.type || 'open',
-          reason: quotation.status?.reason || ''
+          type: status?.type || 'open',
+          reason: status?.reason || ''
         }
       });
     }
@@ -41,8 +54,10 @@ const StatusUpdateModal = ({ isOpen, onClose, quotation, onUpdate }) => {
     setLoading(true);
 
     try {
+      // Backend expects status and reason as top-level fields, not nested
       const updateData = {
-        status: formData.status
+        status: formData.status.type,
+        reason: formData.status.reason || ''
       };
 
       // Add reason data for close/loss statuses
@@ -54,24 +69,53 @@ const StatusUpdateModal = ({ isOpen, onClose, quotation, onUpdate }) => {
         }
       }
 
+      // Use quotationIdentifier (_id or quotationNumber) - backend can handle both
+      if (!quotationIdentifier) {
+        toast.error('Quotation identifier not found');
+        setLoading(false);
+        return;
+      }
 
-      const response = await axiosInstance.patch(`/api/quotations/${quotation._id}/status`, updateData);
+      const response = await axiosInstance.patch(`/api/quotations/${encodeURIComponent(quotationIdentifier)}/status`, updateData);
 
-      if (response.data.success) {
+      // Backend returns: { success: true, data: updatedHeader }
+      if (response.data && response.data.success) {
         toast.success('Quotation status updated successfully!');
-        onUpdate(response.data.data.quotation);
-        onClose();
+        
+        // Backend returns the updated header directly in response.data.data
+        // Call onUpdate if provided, passing the updated header data
+        if (onUpdate && response.data.data) {
+          try {
+            onUpdate(response.data.data);
+          } catch (updateError) {
+            console.error('Error in onUpdate callback:', updateError);
+            // Don't throw - we still want to close the modal even if onUpdate fails
+          }
+        }
+        
+        // Reset form
         setFormData({
           status: {
             type: '',
             reason: ''
           }
         });
+        
+        // Reset loading state BEFORE closing modal to prevent stuck loading state
+        setLoading(false);
+        
+        // Close modal - use setTimeout to ensure state updates are processed
+        setTimeout(() => {
+          onClose();
+        }, 0);
+      } else {
+        // If response is not successful, show error
+        toast.error(response.data?.message || 'Failed to update status');
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error(error.response?.data?.message || 'Failed to update status');
-    } finally {
       setLoading(false);
     }
   };
