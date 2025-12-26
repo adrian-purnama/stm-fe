@@ -25,27 +25,6 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     notesImages: []
   });
 
-  // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
-  const isViewerOnly = useMemo(() => {
-    if (!user || !user.permissions) return false;
-    
-    const permissions = user.permissions.map(perm => {
-      if (typeof perm === 'string') return perm;
-      if (perm.name) return perm.name;
-      return null;
-    }).filter(Boolean);
-    
-    const hasViewerPermission = permissions.includes('all_quotation_viewer');
-    const hasEditPermission = permissions.includes('quotation_edit');
-    const hasDeletePermission = permissions.includes('quotation_delete');
-    const hasAdminPermission = permissions.includes('quotation_admin') || 
-                               permissions.includes('admin') || 
-                               permissions.includes('manager');
-    
-    // User is viewer-only if they have viewer permission but no edit/delete/admin permissions
-    return hasViewerPermission && !hasEditPermission && !hasDeletePermission && !hasAdminPermission;
-  }, [user]);
-
   // Get line of business type from quotation data
   const lineOfBusinessType = useMemo(() => {
     if (quotation?.header?.lineOfBusiness?.type) {
@@ -228,6 +207,54 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     console.log('[DEBUG] No active offer found');
     return null;
   }, [processedQuotation]);
+
+  // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
+  // Exception: If user is the creator of the quotation, they can edit it even with only viewer permissions
+  const isViewerOnly = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    
+    const hasViewerPermission = permissions.includes('all_quotation_viewer');
+    const hasEditPermission = permissions.includes('quotation_edit');
+    const hasDeletePermission = permissions.includes('quotation_delete');
+    const hasAdminPermission = permissions.includes('quotation_admin') || 
+                               permissions.includes('admin') || 
+                               permissions.includes('manager');
+    
+    // If user has edit/delete/admin permissions, they're not viewer-only
+    if (hasEditPermission || hasDeletePermission || hasAdminPermission) {
+      return false;
+    }
+    
+    // If user doesn't have viewer permission, they're not viewer-only (they might have other permissions)
+    if (!hasViewerPermission) {
+      return false;
+    }
+    
+    // User has viewer permission but no edit/delete/admin permissions
+    // Check if they are the creator - if so, allow editing
+    const header = processedQuotation?.header || processedQuotation;
+    const creatorId = header?.creatorId?._id || header?.creatorId || header?.createdBy?._id || header?.createdBy;
+    const userId = user.id || user._id;
+    
+    if (creatorId && userId) {
+      const isCreator = creatorId.toString() === userId.toString() ||
+                       (typeof creatorId === 'object' && creatorId.toString() === userId.toString());
+      
+      // If user is the creator, they can edit even with only viewer permissions
+      if (isCreator) {
+        return false;
+      }
+    }
+    
+    // User has viewer permission but no edit/delete/admin permissions and is not the creator
+    return true;
+  }, [user, processedQuotation]);
 
   useEffect(() => {
     console.log('[DEBUG] useEffect triggered with:', { processedQuotation, activeOffer, mode, rfqId });
