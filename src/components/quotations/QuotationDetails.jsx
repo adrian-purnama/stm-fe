@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import {
   Edit,
   Trash2,
@@ -31,6 +31,7 @@ import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
 import RFQDetailsView from './RFQDetailsView';
 import RequestRFQModal from '../forms/RequestRFQModal';
 import { useNavigate } from 'react-router-dom';
+import { UserContext } from '../../utils/contexts/UserContext';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -120,6 +121,29 @@ const buildSpkPreview = (sequence, monthRoman, type, year) => {
 };
 
 const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) => {
+  const { user } = useContext(UserContext);
+  
+  // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
+  const isViewerOnly = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    
+    const hasViewerPermission = permissions.includes('all_quotation_viewer');
+    const hasEditPermission = permissions.includes('quotation_edit');
+    const hasDeletePermission = permissions.includes('quotation_delete');
+    const hasAdminPermission = permissions.includes('quotation_admin') || 
+                               permissions.includes('admin') || 
+                               permissions.includes('manager');
+    
+    // User is viewer-only if they have viewer permission but no edit/delete/admin permissions
+    return hasViewerPermission && !hasEditPermission && !hasDeletePermission && !hasAdminPermission;
+  }, [user]);
+
   const header = useMemo(() => {
     if (!quotation) return null;
     if (quotation.header) return quotation.header;
@@ -1114,40 +1138,44 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
           <div className="flex flex-col space-y-2">
             <div className="text-xs text-gray-500 font-medium">Quotation Actions</div>
             <div className="flex items-center space-x-1">
-              <button
-                onClick={handleOpenHeaderEditModal}
-                className="text-purple-600 hover:text-purple-900 p-2 transition-colors"
-                title="Edit Quotation Header"
-              >
-                <Edit className="h-5 w-5" />
-              </button>
-              <button
-                onClick={handleOpenStatusModal}
-                className="text-indigo-600 hover:text-indigo-900 p-2 transition-colors"
-                title="Update Status"
-              >
-                <CheckCircle className="h-5 w-5" />
-              </button>
-              <button
-                onClick={handleFollowUp}
-                className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
-                title="Mark Follow-up"
-              >
-                <Clock className="h-5 w-5" />
-              </button>
+              {!isViewerOnly && (
+                <>
+                  <button
+                    onClick={handleOpenHeaderEditModal}
+                    className="text-purple-600 hover:text-purple-900 p-2 transition-colors"
+                    title="Edit Quotation Header"
+                  >
+                    <Edit className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={handleOpenStatusModal}
+                    className="text-indigo-600 hover:text-indigo-900 p-2 transition-colors"
+                    title="Update Status"
+                  >
+                    <CheckCircle className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={handleFollowUp}
+                    className="text-blue-600 hover:text-blue-900 p-2 transition-colors"
+                    title="Mark Follow-up"
+                  >
+                    <Clock className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={handleDeleteQuotation}
+                    className="text-red-600 hover:text-red-900 p-2 transition-colors"
+                    title="Delete Quotation"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </>
+              )}
               <button
                 onClick={handleGenerateQuotation}
                 className="text-orange-600 hover:text-orange-900 p-2 transition-colors"
                 title="Preview Document"
               >
                 <FileText className="h-5 w-5" />
-              </button>
-              <button
-                onClick={handleDeleteQuotation}
-                className="text-red-600 hover:text-red-900 p-2 transition-colors"
-                title="Delete Quotation"
-              >
-                <Trash2 className="h-5 w-5" />
               </button>
             </div>
           </div>

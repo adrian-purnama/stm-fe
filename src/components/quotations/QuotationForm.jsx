@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Save, X, Upload, Image, X as XIcon, FileText, Eye } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
+import { Plus, Trash2, Save, X, Upload, Image, X as XIcon, FileText, Eye, File, Download } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
 import ApiHelper from '../../utils/api/ApiHelper';
@@ -9,8 +9,10 @@ import OfferItemForm from '../forms/OfferItemForm';
 import BaseModal from '../modals/BaseModal';
 import { formatPriceWithCurrency } from '../../utils/helpers/priceFormatter';
 import { getNotesImageAssetUrl } from '../../utils/helpers/assetUrlHelper';
+import { UserContext } from '../../utils/contexts/UserContext';
 
 const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation', stayInCurrentView = false, rfqId = null }) => {
+  const { user } = useContext(UserContext);
   const [formData, setFormData] = useState({
     customerName: '',
     contactPerson: {
@@ -22,6 +24,27 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     notes: '',
     notesImages: []
   });
+
+  // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
+  const isViewerOnly = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    
+    const hasViewerPermission = permissions.includes('all_quotation_viewer');
+    const hasEditPermission = permissions.includes('quotation_edit');
+    const hasDeletePermission = permissions.includes('quotation_delete');
+    const hasAdminPermission = permissions.includes('quotation_admin') || 
+                               permissions.includes('admin') || 
+                               permissions.includes('manager');
+    
+    // User is viewer-only if they have viewer permission but no edit/delete/admin permissions
+    return hasViewerPermission && !hasEditPermission && !hasDeletePermission && !hasAdminPermission;
+  }, [user]);
 
   // Get line of business type from quotation data
   const lineOfBusinessType = useMemo(() => {
@@ -415,7 +438,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     }));
 
     setPendingImages(prev => [...prev, ...newPendingImages]);
-    toast.success(`${files.length} image(s) selected for upload`);
+      toast.success(`${files.length} file(s) selected for upload`);
     
     // Reset file input
     event.target.value = '';
@@ -441,7 +464,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           }
           return updated;
         });
-        toast.success('Image removed from selection');
+        toast.success('File removed from selection');
         return;
       }
 
@@ -458,10 +481,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       }));
       setNotesImagesData(prev => prev.filter(img => img.id !== imageId));
       
-      toast.success('Image removed from form. Changes will be saved when you update the quotation.');
+      toast.success('File removed from form. Changes will be saved when you update the quotation.');
     } catch (error) {
       console.error('Error removing image:', error);
-      toast.error('Failed to remove image. Please try again.');
+      toast.error('Failed to remove file. Please try again.');
     }
   };
 
@@ -611,6 +634,12 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent viewers from submitting
+    if (isViewerOnly) {
+      toast.error('You do not have permission to edit quotations. You can only view them.');
+      return;
+    }
     
     // Prevent multiple submissions
     if (isSubmitting) {
@@ -945,10 +974,15 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-900">
             {(mode === 'create-quotation' || mode === 'create-from-rfq') && 'Create New Quotation'}
-            {mode === 'edit-offer' && 'Edit Quotation'}
+            {mode === 'edit-offer' && (isViewerOnly ? 'View Quotation (Read-Only)' : 'Edit Quotation')}
             {mode === 'revision' && 'Create Quotation Revision'}
             {mode === 'new-offer' && 'Create New Offer'}
           </h2>
+          {isViewerOnly && (
+            <div className="px-3 py-1 bg-yellow-100 border border-yellow-300 rounded-md">
+              <span className="text-sm text-yellow-800 font-medium">View Only Mode</span>
+            </div>
+          )}
           {rfqId && (
             <button
               type="button"
@@ -982,10 +1016,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               type="text"
               value={formData.customerName}
               onChange={(e) => handleInputChange('customerName', e.target.value)}
-              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
+              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'
+                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly
                   ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
                   : 'border-gray-300 focus:ring-blue-500'
               }`}
@@ -1001,10 +1035,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               type="text"
               value={formData.contactPerson.name}
               onChange={(e) => handleNestedInputChange('contactPerson', 'name', e.target.value)}
-              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
+              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'
+                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly
                   ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
                   : 'border-gray-300 focus:ring-blue-500'
               }`}
@@ -1024,10 +1058,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               ]}
               value={formData.contactPerson.gender}
               onChange={(value) => handleNestedInputChange('contactPerson', 'gender', value)}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision'}
+              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
               placeholder="Select gender"
               required={true}
-              className={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' ? 'opacity-50 cursor-not-allowed' : ''}
+              className={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly ? 'opacity-50 cursor-not-allowed' : ''}
             />
           </div>
         </div>
@@ -1037,20 +1071,22 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">Offer Items</h3>
-          <button
-            type="button"
-            onClick={addOfferItem}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Item
-          </button>
+          {!isViewerOnly && (
+            <button
+              type="button"
+              onClick={addOfferItem}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Item
+            </button>
+          )}
         </div>
         
         <div className="space-y-6">
           {formData.offerItems.map((item, index) => (
             <div key={index} className="border border-gray-200 rounded-lg">
-              {editingItemIndex === index ? (
+              {editingItemIndex === index && !isViewerOnly ? (
                 <OfferItemForm
                   item={item}
                   index={index}
@@ -1070,22 +1106,24 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         {lineOfBusinessType === 'sparepart' && item.sparepartName}
                       </p>
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => editOfferItem(index)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteOfferItem(index)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {!isViewerOnly && (
+                      <div className="flex space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => editOfferItem(index)}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteOfferItem(index)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
@@ -1111,7 +1149,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             </div>
           ))}
           
-          {editingItemIndex === formData.offerItems.length && (
+          {!isViewerOnly && editingItemIndex === formData.offerItems.length && (
             <OfferItemForm
               key={`new-item-${editingItemIndex}`}
               index={formData.offerItems.length}
@@ -1179,9 +1217,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               id="excludePPN"
               checked={formData.excludePPN}
               onChange={(e) => handleInputChange('excludePPN', e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              disabled={isViewerOnly}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            <label htmlFor="excludePPN" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="excludePPN" className={`ml-2 block text-sm ${isViewerOnly ? 'text-gray-500' : 'text-gray-700'}`}>
               Exclude PPN (VAT) - Prices do not include tax
             </label>
           </div>
@@ -1193,16 +1232,22 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             <textarea
               value={formData.notes}
               onChange={(e) => handleInputChange('notes', e.target.value)}
+              readOnly={isViewerOnly}
+              disabled={isViewerOnly}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                isViewerOnly 
+                  ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
               placeholder="Additional notes for this offer..."
             />
           </div>
 
-          {/* Notes Images Section */}
+          {/* Notes Images & Documents Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes Images
+              Notes Images & Documents
               {refreshingImages && (
                 <span className="ml-2 text-xs text-blue-600">
                   <svg className="inline-block animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
@@ -1219,16 +1264,23 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               <input
                 type="file"
                 multiple
-                accept="image/*"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
                 onChange={handleFileUpload}
-                disabled={uploadingImages}
+                disabled={uploadingImages || isViewerOnly}
                 className="hidden"
                 id="notes-image-upload"
               />
               <label
                 htmlFor="notes-image-upload"
-                className={`cursor-pointer ${uploadingImages ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={(e) => e.stopPropagation()}
+                className={`cursor-pointer ${uploadingImages || isViewerOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={(e) => {
+                  if (isViewerOnly) {
+                    e.preventDefault();
+                    toast.error('You do not have permission to upload files. You can only view them.');
+                  } else {
+                    e.stopPropagation();
+                  }
+                }}
               >
                 <div className="text-gray-500">
                   {uploadingImages ? (
@@ -1240,13 +1292,13 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                     <div>
                       <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
                       <p className="text-sm text-gray-600">
-                        Click to select images or drag and drop
+                        Click to select files or drag and drop
                       </p>
                       <p className="text-xs text-gray-500">
-                        PNG, JPG, GIF up to 10MB each
+                        Images (PNG, JPG, GIF, WEBP), Documents (PDF, DOC, DOCX, XLS, XLSX, TXT, CSV) up to 10MB each
                       </p>
                       <p className="text-xs text-blue-500 mt-1">
-                        Images will be uploaded when you save the form
+                        Files will be uploaded when you save the form
                       </p>
                     </div>
                   )}
@@ -1254,53 +1306,80 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               </label>
             </div>
 
-            {/* Images Grid */}
+            {/* Images & Documents Grid */}
             {(notesImagesData.length > 0 || pendingImages.length > 0) && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {/* Existing images */}
+                {/* Existing images and documents */}
                 {notesImagesData.map((imageData, index) => {
                   // Handle both populated objects and ObjectIds (same as QuotationDetails)
                   const imageId = imageData._id || imageData.id || imageData;
                   const imageFile = imageData.imageFile;
-                  const originalName = imageFile?.originalName || `Notes Image ${index + 1}`;
+                  const originalName = imageFile?.originalName || `File ${index + 1}`;
                   const fileId = imageFile?.fileId;
+                  const fileCategory = imageFile?.fileCategory || 'image';
+                  const fileType = imageFile?.fileType || '';
+                  const isDocument = fileCategory === 'document' || ['PDF', 'DOC', 'DOCX', 'XLS', 'XLSX', 'TXT', 'CSV'].includes(fileType);
                   
-                  console.log('[DEBUG] Rendering notes image:', { imageData, imageId, fileId, originalName });
+                  console.log('[DEBUG] Rendering notes file:', { imageData, imageId, fileId, originalName, fileCategory, isDocument });
                   
                   return (
                     <div key={imageId} className="relative group">
-                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                        {fileId ? (
-                          <img
-                            src={getNotesImageAssetUrl(imageId, fileId)}
-                            alt={originalName}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('Failed to load notes image:', e.target.src);
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-gray-400 text-sm">Loading...</span>
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                        {isDocument ? (
+                          // Document preview
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                            <File className="h-12 w-12 text-gray-400 mb-2" />
+                            <p className="text-xs text-gray-600 text-center truncate w-full" title={originalName}>
+                              {originalName}
+                            </p>
+                            <a
+                              href={getNotesImageAssetUrl(imageId, fileId, true)}
+                              download={originalName}
+                              className="mt-2 inline-flex items-center px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Download
+                            </a>
                           </div>
+                        ) : (
+                          // Image preview
+                          <>
+                            {fileId ? (
+                              <img
+                                src={getNotesImageAssetUrl(imageId, fileId)}
+                                alt={originalName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  console.error('Failed to load notes image:', e.target.src);
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <span className="text-gray-400 text-sm">Loading...</span>
+                              </div>
+                            )}
+                            <div className="w-full h-full items-center justify-center text-gray-400 text-sm hidden">
+                              Failed to load
+                            </div>
+                          </>
                         )}
-                        <div className="w-full h-full items-center justify-center text-gray-400 text-sm hidden">
-                          Failed to load
-                        </div>
                       </div>
                       
                       {/* Remove button */}
-                      <button
-                        onClick={() => handleRemoveImage(imageId)}
-                        className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Remove image"
-                      >
-                        <XIcon className="h-3 w-3" />
-                      </button>
+                      {!isViewerOnly && (
+                        <button
+                          onClick={() => handleRemoveImage(imageId)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove file"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      )}
                       
-                      {/* Image info */}
+                      {/* File info */}
                       <div className="mt-2">
                         <p className="text-xs text-gray-600 truncate" title={originalName}>
                           {originalName}
@@ -1308,6 +1387,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         {imageFile?.fileSize && (
                           <p className="text-xs text-gray-400">
                             {(imageFile.fileSize / 1024 / 1024).toFixed(2)} MB
+                            {isDocument && ` • ${fileType}`}
                           </p>
                         )}
                       </div>
@@ -1315,44 +1395,64 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   );
                 })}
 
-                {/* Pending images */}
-                {pendingImages.map((pendingImage) => (
-                  <div key={pendingImage.id} className="relative group">
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-blue-300">
-                      <img
-                        src={pendingImage.preview}
-                        alt={pendingImage.name}
-                        className="w-full h-full object-cover"
-                      />
+                {/* Pending images and documents */}
+                {pendingImages.map((pendingImage) => {
+                  const isImage = pendingImage.file.type.startsWith('image/');
+                  const fileName = pendingImage.name;
+                  const fileExtension = fileName.split('.').pop()?.toUpperCase() || '';
+                  
+                  return (
+                    <div key={pendingImage.id} className="relative group">
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-blue-300">
+                        {isImage ? (
+                          <img
+                            src={pendingImage.preview}
+                            alt={pendingImage.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                            <File className="h-12 w-12 text-blue-400 mb-2" />
+                            <p className="text-xs text-gray-600 text-center truncate w-full" title={pendingImage.name}>
+                              {pendingImage.name}
+                            </p>
+                            <p className="text-xs text-blue-500 mt-1">
+                              {fileExtension} (pending)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Remove button */}
+                      {!isViewerOnly && (
+                        <button
+                          onClick={() => handleRemoveImage(pendingImage.id)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove file"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      )}
+                      
+                      {/* File info */}
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-600 truncate" title={pendingImage.name}>
+                          {pendingImage.name}
+                        </p>
+                        <p className="text-xs text-blue-500">
+                          {(pendingImage.size / 1024 / 1024).toFixed(2)} MB (pending)
+                        </p>
+                      </div>
                     </div>
-                    
-                    {/* Remove button */}
-                    <button
-                      onClick={() => handleRemoveImage(pendingImage.id)}
-                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Remove image"
-                    >
-                      <XIcon className="h-3 w-3" />
-                    </button>
-                    
-                    {/* Image info */}
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-600 truncate" title={pendingImage.name}>
-                        {pendingImage.name}
-                      </p>
-                      <p className="text-xs text-blue-500">
-                        {(pendingImage.size / 1024 / 1024).toFixed(2)} MB (pending)
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
             {notesImagesData.length === 0 && pendingImages.length === 0 && (
               <div className="text-center py-4 text-gray-500">
-                <p className="text-sm">No images selected yet.</p>
-                <p className="text-xs">Select images to add them to this offer.</p>
+                <p className="text-sm">No files selected yet.</p>
+                <p className="text-xs">Select images or documents to add them to this offer.</p>
               </div>
             )}
           </div>
@@ -1374,22 +1474,23 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             <X className="h-4 w-4 mr-2" />
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            data-tooltip-id="save-tooltip"
-            data-tooltip-content={isSubmitting ? 'Submitting...' : 
-              mode === 'create-quotation' ? 'Create new quotation' : 
-              mode === 'new-offer' ? 'Create new offer' :
-              mode === 'revision' ? 'Create revision' : 'Update quotation'}
-            className={`flex items-center px-4 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
-              mode === 'new-offer'
-                ? 'bg-green-600 hover:bg-green-700'
-                : mode === 'revision'
-                  ? 'bg-purple-600 hover:bg-purple-700'
-                  : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
+          {!isViewerOnly && (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              data-tooltip-id="save-tooltip"
+              data-tooltip-content={isSubmitting ? 'Submitting...' : 
+                mode === 'create-quotation' ? 'Create new quotation' : 
+                mode === 'new-offer' ? 'Create new offer' :
+                mode === 'revision' ? 'Create revision' : 'Update quotation'}
+              className={`flex items-center px-4 py-2 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                mode === 'new-offer'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : mode === 'revision'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
             {isSubmitting ? (
               <span className="flex items-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -1403,7 +1504,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   mode === 'revision' ? 'Create Revision' : 'Update Quotation'}
               </>
             )}
-          </button>
+            </button>
+          )}
           {submitProgress && (
             <div className="mt-2 text-sm">
               {submitProgress.step === 'uploading' && <span className="text-blue-600">📤 {submitProgress.message}</span>}
