@@ -126,6 +126,110 @@ const deriveSpkTypeFromCode = (code) => {
   return '-';
 };
 
+// Helper function to get approval status badges
+const getApprovalStatusBadges = (offer) => {
+  if (!offer || !offer.downloadApproval) return null;
+  
+  const engineerStatus = offer.downloadApproval?.engineerApproval?.status || 'pending';
+  const managementStatus = offer.downloadApproval?.managementApproval?.status || 'pending';
+  
+  const badges = [];
+  
+  // Engineer approval badge
+  if (engineerStatus === 'approved') {
+    badges.push(
+      <span key="engineer-approved" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Engineer Approved">
+        Eng ✓
+      </span>
+    );
+  } else if (engineerStatus === 'rejected') {
+    badges.push(
+      <span key="engineer-rejected" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title={`Engineer Rejected: ${offer.downloadApproval?.engineerApproval?.rejectionNote || ''}`}>
+        Eng ✗
+      </span>
+    );
+  } else {
+    badges.push(
+      <span key="engineer-pending" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800" title="Engineer Approval Pending">
+        Eng ⏳
+      </span>
+    );
+  }
+  
+  // Management approval badge
+  if (managementStatus === 'approved') {
+    badges.push(
+      <span key="management-approved" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Management Approved">
+        Mgt ✓
+      </span>
+    );
+  } else if (managementStatus === 'rejected') {
+    badges.push(
+      <span key="management-rejected" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title={`Management Rejected: ${offer.downloadApproval?.managementApproval?.rejectionNote || ''}`}>
+        Mgt ✗
+      </span>
+    );
+  } else {
+    badges.push(
+      <span key="management-pending" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800" title="Management Approval Pending">
+        Mgt ⏳
+      </span>
+    );
+  }
+  
+  return badges;
+};
+
+// Helper function to check if offer is approved
+const isOfferApproved = (offer) => {
+  if (!offer || !offer.downloadApproval) return false;
+  return offer.downloadApproval?.engineerApproval?.status === 'approved' &&
+         offer.downloadApproval?.managementApproval?.status === 'approved';
+};
+
+// Helper function to check if offer is rejected (either engineer or management or both)
+const isOfferRejected = (offer) => {
+  if (!offer || !offer.downloadApproval) return false;
+  const engineerStatus = offer.downloadApproval?.engineerApproval?.status || 'pending';
+  const managementStatus = offer.downloadApproval?.managementApproval?.status || 'pending';
+  return engineerStatus === 'rejected' || managementStatus === 'rejected';
+};
+
+// Helper function to get rejection reasons display
+const getRejectionReasons = (offer) => {
+  if (!offer || !offer.downloadApproval) return null;
+  
+  const engineerStatus = offer.downloadApproval?.engineerApproval?.status || 'pending';
+  const managementStatus = offer.downloadApproval?.managementApproval?.status || 'pending';
+  const reasons = [];
+  
+  if (engineerStatus === 'rejected') {
+    const rejectionNote = offer.downloadApproval?.engineerApproval?.rejectionNote?.trim() || '';
+    // Only add if there's a note or approvedBy info
+    if (rejectionNote || offer.downloadApproval?.engineerApproval?.approvedBy) {
+      reasons.push({
+        type: 'engineer',
+        note: rejectionNote || 'No reason provided',
+        approvedBy: offer.downloadApproval?.engineerApproval?.approvedBy
+      });
+    }
+  }
+  
+  if (managementStatus === 'rejected') {
+    const rejectionNote = offer.downloadApproval?.managementApproval?.rejectionNote?.trim() || '';
+    // Only add if there's a note or approvedBy info
+    if (rejectionNote || offer.downloadApproval?.managementApproval?.approvedBy) {
+      reasons.push({
+        type: 'management',
+        note: rejectionNote || 'No reason provided',
+        approvedBy: offer.downloadApproval?.managementApproval?.approvedBy
+      });
+    }
+  }
+  
+  return reasons.length > 0 ? reasons : null;
+};
+
 const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCreateButton = false, filterMode = 'all', apiEndpoint = '/api/quotations', actionMode = 'full' }) => {
   const { user } = useContext(UserContext);
   
@@ -1909,6 +2013,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                                     Winner
                                   </span>
+                                  {getApprovalStatusBadges(actualWinningOffer)}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   {winningItems.length} winning items
@@ -1967,180 +2072,316 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     // For flat structure (old data), convert to grouped structure
                     if (!offerGroup.original && offerGroup._id) {
                       return (
-                        <div key={offerGroup._id} className="border border-gray-200 rounded-lg overflow-hidden">
-                          <div className="bg-white">
-                            <div className="px-4 py-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-medium text-gray-900">
-                                      Offer {groupIndex + 1}
-                                    </span>
-                                    {offerGroup.revision > 0 ? (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                        Rev. {offerGroup.revision}
+                        <div key={offerGroup._id}>
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-white">
+                              <div className="px-4 py-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        Offer {groupIndex + 1}
                                       </span>
-                                    ) : (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                        Original
-                              </span>
-                            )}
-                            </div>
-                                  <div className="text-sm text-gray-500">
-                                    {offerGroup.offerItems?.length || 0} items
-                                    {offerGroup.offerItems?.length > 0 && (
-                                      <span className="ml-2">
-                                        ({offerGroup.offerItems[0].karoseri} - {offerGroup.offerItems[0].chassis}
-                                        {offerGroup.offerItems.length > 1 && ` +${offerGroup.offerItems.length - 1} more`})
-                                      </span>
-                                    )}
+                                      {offerGroup.revision > 0 ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                          Rev. {offerGroup.revision}
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                          Original
+                                        </span>
+                                      )}
+                                      {getApprovalStatusBadges(offerGroup)}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      {offerGroup.offerItems?.length || 0} items
+                                      {offerGroup.offerItems?.length > 0 && (
+                                        <span className="ml-2">
+                                          ({offerGroup.offerItems[0].karoseri} - {offerGroup.offerItems[0].chassis}
+                                          {offerGroup.offerItems.length > 1 && ` +${offerGroup.offerItems.length - 1} more`})
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                  <div className="text-sm text-gray-900">
-                                    {formatPriceWithCurrency(offerGroup.original?.totalNetto || 0)}
-                                  </div>
-                            <div className="flex items-center space-x-2">
-                              <button
-                                      onClick={() => onView && onView({ header, offers, activeOfferId: offerGroup._id })}
-                                      data-tooltip-id={`offer-view-${offerGroup._id}`}
-                                data-tooltip-content="View offer details"
-                                className="text-blue-600 hover:text-blue-900 p-1"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              <button
-                                      onClick={() => onPreview && onPreview({ header, offers })}
-                                      data-tooltip-id={`offer-generate-${offerGroup._id}`}
-                                      data-tooltip-content="Generate quotation document"
-                                      className="text-orange-600 hover:text-orange-900 p-1"
-                                    >
-                                      <FileDown className="h-4 w-4" />
-                                    </button>
-                                    {/* Offer action buttons - conditional based on actionMode and permissions */}
-                                    {actionMode === 'full' && canEditQuotation(header) && (
-                                      <>
+                                  <div className="flex items-center space-x-4">
+                                    <div className="text-sm text-gray-900">
+                                      {formatPriceWithCurrency(offerGroup.original?.totalNetto || 0)}
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => onView && onView({ header, offers, activeOfferId: offerGroup._id })}
+                                        data-tooltip-id={`offer-view-${offerGroup._id}`}
+                                        data-tooltip-content="View offer details"
+                                        className="text-blue-600 hover:text-blue-900 p-1"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => onPreview && onPreview({ header, offers })}
+                                        data-tooltip-id={`offer-generate-${offerGroup._id}`}
+                                        data-tooltip-content="Generate quotation document"
+                                        className="text-orange-600 hover:text-orange-900 p-1"
+                                      >
+                                        <FileDown className="h-4 w-4" />
+                                      </button>
+                                      {/* Offer action buttons - conditional based on actionMode and permissions */}
+                                      {actionMode === 'full' && canEditQuotation(header) && !isOfferApproved(offerGroup) && !isOfferRejected(offerGroup) && (
+                                        <>
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original || offerGroup })}
+                                            data-tooltip-id={`offer-edit-${offerGroup._id}`}
+                                            data-tooltip-content="Edit offer"
+                                            className="text-indigo-600 hover:text-indigo-900 p-1"
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original || offerGroup })}
+                                            data-tooltip-id={`offer-revision-${offerGroup._id}`}
+                                            data-tooltip-content="Create revision from this offer"
+                                            className="text-purple-600 hover:text-purple-900 p-1"
+                                          >
+                                            <Plus className="h-4 w-4" />
+                                          </button>
+                                        </>
+                                      )}
+                                      {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(offerGroup) || isOfferRejected(offerGroup)) && (
                                         <button
-                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
-                                          data-tooltip-id={`offer-edit-${offerGroup._id}`}
-                                    data-tooltip-content="Edit offer"
-                                    className="text-indigo-600 hover:text-indigo-900 p-1"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original || offerGroup })}
                                           data-tooltip-id={`offer-revision-${offerGroup._id}`}
-                                    data-tooltip-content="Create revision from this offer"
-                                    className="text-purple-600 hover:text-purple-900 p-1"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </button>
-                                </>
-                              )}
-                                    {actionMode === 'full' && canDeleteQuotation(header) && (
-                                  <button
+                                          data-tooltip-content={isOfferRejected(offerGroup) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
+                                          className="text-purple-600 hover:text-purple-900 p-1"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                      {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(offerGroup) && !isOfferRejected(offerGroup) && (
+                                        <button
                                           onClick={() => handleDeleteOffer(offerGroup, header)}
                                           data-tooltip-id={`offer-delete-${offerGroup._id}`}
-                                    data-tooltip-content="Delete offer"
-                                    className="text-red-600 hover:text-red-900 p-1"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                    )}
-                            </div>
-                </div>
+                                          data-tooltip-content="Delete offer"
+                                          className="text-red-600 hover:text-red-900 p-1"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                      {actionMode === 'full' && isOfferApproved(offerGroup) && (
+                                        <span 
+                                          data-tooltip-id={`offer-approved-note-${offerGroup._id}`}
+                                          data-tooltip-content="This offer is approved and cannot be edited or deleted. Create a revision to make changes."
+                                          className="text-xs text-gray-400 italic"
+                                        >
+                                          Approved
+                                        </span>
+                                      )}
+                                      {actionMode === 'full' && isOfferRejected(offerGroup) && (
+                                        <span 
+                                          data-tooltip-id={`offer-rejected-note-${offerGroup._id}`}
+                                          data-tooltip-content="This offer is rejected and cannot be edited or deleted. Create a revision to make changes."
+                                          className="text-xs text-red-400 italic"
+                                        >
+                                          Rejected
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
+                          {/* Show rejection reasons if offer is rejected - below the offer card */}
+                          {isOfferRejected(offerGroup) && (() => {
+                            const rejectionReasons = getRejectionReasons(offerGroup);
+                            if (!rejectionReasons || rejectionReasons.length === 0) return null;
+                            return (
+                              <div className="mt-3 px-4 pb-3 w-full">
+                                <div className="space-y-3">
+                                  {rejectionReasons.map((reason, idx) => {
+                                    const approverName = reason.approvedBy 
+                                      ? (typeof reason.approvedBy === 'object' 
+                                        ? (reason.approvedBy.fullName || reason.approvedBy.email || 'Unknown')
+                                        : 'Unknown')
+                                      : null;
+                                    return (
+                                      <div key={idx} className="w-full bg-red-50 border border-red-200 rounded-md p-3">
+                                        <div className="font-semibold text-red-800 mb-1">
+                                          {reason.type === 'engineer' ? 'Engineer Rejection:' : 'Management Rejection:'}
+                                        </div>
+                                        {reason.note && reason.note !== 'No reason provided' && (
+                                          <div className="text-red-700 mt-1.5 text-sm">{reason.note}</div>
+                                        )}
+                                        {reason.note === 'No reason provided' && (
+                                          <div className="text-red-600 mt-1.5 italic text-sm">No reason provided</div>
+                                        )}
+                                        {approverName && (
+                                          <div className="text-red-600 mt-2 text-xs">
+                                            Rejected by: {approverName}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     }
                     
                     // For grouped structure (new data) - this is what we want to display
                     return (
-                    <div key={offerGroup.original?._id || `group-${groupIndex}`} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Original Offer */}
-                      <div className="bg-white border-b border-gray-200">
-                        <div className="px-4 py-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm font-medium text-gray-900">
-                                Offer {offerGroup.original?.offerNumberInQuotation || (groupIndex + 1)}
-                              </span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                Original
-                              </span>
-                            </div>
-                              <div className="text-sm text-gray-500">
-                                {offerGroup.original?.offerItems?.length || 0} items
-                                {offerGroup.original?.offerItems?.length > 0 && (
-                                  <span className="ml-2">
-                                    ({offerGroup.original.offerItems[0].karoseri} - {offerGroup.original.offerItems[0].chassis}
-                                    {offerGroup.original.offerItems.length > 1 && ` +${offerGroup.original.offerItems.length - 1} more`})
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                              <div className="text-sm text-gray-900">
-                                {formatPriceWithCurrency(offerGroup.original?.totalNetto || 0)}
-                              </div>
+                    <div key={offerGroup.original?._id || `group-${groupIndex}`}>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Original Offer */}
+                        <div className="bg-white border-b border-gray-200">
+                          <div className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
                               <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={() => onView && onView({ header, offers, activeOfferId: offerGroup.original?._id })}
-                                  data-tooltip-id={`offer-view-${offerGroup.original?._id}`}
-                                  data-tooltip-content="View offer details"
-                                  className="text-blue-600 hover:text-blue-900 p-1"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => onPreview && onPreview({ header, offers })}
-                                  data-tooltip-id={`offer-generate-${offerGroup.original?._id}`}
-                                  data-tooltip-content="Generate quotation document"
-                                  className="text-orange-600 hover:text-orange-900 p-1"
-                                >
-                                  <FileDown className="h-4 w-4" />
-                                </button>
-                                {/* Offer action buttons - conditional based on actionMode and permissions */}
-                                {actionMode === 'full' && canEditQuotation(header) && (
-                                  <>
+                                <span className="text-sm font-medium text-gray-900">
+                                  Offer {offerGroup.original?.offerNumberInQuotation || (groupIndex + 1)}
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  Original
+                                </span>
+                                {getApprovalStatusBadges(offerGroup.original)}
+                              </div>
+                                <div className="text-sm text-gray-500">
+                                  {offerGroup.original?.offerItems?.length || 0} items
+                                  {offerGroup.original?.offerItems?.length > 0 && (
+                                    <span className="ml-2">
+                                      ({offerGroup.original.offerItems[0].karoseri} - {offerGroup.original.offerItems[0].chassis}
+                                      {offerGroup.original.offerItems.length > 1 && ` +${offerGroup.original.offerItems.length - 1} more`})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex items-center space-x-4">
+                                  <div className="text-sm text-gray-900">
+                                    {formatPriceWithCurrency(offerGroup.original?.totalNetto || 0)}
+                                  </div>
+                                  <div className="flex items-center space-x-2">
                                     <button
-                                      onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
-                                      data-tooltip-id={`offer-edit-${offerGroup.original?._id}`}
-                                      data-tooltip-content="Edit offer"
-                                      className="text-indigo-600 hover:text-indigo-900 p-1"
+                                      onClick={() => onView && onView({ header, offers, activeOfferId: offerGroup.original?._id })}
+                                      data-tooltip-id={`offer-view-${offerGroup.original?._id}`}
+                                      data-tooltip-content="View offer details"
+                                      className="text-blue-600 hover:text-blue-900 p-1"
                                     >
-                                      <Edit className="h-4 w-4" />
+                                      <Eye className="h-4 w-4" />
                                     </button>
-                                    {(!offerGroup.revisions || offerGroup.revisions.length === 0) && (
+                                    <button
+                                      onClick={() => onPreview && onPreview({ header, offers })}
+                                      data-tooltip-id={`offer-generate-${offerGroup.original?._id}`}
+                                      data-tooltip-content="Generate quotation document"
+                                      className="text-orange-600 hover:text-orange-900 p-1"
+                                    >
+                                      <FileDown className="h-4 w-4" />
+                                    </button>
+                                    {/* Offer action buttons - conditional based on actionMode and permissions */}
+                                    {actionMode === 'full' && canEditQuotation(header) && !isOfferApproved(offerGroup.original) && !isOfferRejected(offerGroup.original) && (
+                                      <>
+                                        <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
+                                          data-tooltip-id={`offer-edit-${offerGroup.original?._id}`}
+                                          data-tooltip-content="Edit offer"
+                                          className="text-indigo-600 hover:text-indigo-900 p-1"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </button>
+                                        {(!offerGroup.revisions || offerGroup.revisions.length === 0) && (
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
+                                            data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
+                                            data-tooltip-content="Create revision from this offer"
+                                            className="text-purple-600 hover:text-purple-900 p-1"
+                                          >
+                                            <Plus className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                    {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(offerGroup.original) || isOfferRejected(offerGroup.original)) && (
                                       <button
                                         onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
                                         data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
-                                        data-tooltip-content="Create revision from this offer"
+                                        data-tooltip-content={isOfferRejected(offerGroup.original) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
                                         className="text-purple-600 hover:text-purple-900 p-1"
                                       >
                                         <Plus className="h-4 w-4" />
                                       </button>
                                     )}
-                                  </>
-                                )}
-                                {actionMode === 'full' && canDeleteQuotation(header) && (
-                                  <button
-                                    onClick={() => handleDeleteOffer(offerGroup.original, header)}
-                                    data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
-                                    data-tooltip-content="Delete offer"
-                                    className="text-red-600 hover:text-red-900 p-1"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                )}
+                                    {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(offerGroup.original) && !isOfferRejected(offerGroup.original) && (
+                                      <button
+                                        onClick={() => handleDeleteOffer(offerGroup.original, header)}
+                                        data-tooltip-id={`offer-delete-${offerGroup.original?._id}`}
+                                        data-tooltip-content="Delete offer"
+                                        className="text-red-600 hover:text-red-900 p-1"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    {actionMode === 'full' && isOfferApproved(offerGroup.original) && (
+                                      <span 
+                                        data-tooltip-id={`offer-approved-note-${offerGroup.original?._id}`}
+                                        data-tooltip-content="This offer is approved and cannot be edited or deleted. Create a revision to make changes."
+                                        className="text-xs text-gray-400 italic"
+                                      >
+                                        Approved
+                                      </span>
+                                    )}
+                                    {actionMode === 'full' && isOfferRejected(offerGroup.original) && (
+                                      <span 
+                                        data-tooltip-id={`offer-rejected-note-${offerGroup.original?._id}`}
+                                        data-tooltip-content="This offer is rejected and cannot be edited or deleted. Create a revision to make changes."
+                                        className="text-xs text-red-400 italic"
+                                      >
+                                        Rejected
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
+                        {/* Show rejection reasons if original offer is rejected - below the original offer */}
+                        {isOfferRejected(offerGroup.original) && (() => {
+                          const rejectionReasons = getRejectionReasons(offerGroup.original);
+                          if (!rejectionReasons || rejectionReasons.length === 0) return null;
+                          return (
+                            <div className="px-4 py-3 bg-white border-t border-gray-200">
+                              <div className="space-y-3">
+                                {rejectionReasons.map((reason, idx) => {
+                                  const approverName = reason.approvedBy 
+                                    ? (typeof reason.approvedBy === 'object' 
+                                      ? (reason.approvedBy.fullName || reason.approvedBy.email || 'Unknown')
+                                      : 'Unknown')
+                                    : null;
+                                  return (
+                                    <div key={idx} className="w-full bg-red-50 border border-red-200 rounded-md p-3">
+                                      <div className="font-semibold text-red-800 mb-1">
+                                        {reason.type === 'engineer' ? 'Engineer Rejection:' : 'Management Rejection:'}
+                                      </div>
+                                      {reason.note && reason.note !== 'No reason provided' && (
+                                        <div className="text-red-700 mt-1.5 text-sm">{reason.note}</div>
+                                      )}
+                                      {reason.note === 'No reason provided' && (
+                                        <div className="text-red-600 mt-1.5 italic text-sm">No reason provided</div>
+                                      )}
+                                      {approverName && (
+                                        <div className="text-red-600 mt-2 text-xs">
+                                          Rejected by: {approverName}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Revisions */}
@@ -2149,72 +2390,141 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                           {offerGroup.revisions.map((revision, revisionIndex) => {
                             const isLatestRevision = revisionIndex === offerGroup.revisions.length - 1;
                             return (
-                            <div key={revision._id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="flex items-center space-x-2">
-                                    <div className="w-4 h-px bg-gray-300"></div>
-                                    <span className="text-sm font-medium text-gray-700">
-                                      Revision {revision.revision}
-                                    </span>
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                      Rev. {revision.revision}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {revision.karoseri} - {revision.chassis}
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                  <div className="text-sm text-gray-900">
-                                    {formatPriceWithCurrency(revision.totalNetto || 0)}
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <button
-                                      onClick={() => onView && onView({ header, offers, activeOfferId: revision._id })}
-                                      data-tooltip-id={`offer-view-${revision._id}`}
-                                      data-tooltip-content="View revision details"
-                                      className="text-blue-600 hover:text-blue-900 p-1"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </button>
-                                    {/* Revision action buttons - conditional based on actionMode and permissions */}
-                                    {actionMode === 'full' && canEditQuotation(header) && (
-                                      <>
+                            <React.Fragment key={revision._id}>
+                              <div className="px-4 py-3 border-b border-gray-200 last:border-b-0">
+                                <div className="flex flex-col space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-4 h-px bg-gray-300"></div>
+                                        <span className="text-sm font-medium text-gray-700">
+                                          Revision {revision.revision}
+                                        </span>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                          Rev. {revision.revision}
+                                        </span>
+                                        {getApprovalStatusBadges(revision)}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {revision.karoseri} - {revision.chassis}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-4">
+                                      <div className="text-sm text-gray-900">
+                                        {formatPriceWithCurrency(revision.totalNetto || 0)}
+                                      </div>
+                                      <div className="flex items-center space-x-2">
                                         <button
-                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
-                                          data-tooltip-id={`offer-edit-${revision._id}`}
-                                          data-tooltip-content="Edit revision"
-                                          className="text-indigo-600 hover:text-indigo-900 p-1"
+                                          onClick={() => onView && onView({ header, offers, activeOfferId: revision._id })}
+                                          data-tooltip-id={`offer-view-${revision._id}`}
+                                          data-tooltip-content="View revision details"
+                                          className="text-blue-600 hover:text-blue-900 p-1"
                                         >
-                                          <Edit className="h-4 w-4" />
+                                          <Eye className="h-4 w-4" />
                                         </button>
-                                        {isLatestRevision && (
+                                        {/* Revision action buttons - conditional based on actionMode and permissions */}
+                                        {actionMode === 'full' && canEditQuotation(header) && !isOfferApproved(revision) && !isOfferRejected(revision) && (
+                                          <>
+                                            <button
+                                              onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
+                                              data-tooltip-id={`offer-edit-${revision._id}`}
+                                              data-tooltip-content="Edit revision"
+                                              className="text-indigo-600 hover:text-indigo-900 p-1"
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </button>
+                                            {isLatestRevision && (
+                                              <button
+                                                onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
+                                                data-tooltip-id={`offer-revision-${revision._id}`}
+                                                data-tooltip-content="Create revision from this revision"
+                                                className="text-purple-600 hover:text-purple-900 p-1"
+                                              >
+                                                <Plus className="h-4 w-4" />
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                        {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(revision) || isOfferRejected(revision)) && (
                                           <button
                                             onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
                                             data-tooltip-id={`offer-revision-${revision._id}`}
-                                            data-tooltip-content="Create revision from this revision"
+                                            data-tooltip-content={isOfferRejected(revision) ? "Create revision (revision is rejected and cannot be edited)" : "Create revision (revision is approved and cannot be edited)"}
                                             className="text-purple-600 hover:text-purple-900 p-1"
                                           >
                                             <Plus className="h-4 w-4" />
                                           </button>
                                         )}
-                                      </>
-                                    )}
-                                    {actionMode === 'full' && canDeleteQuotation(header) && (
-                                      <button
-                                        onClick={() => handleDeleteOffer(revision, header)}
-                                        data-tooltip-id={`offer-delete-${revision._id}`}
-                                        data-tooltip-content="Delete revision"
-                                        className="text-red-600 hover:text-red-900 p-1"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    )}
+                                        {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(revision) && !isOfferRejected(revision) && (
+                                          <button
+                                            onClick={() => handleDeleteOffer(revision, header)}
+                                            data-tooltip-id={`offer-delete-${revision._id}`}
+                                            data-tooltip-content="Delete revision"
+                                            className="text-red-600 hover:text-red-900 p-1"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                        {actionMode === 'full' && isOfferApproved(revision) && (
+                                          <span 
+                                            data-tooltip-id={`offer-approved-note-${revision._id}`}
+                                            data-tooltip-content="This revision is approved and cannot be edited or deleted. Create a new revision to make changes."
+                                            className="text-xs text-gray-400 italic"
+                                          >
+                                            Approved
+                                          </span>
+                                        )}
+                                        {actionMode === 'full' && isOfferRejected(revision) && (
+                                          <span 
+                                            data-tooltip-id={`offer-rejected-note-${revision._id}`}
+                                            data-tooltip-content="This revision is rejected and cannot be edited or deleted. Create a new revision to make changes."
+                                            className="text-xs text-red-400 italic"
+                                          >
+                                            Rejected
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
+                              {/* Show rejection reasons if revision is rejected - below the revision */}
+                              {isOfferRejected(revision) && (() => {
+                                const rejectionReasons = getRejectionReasons(revision);
+                                if (!rejectionReasons || rejectionReasons.length === 0) return null;
+                                return (
+                                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                                    <div className="space-y-3">
+                                      {rejectionReasons.map((reason, idx) => {
+                                        const approverName = reason.approvedBy 
+                                          ? (typeof reason.approvedBy === 'object' 
+                                            ? (reason.approvedBy.fullName || reason.approvedBy.email || 'Unknown')
+                                            : 'Unknown')
+                                          : null;
+                                        return (
+                                          <div key={idx} className="w-full bg-red-50 border border-red-200 rounded-md p-3">
+                                            <div className="font-semibold text-red-800 mb-1">
+                                              {reason.type === 'engineer' ? 'Engineer Rejection:' : 'Management Rejection:'}
+                                            </div>
+                                            {reason.note && reason.note !== 'No reason provided' && (
+                                              <div className="text-red-700 mt-1.5 text-sm">{reason.note}</div>
+                                            )}
+                                            {reason.note === 'No reason provided' && (
+                                              <div className="text-red-600 mt-1.5 italic text-sm">No reason provided</div>
+                                            )}
+                                            {approverName && (
+                                              <div className="text-red-600 mt-2 text-xs">
+                                                Rejected by: {approverName}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </React.Fragment>
                             );
                           })}
                         </div>
@@ -2374,6 +2684,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           <Tooltip id={`status-${header._id}`} />
           <Tooltip id={`followup-${header._id}`} />
           <Tooltip id={`delete-quotation-${header._id}`} />
+          <Tooltip id={`offer-approved-note-${header._id}`} />
+          <Tooltip id={`offer-rejected-note-${header._id}`} />
           {offers.map((offerGroup) => {
             // Handle both grouped and flat structures
             if (offerGroup.original) {
@@ -2402,6 +2714,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                   <Tooltip id={`offer-edit-${offerGroup._id}`} />
                   <Tooltip id={`offer-revision-${offerGroup._id}`} />
                   <Tooltip id={`offer-delete-${offerGroup._id}`} />
+                  <Tooltip id={`offer-approved-note-${offerGroup._id}`} />
+                  <Tooltip id={`offer-rejected-note-${offerGroup._id}`} />
                 </React.Fragment>
               );
             }

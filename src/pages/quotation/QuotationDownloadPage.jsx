@@ -34,7 +34,10 @@ const QuotationDownloadPage = () => {
 
     setLoading(true);
     try {
-      const response = await ApiHelper.get(`/api/quotations/by-id/${quotationId}`);
+      // React Router already decodes the URL parameter, but if it contains slashes,
+      // we need to encode it again for the API call, OR use the by-id endpoint
+      // Try using by-id endpoint which handles both _id and quotationNumber
+      const response = await ApiHelper.get(`/api/quotations/by-id/${encodeURIComponent(quotationId)}`);
       if (response.data.success) {
         setQuotationData(response.data.data);
       } else {

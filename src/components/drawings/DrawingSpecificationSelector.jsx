@@ -37,6 +37,9 @@ const DrawingSpecificationSelector = ({
   const [sizeTypes, setSizeTypes] = useState([]);
   const [featureTypes, setFeatureTypes] = useState([]);
   
+  // State for selected drawing (from value prop)
+  const [selectedDrawingId, setSelectedDrawingId] = useState(null);
+  
   // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBodyTypeFilter, setSelectedBodyTypeFilter] = useState('');
@@ -266,6 +269,52 @@ const DrawingSpecificationSelector = ({
     setCurrentPage(nextPage);
     await loadDrawings(nextPage, true);
   }, [currentPage, hasMore, isLoadingMore, loadingDrawings, loadDrawings]);
+
+  // Update selectedDrawingId when value prop changes and fetch drawing if needed
+  useEffect(() => {
+    if (value) {
+      // Extract ID from value (could be ObjectId string or object with _id)
+      const drawingId = typeof value === 'object' && value._id 
+        ? value._id 
+        : value;
+      setSelectedDrawingId(drawingId);
+      
+      // If value is an object (populated), we already have the drawing
+      // If value is just an ID string, check if it's in the current drawings list
+      if (typeof value === 'string' || (typeof value === 'object' && !value.drawingNumber)) {
+        // Check if drawing is already in the list
+        const drawingExists = drawings.some(d => 
+          d._id?.toString() === drawingId.toString() || 
+          d._id === drawingId
+        );
+        
+        // If not in list and modal is open, try to fetch it
+        if (!drawingExists && isOpen && drawingId) {
+          axiosInstance.get(`/api/drawing-specifications/${drawingId}`)
+            .then(response => {
+              if (response.data?.success && response.data?.data) {
+                // Add to drawings list if not already there
+                setDrawings(prev => {
+                  const exists = prev.some(d => 
+                    d._id?.toString() === drawingId.toString() || 
+                    d._id === drawingId
+                  );
+                  if (!exists) {
+                    return [response.data.data, ...prev];
+                  }
+                  return prev;
+                });
+              }
+            })
+            .catch(error => {
+              console.error('Error fetching selected drawing:', error);
+            });
+        }
+      }
+    } else {
+      setSelectedDrawingId(null);
+    }
+  }, [value, isOpen, drawings]);
 
   // Reset pagination and reload when filters change
   useEffect(() => {
@@ -671,17 +720,33 @@ const DrawingSpecificationSelector = ({
                       ? drawing.sizeTypeId?.name || 'Unknown'
                       : 'Unknown';
 
+                    const isSelected = selectedDrawingId && (
+                      drawing._id?.toString() === selectedDrawingId.toString() ||
+                      drawing._id === selectedDrawingId
+                    );
+
                     return (
                       <div
                         key={drawing._id}
                         onClick={() => handleSelect(drawing)}
-                        className="p-4 cursor-pointer hover:bg-blue-50 transition-colors"
+                        className={`p-4 cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-100 border-2 border-blue-500' 
+                            : 'hover:bg-blue-50 border-2 border-transparent'
+                        }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h3 className="font-medium text-gray-900 mb-1">
-                              {drawing.drawingNumber || 'Drawing'}
-                            </h3>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-gray-900">
+                                {drawing.drawingNumber || 'Drawing'}
+                              </h3>
+                              {isSelected && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600 text-white">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
                             <div className="text-sm text-gray-600 space-y-1">
                               <p>
                                 <span className="font-medium">Body:</span> {bodyTypeName}
@@ -701,8 +766,12 @@ const DrawingSpecificationSelector = ({
                             </div>
                           </div>
                           <div className="ml-4">
-                            <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                              Select
+                            <button className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                              isSelected
+                                ? 'bg-green-600 text-white hover:bg-green-700'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}>
+                              {isSelected ? 'Selected' : 'Select'}
                             </button>
                           </div>
                         </div>

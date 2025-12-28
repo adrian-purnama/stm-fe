@@ -304,12 +304,42 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             
             // Add type-specific fields
             if (lineOfBusinessType === 'karoseri') {
+              // Extract ObjectId from populated fields if they're objects
+              const drawingSpecId = item.drawingSpecification 
+                ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
+                  ? item.drawingSpecification._id 
+                  : item.drawingSpecification)
+                : null;
+              
+              const bodyTypeId = item.bodyTypeId 
+                ? (typeof item.bodyTypeId === 'object' && item.bodyTypeId._id 
+                  ? item.bodyTypeId._id 
+                  : item.bodyTypeId)
+                : null;
+              
+              const chassisTypeId = item.chassisTypeId 
+                ? (typeof item.chassisTypeId === 'object' && item.chassisTypeId._id 
+                  ? item.chassisTypeId._id 
+                  : item.chassisTypeId)
+                : null;
+              
+              const templateSourceId = item.templateSourceId 
+                ? (typeof item.templateSourceId === 'object' && item.templateSourceId._id 
+                  ? item.templateSourceId._id 
+                  : item.templateSourceId)
+                : null;
+              
               return {
                 ...baseItem,
                 karoseri: item.karoseri || '',
                 chassis: item.chassis || '',
                 chassisModel: item.chassisModel || '',
-                drawingSpecification: item.drawingSpecification || null,
+                drawingSpecification: drawingSpecId,
+                bodyTypeId: bodyTypeId,
+                chassisTypeId: chassisTypeId,
+                templateMode: item.templateMode || 'manual',
+                templateSourceModel: item.templateSourceModel || null,
+                templateSourceId: templateSourceId,
                 specifications: item.specifications || []
               };
             } else if (lineOfBusinessType === 'service') {

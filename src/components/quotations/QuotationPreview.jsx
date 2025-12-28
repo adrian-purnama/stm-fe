@@ -154,10 +154,42 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
       
       // Determine offer ID if specific offer/revision is selected
       let offerId = null;
+      let targetOffer = null;
       if (revision) {
         offerId = revision._id;
+        targetOffer = revision;
       } else if (offer) {
         offerId = offer._id;
+        targetOffer = offer;
+      }
+      
+      // Check approval status if downloading a specific offer
+      if (targetOffer) {
+        const engineerStatus = targetOffer.downloadApproval?.engineerApproval?.status || 'pending';
+        const managementStatus = targetOffer.downloadApproval?.managementApproval?.status || 'pending';
+        
+        if (engineerStatus !== 'approved' || managementStatus !== 'approved') {
+          toast.error('This offer has not been approved for download. It requires approval from both engineering and management.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // If downloading all offers, check if at least one is approved
+        const { offers } = quotationData;
+        const hasApprovedOffer = offers.some(offerGroup => {
+          const offersToCheck = offerGroup.original ? [offerGroup.original, ...(offerGroup.revisions || [])] : [offerGroup];
+          return offersToCheck.some(o => {
+            const offerObj = o.original || o;
+            return offerObj.downloadApproval?.engineerApproval?.status === 'approved' &&
+                   offerObj.downloadApproval?.managementApproval?.status === 'approved';
+          });
+        });
+        
+        if (!hasApprovedOffer) {
+          toast.error('No approved offers found in this quotation. At least one offer must be approved by both engineering and management before download.');
+          setLoading(false);
+          return;
+        }
       }
       
       // Use provided mode or default to current downloadMode state
@@ -546,9 +578,13 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                           </button>
                           <button
                             onClick={() => handleDownload(offerGroup.original)}
-                            disabled={loading}
-                            className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
-                            title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
+                            disabled={loading || !(offerGroup.original?.downloadApproval?.engineerApproval?.status === 'approved' && offerGroup.original?.downloadApproval?.managementApproval?.status === 'approved')}
+                            className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                            title={
+                              offerGroup.original?.downloadApproval?.engineerApproval?.status === 'approved' && offerGroup.original?.downloadApproval?.managementApproval?.status === 'approved'
+                                ? (downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)')
+                                : 'This offer requires approval from both engineering and management before download'
+                            }
                           >
                             <Download className="w-3 h-3 sm:mr-1" />
                             <span className="hidden sm:inline">Download</span>
@@ -585,9 +621,13 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                   </button>
                                   <button
                                     onClick={() => handleDownload(offerGroup.original, revision)}
-                                    disabled={loading}
-                                    className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
-                                    title={downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)'}
+                                    disabled={loading || !(revision?.downloadApproval?.engineerApproval?.status === 'approved' && revision?.downloadApproval?.managementApproval?.status === 'approved')}
+                                    className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                    title={
+                                      revision?.downloadApproval?.engineerApproval?.status === 'approved' && revision?.downloadApproval?.managementApproval?.status === 'approved'
+                                        ? (downloadMode === 'full' ? 'Download with header, footer, and watermark' : 'Download without header, footer, and watermark (for pre-printed paper)')
+                                        : 'This revision requires approval from both engineering and management before download'
+                                    }
                                   >
                                     <Download className="w-3 h-3 sm:mr-1" />
                                     <span className="hidden sm:inline">Download</span>

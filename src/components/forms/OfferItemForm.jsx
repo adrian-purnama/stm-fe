@@ -48,12 +48,19 @@ const OfferItemForm = ({
     };
 
     if (lineOfBusinessType === 'karoseri') {
+      // Extract ObjectId from drawingSpecification if it's a populated object
+      const drawingSpecId = item?.drawingSpecification 
+        ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
+          ? item.drawingSpecification._id 
+          : item.drawingSpecification)
+        : null;
+      
       return {
         ...baseData,
         karoseri: item?.karoseri || '',
         chassis: item?.chassis || '',
         chassisModel: item?.chassisModel || '',
-        drawingSpecification: item?.drawingSpecification || null,
+        drawingSpecification: drawingSpecId,
         bodyTypeId: item?.bodyTypeId || '',
         chassisTypeId: item?.chassisTypeId || '',
         sizeTypeId: item?.sizeTypeId || '',
@@ -182,12 +189,19 @@ const OfferItemForm = ({
 
     let newFormData;
     if (lineOfBusinessType === 'karoseri') {
+      // Extract ObjectId from drawingSpecification if it's a populated object
+      const drawingSpecId = item?.drawingSpecification 
+        ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
+          ? item.drawingSpecification._id 
+          : item.drawingSpecification)
+        : null;
+      
       newFormData = {
         ...baseData,
         karoseri: item?.karoseri || '',
         chassis: item?.chassis || '',
         chassisModel: item?.chassisModel || '',
-        drawingSpecification: item?.drawingSpecification || null,
+        drawingSpecification: drawingSpecId,
         bodyTypeId: item?.bodyTypeId?._id || item?.bodyTypeId || '',
         chassisTypeId: item?.chassisTypeId?._id || item?.chassisTypeId || '',
         sizeTypeId: item?.sizeTypeId || '',
@@ -199,9 +213,17 @@ const OfferItemForm = ({
           items: normalizeOrderValues(spec.items || [])
         }))
       };
-      // Set the selected drawing spec if it exists
+      // Set the selected drawing spec if it exists (use the populated object for display)
       if (item?.drawingSpecification) {
-        setSelectedDrawingSpec(item.drawingSpecification);
+        // If it's already a populated object, use it directly
+        if (typeof item.drawingSpecification === 'object' && item.drawingSpecification.drawingNumber) {
+          setSelectedDrawingSpec(item.drawingSpecification);
+        } else {
+          // Otherwise, it will be fetched by the useEffect that watches drawingSpecification
+          setSelectedDrawingSpec(null);
+        }
+      } else {
+        setSelectedDrawingSpec(null);
       }
     } else if (lineOfBusinessType === 'service') {
       newFormData = {
@@ -226,17 +248,53 @@ const OfferItemForm = ({
   // Fetch drawing specification details when drawingSpecification ID changes
   useEffect(() => {
     const fetchDrawingSpec = async () => {
-      if (formData.drawingSpecification && formData.drawingSpecification !== null && typeof formData.drawingSpecification === 'string') {
+      if (!formData.drawingSpecification || formData.drawingSpecification === null) {
+        setSelectedDrawingSpec(null);
+        return;
+      }
+
+      // Handle ObjectId string
+      if (typeof formData.drawingSpecification === 'string') {
         try {
           const response = await axiosInstance.get(`/api/drawing-specifications/${formData.drawingSpecification}`);
-          setSelectedDrawingSpec(response.data.data);
+          if (response.data?.success && response.data?.data) {
+            setSelectedDrawingSpec(response.data.data);
+          } else if (response.data?.data) {
+            // Some APIs return data directly without success wrapper
+            setSelectedDrawingSpec(response.data.data);
+          } else {
+            console.warn('Unexpected API response structure:', response.data);
+            setSelectedDrawingSpec(null);
+          }
         } catch (error) {
           console.error('Error fetching drawing specification:', error);
           setSelectedDrawingSpec(null);
         }
-      } else if (formData.drawingSpecification && formData.drawingSpecification !== null && typeof formData.drawingSpecification === 'object') {
-        // If it's already an object (populated), use it directly
-        setSelectedDrawingSpec(formData.drawingSpecification);
+      } 
+      // Handle populated object
+      else if (typeof formData.drawingSpecification === 'object') {
+        // If it has drawingNumber or other drawing properties, it's already populated
+        if (formData.drawingSpecification.drawingNumber || formData.drawingSpecification.bodyTypeId) {
+          setSelectedDrawingSpec(formData.drawingSpecification);
+        } 
+        // If it's an object with just _id, extract the ID and fetch
+        else if (formData.drawingSpecification._id) {
+          try {
+            const response = await axiosInstance.get(`/api/drawing-specifications/${formData.drawingSpecification._id}`);
+            if (response.data?.success && response.data?.data) {
+              setSelectedDrawingSpec(response.data.data);
+            } else if (response.data?.data) {
+              setSelectedDrawingSpec(response.data.data);
+            } else {
+              setSelectedDrawingSpec(null);
+            }
+          } catch (error) {
+            console.error('Error fetching drawing specification from object:', error);
+            setSelectedDrawingSpec(null);
+          }
+        } else {
+          setSelectedDrawingSpec(null);
+        }
       } else {
         setSelectedDrawingSpec(null);
       }
@@ -536,9 +594,33 @@ const OfferItemForm = ({
       return;
     }
     
-    // Normalize order values before saving
+    // Normalize order values and ObjectId fields before saving
     const normalizedFormData = {
       ...formData,
+      // Ensure drawingSpecification is always just the ID, not an object
+      drawingSpecification: formData.drawingSpecification 
+        ? (typeof formData.drawingSpecification === 'object' && formData.drawingSpecification._id 
+          ? formData.drawingSpecification._id 
+          : formData.drawingSpecification)
+        : null,
+      // Ensure bodyTypeId is just the ID
+      bodyTypeId: formData.bodyTypeId 
+        ? (typeof formData.bodyTypeId === 'object' && formData.bodyTypeId._id 
+          ? formData.bodyTypeId._id 
+          : formData.bodyTypeId)
+        : '',
+      // Ensure chassisTypeId is just the ID
+      chassisTypeId: formData.chassisTypeId 
+        ? (typeof formData.chassisTypeId === 'object' && formData.chassisTypeId._id 
+          ? formData.chassisTypeId._id 
+          : formData.chassisTypeId)
+        : '',
+      // Ensure templateSourceId is just the ID
+      templateSourceId: formData.templateSourceId 
+        ? (typeof formData.templateSourceId === 'object' && formData.templateSourceId._id 
+          ? formData.templateSourceId._id 
+          : formData.templateSourceId)
+        : null,
       specifications: formData.specifications?.map(spec => ({
         ...spec,
         items: normalizeOrderValues(spec.items || [])

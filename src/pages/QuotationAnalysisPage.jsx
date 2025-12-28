@@ -724,7 +724,11 @@ const QuotationAnalysisPage = () => {
                         {analysisData.followUpStatus.notFollowedUp.quotations.map((q, idx) => (
                           <button
                             key={idx}
-                            onClick={() => navigate(`/quotations/details/${q.quotationId || q.quotationNumber}`)}
+                            onClick={() => {
+                              const quotationId = q.quotationId || q.quotationNumber;
+                              const encodedId = encodeURIComponent(quotationId);
+                              navigate(`/quotations/details/${encodedId}`);
+                            }}
                             className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium text-red-700 hover:bg-red-50 hover:shadow-sm transition-all border border-red-200 hover:border-red-300"
                             title={`${q.customerName}${q.daysSinceFollowUp !== null ? ` - ${q.daysSinceFollowUp} days ago` : ' - Never followed up'}`}
                           >
@@ -764,7 +768,11 @@ const QuotationAnalysisPage = () => {
                         {analysisData.followUpStatus.mediumWarning.quotations.map((q, idx) => (
                           <button
                             key={idx}
-                            onClick={() => navigate(`/quotations/details/${q.quotationId || q.quotationNumber}`)}
+                            onClick={() => {
+                              const quotationId = q.quotationId || q.quotationNumber;
+                              const encodedId = encodeURIComponent(quotationId);
+                              navigate(`/quotations/details/${encodedId}`);
+                            }}
                             className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium text-amber-700 hover:bg-amber-50 hover:shadow-sm transition-all border border-amber-200 hover:border-amber-300"
                             title={`${q.customerName} - ${q.daysSinceFollowUp} days ago`}
                           >

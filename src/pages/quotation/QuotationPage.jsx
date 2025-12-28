@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { ArrowLeft, BarChart3, CheckCircle, FileText, List, Wrench } from 'lucide-react';
+import { ArrowLeft, BarChart3, CheckCircle, CheckCircle2, FileText, List, Wrench } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Navigation from '../../components/common/Navigation';
 import LazyTabs from '../../components/common/LazyTabs';
@@ -60,7 +60,9 @@ const QuotationPage = () => {
     }
     
     const stringQuotationId = quotationId.toString();
-    navigate(`/quotations/details/${stringQuotationId}`);
+    // URL encode the quotation ID to handle slashes and special characters
+    const encodedQuotationId = encodeURIComponent(stringQuotationId);
+    navigate(`/quotations/details/${encodedQuotationId}`);
   }, [navigate]);
 
   const handlePreview = useCallback((quotationData) => {
@@ -87,7 +89,9 @@ const QuotationPage = () => {
     }
     
     const stringQuotationId = quotationId.toString();
-    navigate(`/quotations/details/${stringQuotationId}?view=preview`);
+    // URL encode the quotation ID to handle slashes and special characters
+    const encodedQuotationId = encodeURIComponent(stringQuotationId);
+    navigate(`/quotations/details/${encodedQuotationId}?view=preview`);
   }, [navigate]);
 
   const handleEdit = useCallback((context = {}) => {
@@ -165,6 +169,15 @@ const QuotationPage = () => {
       icon: CheckCircle,
       permissionKey: 'approve_rfq',
       component: () => import('../../components/quotations/ApproveQuotationTab')
+    });
+
+    // Download Approval Role Tab
+    tabList.push({
+      key: 'download-approval',
+      label: 'Download Approval',
+      icon: CheckCircle2,
+      permissionKey: 'engineer_download_approver', // Will show if user has either permission
+      component: () => import('../../components/quotations/DownloadApprovalTab')
     });
 
     // Creator Role Tabs
@@ -258,6 +271,8 @@ const QuotationPage = () => {
         return 'Create new RFQ requests for quotation approval';
       case 'approve':
         return 'Review and approve/reject RFQ requests';
+      case 'download-approval':
+        return 'Approve quotation offers for download (requires both engineer and management approval)';
       case 'rfq-list':
         return 'View approved RFQ requests and create quotations';
       case 'my-created-quotations':

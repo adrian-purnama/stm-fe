@@ -206,6 +206,116 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
   }, [offers, quotation]);
 
   const [headerState, setHeaderState] = useState(header);
+  
+  // Check if current user is the requester of this quotation
+  // Logic: First check if user is requester, then check if they have other roles
+  // If they have other roles (approver, management, engineering, super admin), allow viewing
+  const isRequester = useMemo(() => {
+    if (!user || !headerState?.requesterId) {
+      console.log('[DEBUG] isRequester check: no user or requesterId', { 
+        hasUser: !!user, 
+        hasRequesterId: !!headerState?.requesterId,
+        userId: user?.id || user?._id,
+        requesterId: headerState?.requesterId 
+      });
+      return false;
+    }
+    
+    const requesterId = headerState.requesterId;
+    const userId = user.id || user._id;
+    
+    // Handle both populated objects (with _id) and ObjectId strings
+    // When populated, requesterId is an object like { _id: ObjectId('...'), fullName: '...', email: '...' }
+    // When not populated, it's just an ObjectId
+    let requesterIdStr;
+    if (requesterId && typeof requesterId === 'object' && requesterId._id) {
+      // If it's a populated object, use _id
+      requesterIdStr = requesterId._id.toString();
+    } else {
+      // Try toString() first (works for Mongoose ObjectIds)
+      // If that fails, try accessing _id or convert to string
+      try {
+        requesterIdStr = requesterId.toString();
+      } catch {
+        requesterIdStr = requesterId?._id?.toString() || String(requesterId);
+      }
+    }
+    
+    const userIdStr = userId?.toString?.() || String(userId);
+    
+    // Step 1: Check if user is the requester (lowest check)
+    const isUserRequester = requesterIdStr === userIdStr;
+    
+    // Step 2: If user is the requester, check if they have other roles that override requester restriction
+    if (isUserRequester) {
+      // Extract user permissions
+      const permissions = (user?.permissions || []).map(perm => {
+        if (typeof perm === 'string') return perm;
+        if (perm.name) return perm.name;
+        return null;
+      }).filter(Boolean);
+      
+      // Check for roles that allow viewing notes/images even if user is requester
+      const hasApproverRole = permissions.includes('approve_rfq');
+      const hasManagementRole = permissions.includes('quotation_download_approver') || 
+                                permissions.includes('quotation_admin') ||
+                                permissions.includes('admin') ||
+                                permissions.includes('manager');
+      const hasEngineeringRole = permissions.includes('engineer_download_approver') ||
+                                permissions.includes('engineer_review');
+      const isSuperAdminUser = permissions.includes('super_admin');
+      
+      // If user has any of these roles, allow viewing (return false to not hide)
+      if (hasApproverRole || hasManagementRole || hasEngineeringRole || isSuperAdminUser) {
+        console.log('[DEBUG] User is requester but has other roles - allowing notes visibility', {
+          hasApproverRole,
+          hasManagementRole,
+          hasEngineeringRole,
+          isSuperAdminUser,
+          permissions
+        });
+        return false; // Don't hide notes/images
+      }
+      
+      // User is requester and has no other roles - hide notes/images
+      console.log('[DEBUG] User is requester with no other roles - hiding notes/images', {
+        permissions
+      });
+      return true; // Hide notes/images
+    }
+    
+    // User is not the requester - show notes/images
+    console.log('[DEBUG] User is not requester - showing notes/images', {
+      requesterIdStr,
+      userIdStr
+    });
+    return false; // Don't hide notes/images
+  }, [user, headerState?.requesterId]);
+
+  // Check if current user is the creator of this quotation
+  const isCreator = useMemo(() => {
+    if (!user || !headerState?.creatorId) return false;
+    
+    const creatorId = headerState.creatorId;
+    const userId = user.id || user._id;
+    
+    // Handle both populated objects (with _id) and ObjectId strings
+    let creatorIdStr;
+    if (creatorId && typeof creatorId === 'object' && creatorId._id) {
+      creatorIdStr = creatorId._id.toString();
+    } else {
+      try {
+        creatorIdStr = creatorId.toString();
+      } catch {
+        creatorIdStr = creatorId?._id?.toString() || String(creatorId);
+      }
+    }
+    
+    const userIdStr = userId?.toString?.() || String(userId);
+    
+    return creatorIdStr === userIdStr;
+  }, [user, headerState?.creatorId]);
+  
   const [activeOfferId, setActiveOfferId] = useState(initialActiveOfferId);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showHeaderEditModal, setShowHeaderEditModal] = useState(false);
@@ -1907,16 +2017,17 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                 <p className="font-medium text-gray-900">{activeOffer.offerItems?.length || 0}</p>
               </div>
             </div>
+            {/* Notes - Hidden only for requesters */}
             {activeOffer.notes && (
-              <div className="mt-4">
+              <div className="mt-4" style={{ display: isRequester ? 'none' : 'block' }}>
                 <span className="text-gray-600">Notes:</span>
                 <p className="font-medium text-gray-900 mt-1">{activeOffer.notes}</p>
               </div>
             )}
             
-            {/* Notes Images */}
+            {/* Notes Images - Hidden only for requesters */}
             {activeOffer.notesImages && activeOffer.notesImages.length > 0 && (
-              <div className="mt-4">
+              <div className="mt-4" style={{ display: isRequester ? 'none' : 'block' }}>
                 <span className="text-gray-600">Notes Images:</span>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-2">
                   {activeOffer.notesImages.map((imageData, index) => {
@@ -1928,18 +2039,34 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                     
                     return (
                       <div key={imageId} className="relative group">
-                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
                           {fileId ? (
-                            <img
-                              src={getNotesImageAssetUrl(imageId, fileId)}
-                              alt={originalName}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error('Failed to load notes image:', e.target.src);
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
+                            <>
+                              <img
+                                src={getNotesImageAssetUrl(imageId, fileId)}
+                                alt={originalName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  console.error('Failed to load notes image:', e.target.src);
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                              {/* Download button overlay for creators */}
+                              {isCreator && (
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                  <a
+                                    href={getNotesImageAssetUrl(imageId, fileId, true)}
+                                    download={originalName}
+                                    className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-lg"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                  </a>
+                                </div>
+                              )}
+                            </>
                           ) : null}
                           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm" style={{ display: fileId ? 'none' : 'flex' }}>
                             {fileId ? 'Failed to load' : 'Loading...'}
@@ -1953,6 +2080,18 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                             <p className="text-xs text-gray-400">
                               {(imageFile.fileSize / 1024 / 1024).toFixed(2)} MB
                             </p>
+                          )}
+                          {/* Download link below image for creators */}
+                          {isCreator && fileId && (
+                            <a
+                              href={getNotesImageAssetUrl(imageId, fileId, true)}
+                              download={originalName}
+                              className="mt-1 inline-flex items-center text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Download
+                            </a>
                           )}
                         </div>
                       </div>
@@ -2252,8 +2391,9 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                         </div>
                       )}
 
+                      {/* Item Notes - Hidden only for requesters */}
                       {item.notes && (
-                        <div className="mt-3">
+                        <div className="mt-3" style={{ display: isRequester ? 'none' : 'block' }}>
                           <span className="text-gray-600 text-sm">Notes:</span>
                           <p className="text-sm text-gray-700 mt-1">{item.notes}</p>
                         </div>
