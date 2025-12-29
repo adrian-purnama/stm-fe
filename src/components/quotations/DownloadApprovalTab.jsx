@@ -60,7 +60,8 @@ const DownloadApprovalTab = () => {
       const quotationNumber = offer.header?.quotationNumber || offer.quotationHeaderId?.quotationNumber;
       // URL encode the quotation number to handle slashes and special characters
       const encodedQuotationNumber = encodeURIComponent(quotationNumber);
-      const endpoint = `/api/quotations/${encodedQuotationNumber}/offers/${offer._id}/approve/${approvalType}`;
+      // Use new route structure to avoid CORS issues with encoded slashes
+      const endpoint = `/api/quotations/approve/${approvalType}/${encodedQuotationNumber}/${offer._id}`;
       
       await axiosInstance.post(endpoint, {
         action: 'approve',
@@ -92,7 +93,8 @@ const DownloadApprovalTab = () => {
       const quotationNumber = offer.header?.quotationNumber || offer.quotationHeaderId?.quotationNumber;
       // URL encode the quotation number to handle slashes and special characters
       const encodedQuotationNumber = encodeURIComponent(quotationNumber);
-      const endpoint = `/api/quotations/${encodedQuotationNumber}/offers/${offer._id}/approve/${approvalType}`;
+      // Use new route structure to avoid CORS issues with encoded slashes
+      const endpoint = `/api/quotations/approve/${approvalType}/${encodedQuotationNumber}/${offer._id}`;
       
       await axiosInstance.post(endpoint, {
         action: 'reject',
