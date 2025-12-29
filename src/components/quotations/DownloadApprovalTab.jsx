@@ -21,9 +21,21 @@ const DownloadApprovalTab = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Check user permissions using the permission hook (handles super_admin correctly)
-  const { hasPermission } = usePermissions(['engineer_download_approver', 'quotation_download_approver']);
+  const { hasPermission, loading: permissionsLoading } = usePermissions(['engineer_download_approver', 'quotation_download_approver']);
   const hasEngineerPermission = hasPermission('engineer_download_approver');
   const hasManagementPermission = hasPermission('quotation_download_approver');
+  
+  // Debug logging
+  useEffect(() => {
+    if (!permissionsLoading) {
+      console.log('[DownloadApprovalTab] Permissions loaded:', {
+        hasEngineerPermission,
+        hasManagementPermission,
+        engineerPermission: hasPermission('engineer_download_approver'),
+        managementPermission: hasPermission('quotation_download_approver')
+      });
+    }
+  }, [permissionsLoading, hasEngineerPermission, hasManagementPermission, hasPermission]);
 
   // Fetch offers pending approval
   const fetchPendingOffers = async () => {
@@ -169,12 +181,25 @@ const DownloadApprovalTab = () => {
 
   // Check if user can approve this offer
   const canApprove = (offer, type) => {
+    // Don't allow approval if permissions are still loading
+    if (permissionsLoading) return false;
+    
     const approval = offer.downloadApproval?.[type === 'engineer' ? 'engineerApproval' : 'managementApproval'];
     const status = approval?.status || 'pending';
     
     // User can approve if they have the permission and the status is pending
-    if (type === 'engineer' && hasEngineerPermission && status === 'pending') return true;
-    if (type === 'management' && hasManagementPermission && status === 'pending') return true;
+    if (type === 'engineer') {
+      // Explicitly check engineer permission
+      if (!hasEngineerPermission) return false;
+      if (status !== 'pending') return false;
+      return true;
+    }
+    if (type === 'management') {
+      // Explicitly check management permission
+      if (!hasManagementPermission) return false;
+      if (status !== 'pending') return false;
+      return true;
+    }
     return false;
   };
 
@@ -245,21 +270,27 @@ const DownloadApprovalTab = () => {
                     <p className="text-xs sm:text-sm text-gray-600 mb-3 break-words">Customer: {customerName}</p>
                     
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 whitespace-nowrap">Engineer:</span>
-                        {getApprovalStatusBadge(offer, 'engineer')}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 whitespace-nowrap">Management:</span>
-                        {getApprovalStatusBadge(offer, 'management')}
-                      </div>
+                      {/* Only show Engineer badge if user has engineer permission */}
+                      {hasEngineerPermission && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">Engineer:</span>
+                          {getApprovalStatusBadge(offer, 'engineer')}
+                        </div>
+                      )}
+                      {/* Only show Management badge if user has management permission */}
+                      {hasManagementPermission && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">Management:</span>
+                          {getApprovalStatusBadge(offer, 'management')}
+                        </div>
+                      )}
                       <div className="text-xs sm:text-sm font-medium text-gray-900">
                         Total: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalNetto)}
                       </div>
                     </div>
 
-                    {/* Approval/Rejection info */}
-                    {offer.downloadApproval?.engineerApproval?.status === 'approved' && offer.downloadApproval?.engineerApproval?.approvedBy && (
+                    {/* Approval/Rejection info - Only show for permissions user has */}
+                    {hasEngineerPermission && offer.downloadApproval?.engineerApproval?.status === 'approved' && offer.downloadApproval?.engineerApproval?.approvedBy && (
                       <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-800 break-words">
                         <strong>Engineer Approved</strong> by {offer.downloadApproval.engineerApproval.approvedBy?.fullName || 'Unknown'} 
                         {offer.downloadApproval.engineerApproval.approvedAt && (
@@ -269,7 +300,7 @@ const DownloadApprovalTab = () => {
                         )}
                       </div>
                     )}
-                    {offer.downloadApproval?.engineerApproval?.status === 'rejected' && offer.downloadApproval?.engineerApproval?.rejectionNote && (
+                    {hasEngineerPermission && offer.downloadApproval?.engineerApproval?.status === 'rejected' && offer.downloadApproval?.engineerApproval?.rejectionNote && (
                       <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800 break-words">
                         <strong>Engineer Rejected:</strong> {offer.downloadApproval.engineerApproval.rejectionNote}
                         {offer.downloadApproval.engineerApproval.approvedBy && (
@@ -279,7 +310,7 @@ const DownloadApprovalTab = () => {
                         )}
                       </div>
                     )}
-                    {offer.downloadApproval?.managementApproval?.status === 'approved' && offer.downloadApproval?.managementApproval?.approvedBy && (
+                    {hasManagementPermission && offer.downloadApproval?.managementApproval?.status === 'approved' && offer.downloadApproval?.managementApproval?.approvedBy && (
                       <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-800 break-words">
                         <strong>Management Approved</strong> by {offer.downloadApproval.managementApproval.approvedBy?.fullName || 'Unknown'}
                         {offer.downloadApproval.managementApproval.approvedAt && (
@@ -289,7 +320,7 @@ const DownloadApprovalTab = () => {
                         )}
                       </div>
                     )}
-                    {offer.downloadApproval?.managementApproval?.status === 'rejected' && offer.downloadApproval?.managementApproval?.rejectionNote && (
+                    {hasManagementPermission && offer.downloadApproval?.managementApproval?.status === 'rejected' && offer.downloadApproval?.managementApproval?.rejectionNote && (
                       <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800 break-words">
                         <strong>Management Rejected:</strong> {offer.downloadApproval.managementApproval.rejectionNote}
                         {offer.downloadApproval.managementApproval.approvedBy && (
@@ -310,8 +341,8 @@ const DownloadApprovalTab = () => {
                       <Eye className="h-5 w-5" />
                     </button>
                     
-                    {/* Show engineer approval buttons if user has permission and offer is pending engineer approval */}
-                    {canApprove(offer, 'engineer') && (
+                    {/* Show engineer approval buttons ONLY if user has engineer permission and offer is pending engineer approval */}
+                    {!permissionsLoading && hasEngineerPermission && canApprove(offer, 'engineer') && (
                       <>
                         <button
                           onClick={() => showApproval(offer, 'engineer', 'approve')}
@@ -330,8 +361,8 @@ const DownloadApprovalTab = () => {
                       </>
                     )}
                     
-                    {/* Show management approval buttons if user has permission and offer is pending management approval */}
-                    {canApprove(offer, 'management') && (
+                    {/* Show management approval buttons ONLY if user has management permission and offer is pending management approval */}
+                    {!permissionsLoading && hasManagementPermission && canApprove(offer, 'management') && (
                       <>
                         <button
                           onClick={() => showApproval(offer, 'management', 'approve')}

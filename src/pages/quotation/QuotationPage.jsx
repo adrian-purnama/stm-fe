@@ -176,7 +176,7 @@ const QuotationPage = () => {
       key: 'download-approval',
       label: 'Download Approval',
       icon: CheckCircle2,
-      permissionKey: 'engineer_download_approver', // Will show if user has either permission
+      permissionKey: ['engineer_download_approver', 'quotation_download_approver'], // Show if user has either permission
       component: () => import('../../components/quotations/DownloadApprovalTab')
     });
 

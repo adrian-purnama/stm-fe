@@ -51,11 +51,19 @@ const LazyTabs = ({
     lazyComponentsRef.current = lazyComponents;
   }, [lazyComponents]);
 
-  // Extract unique permission keys from tabs
+  // Extract unique permission keys from tabs (support both single string and array)
   const permissionKeys = useMemo(() => {
-    return tabs
-      .map(tab => tab.permissionKey)
-      .filter(Boolean);
+    const keys = new Set();
+    tabs.forEach(tab => {
+      if (tab.permissionKey) {
+        if (Array.isArray(tab.permissionKey)) {
+          tab.permissionKey.forEach(key => keys.add(key));
+        } else {
+          keys.add(tab.permissionKey);
+        }
+      }
+    });
+    return Array.from(keys);
   }, [tabs]);
 
   // Fetch permissions for all tabs
@@ -68,8 +76,14 @@ const LazyTabs = ({
       if (!tab.permissionKey) {
         return true;
       }
-      // Check if user has the required permission
-      return hasPermission(tab.permissionKey);
+      // Support both single permission key and array of permission keys
+      if (Array.isArray(tab.permissionKey)) {
+        // Show tab if user has ANY of the required permissions
+        return tab.permissionKey.some(key => hasPermission(key));
+      } else {
+        // Check if user has the required permission
+        return hasPermission(tab.permissionKey);
+      }
     });
   }, [tabs, hasPermission]);
 
