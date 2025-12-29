@@ -57,12 +57,19 @@ const DownloadApprovalTab = () => {
   const handleApprove = async (offer, approvalType) => {
     try {
       setIsProcessing(true);
-      const quotationNumber = offer.header?.quotationNumber || offer.quotationHeaderId?.quotationNumber;
-      // URL encode the quotation number to handle slashes and special characters
-      const encodedQuotationNumber = encodeURIComponent(quotationNumber);
-      const endpoint = `/api/quotations/${encodedQuotationNumber}/offers/${offer._id}/approve/${approvalType}`;
+      // Get quotation header ID (prefer _id, fallback to quotationNumber)
+      const quotationHeaderId = offer.header?._id || 
+                                 offer.quotationHeaderId?._id || 
+                                 offer.quotationHeaderId ||
+                                 offer.header?.quotationNumber || 
+                                 offer.quotationHeaderId?.quotationNumber;
+      
+      // Simple endpoint - all data in body
+      const endpoint = `/api/quotations/approve/${approvalType}`;
       
       await axiosInstance.post(endpoint, {
+        quotationHeaderId: quotationHeaderId,
+        offerId: offer._id,
         action: 'approve',
         note: approvalNote.trim() || ''
       });
@@ -89,12 +96,19 @@ const DownloadApprovalTab = () => {
 
     try {
       setIsProcessing(true);
-      const quotationNumber = offer.header?.quotationNumber || offer.quotationHeaderId?.quotationNumber;
-      // URL encode the quotation number to handle slashes and special characters
-      const encodedQuotationNumber = encodeURIComponent(quotationNumber);
-      const endpoint = `/api/quotations/${encodedQuotationNumber}/offers/${offer._id}/approve/${approvalType}`;
+      // Get quotation header ID (prefer _id, fallback to quotationNumber)
+      const quotationHeaderId = offer.header?._id || 
+                                 offer.quotationHeaderId?._id || 
+                                 offer.quotationHeaderId ||
+                                 offer.header?.quotationNumber || 
+                                 offer.quotationHeaderId?.quotationNumber;
+      
+      // Simple endpoint - all data in body
+      const endpoint = `/api/quotations/approve/${approvalType}`;
       
       await axiosInstance.post(endpoint, {
+        quotationHeaderId: quotationHeaderId,
+        offerId: offer._id,
         action: 'reject',
         note: approvalNote.trim()
       });
