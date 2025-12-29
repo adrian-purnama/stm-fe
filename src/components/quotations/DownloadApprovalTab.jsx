@@ -133,12 +133,20 @@ const DownloadApprovalTab = () => {
     setShowApprovalModal(true);
   };
 
-  // View quotation details
+  // View quotation details - Use header ID to avoid CORS issues with quotation numbers containing slashes
   const handleViewQuotation = (offer) => {
-    const quotationNumber = offer.header?.quotationNumber || offer.quotationHeaderId?.quotationNumber;
-    // URL encode the quotation number to handle slashes and special characters
-    const encodedQuotationNumber = encodeURIComponent(quotationNumber);
-    navigate(`/quotations/details/${encodedQuotationNumber}?activeOfferId=${offer._id}`);
+    // Prefer using _id to avoid URL encoding issues with quotation numbers containing slashes
+    const quotationHeaderId = offer.header?._id || 
+                               offer.quotationHeaderId?._id || 
+                               offer.quotationHeaderId;
+    
+    // Fallback to quotationNumber if _id is not available
+    const quotationIdentifier = quotationHeaderId || 
+                                offer.header?.quotationNumber || 
+                                offer.quotationHeaderId?.quotationNumber;
+    
+    // Use the identifier directly - React Router and the backend by-id endpoint handle both _id and quotationNumber
+    navigate(`/quotations/details/${quotationIdentifier}?activeOfferId=${offer._id}`);
   };
 
   useEffect(() => {
