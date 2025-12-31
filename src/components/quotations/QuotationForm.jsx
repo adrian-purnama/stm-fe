@@ -208,6 +208,13 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     return null;
   }, [processedQuotation]);
 
+  // Helper function to check if offer is approved (both engineer and management)
+  const isOfferApproved = useMemo(() => {
+    if (!activeOffer || !activeOffer.downloadApproval) return false;
+    return activeOffer.downloadApproval?.engineerApproval?.status === 'approved' &&
+           activeOffer.downloadApproval?.managementApproval?.status === 'approved';
+  }, [activeOffer]);
+
   // Check if user is viewer-only (has all_quotation_viewer but NOT quotation_edit or quotation_delete)
   // Exception 1: If user is creating a NEW quotation, they should be able to create it even with only viewer permissions
   // Exception 2: If user is the creator of an existing quotation, they can edit it even with only viewer permissions
@@ -261,6 +268,11 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
     // User has viewer permission but no edit/delete/admin permissions and is not the creator
     return true;
   }, [user, processedQuotation, mode]);
+
+  // Check if fields should be disabled (all fields except notes/images when approved)
+  const isFieldDisabled = useMemo(() => {
+    return mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly || isOfferApproved;
+  }, [mode, isViewerOnly, isOfferApproved]);
 
   useEffect(() => {
     console.log('[DEBUG] useEffect triggered with:', { processedQuotation, activeOffer, mode, rfqId });
@@ -1079,10 +1091,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               type="text"
               value={formData.customerName}
               onChange={(e) => handleInputChange('customerName', e.target.value)}
-              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
+              readOnly={isFieldDisabled}
+              disabled={isFieldDisabled}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly
+                isFieldDisabled
                   ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
                   : 'border-gray-300 focus:ring-blue-500'
               }`}
@@ -1098,10 +1110,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               type="text"
               value={formData.contactPerson.name}
               onChange={(e) => handleNestedInputChange('contactPerson', 'name', e.target.value)}
-              readOnly={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
+              readOnly={isFieldDisabled}
+              disabled={isFieldDisabled}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly
+                isFieldDisabled
                   ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
                   : 'border-gray-300 focus:ring-blue-500'
               }`}
@@ -1121,10 +1133,10 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               ]}
               value={formData.contactPerson.gender}
               onChange={(value) => handleNestedInputChange('contactPerson', 'gender', value)}
-              disabled={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly}
+              disabled={isFieldDisabled}
               placeholder="Select gender"
               required={true}
-              className={mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly ? 'opacity-50 cursor-not-allowed' : ''}
+              className={isFieldDisabled ? 'opacity-50 cursor-not-allowed' : ''}
             />
           </div>
         </div>
@@ -1134,7 +1146,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">Offer Items</h3>
-          {!isViewerOnly && (
+          {!isFieldDisabled && (
             <button
               type="button"
               onClick={addOfferItem}
@@ -1149,7 +1161,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         <div className="space-y-6">
           {formData.offerItems.map((item, index) => (
             <div key={index} className="border border-gray-200 rounded-lg">
-              {editingItemIndex === index && !isViewerOnly ? (
+              {editingItemIndex === index && !isFieldDisabled ? (
                 <OfferItemForm
                   item={item}
                   index={index}
@@ -1169,7 +1181,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         {lineOfBusinessType === 'sparepart' && item.sparepartName}
                       </p>
                     </div>
-                    {!isViewerOnly && (
+                    {!isFieldDisabled && (
                       <div className="flex space-x-2">
                         <button
                           type="button"
@@ -1212,7 +1224,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             </div>
           ))}
           
-          {!isViewerOnly && editingItemIndex === formData.offerItems.length && (
+          {!isFieldDisabled && editingItemIndex === formData.offerItems.length && (
             <OfferItemForm
               key={`new-item-${editingItemIndex}`}
               index={formData.offerItems.length}
@@ -1280,7 +1292,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
               id="excludePPN"
               checked={formData.excludePPN}
               onChange={(e) => handleInputChange('excludePPN', e.target.checked)}
-              disabled={isViewerOnly}
+              disabled={isFieldDisabled}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <label htmlFor="excludePPN" className={`ml-2 block text-sm ${isViewerOnly ? 'text-gray-500' : 'text-gray-700'}`}>
@@ -1295,16 +1307,21 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             <textarea
               value={formData.notes}
               onChange={(e) => handleInputChange('notes', e.target.value)}
-              readOnly={isViewerOnly}
-              disabled={isViewerOnly}
+              readOnly={isViewerOnly && !isOfferApproved}
+              disabled={isViewerOnly && !isOfferApproved}
               rows={3}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                isViewerOnly 
+                (isViewerOnly && !isOfferApproved)
                   ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed' 
                   : 'border-gray-300 focus:ring-blue-500'
               }`}
               placeholder="Additional notes for this offer..."
             />
+            {isOfferApproved && (
+              <p className="mt-1 text-xs text-blue-600">
+                Note: This offer is approved. You can still add notes and images, but other fields cannot be edited.
+              </p>
+            )}
           </div>
 
           {/* Notes Images & Documents Section */}
@@ -1329,15 +1346,15 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                 multiple
                 accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
                 onChange={handleFileUpload}
-                disabled={uploadingImages || isViewerOnly}
+                disabled={uploadingImages || (isViewerOnly && !isOfferApproved)}
                 className="hidden"
                 id="notes-image-upload"
               />
               <label
                 htmlFor="notes-image-upload"
-                className={`cursor-pointer ${uploadingImages || isViewerOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`cursor-pointer ${uploadingImages || (isViewerOnly && !isOfferApproved) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={(e) => {
-                  if (isViewerOnly) {
+                  if (isViewerOnly && !isOfferApproved) {
                     e.preventDefault();
                     toast.error('You do not have permission to upload files. You can only view them.');
                   } else {
@@ -1431,8 +1448,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         )}
                       </div>
                       
-                      {/* Remove button */}
-                      {!isViewerOnly && (
+                      {/* Remove button - allow removal even when approved (for notes/images) */}
+                      {(!isViewerOnly || isOfferApproved) && (
                         <button
                           onClick={() => handleRemoveImage(imageId)}
                           className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1486,8 +1503,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         )}
                       </div>
                       
-                      {/* Remove button */}
-                      {!isViewerOnly && (
+                      {/* Remove button - allow removal even when approved (for notes/images) */}
+                      {(!isViewerOnly || isOfferApproved) && (
                         <button
                           onClick={() => handleRemoveImage(pendingImage.id)}
                           className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"

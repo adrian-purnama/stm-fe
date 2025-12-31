@@ -92,10 +92,13 @@ const formatWinSubStatus = (value) => {
   return option ? option.label : value;
 };
 
-const buildOcPreview = (sequence, monthRoman, year) => {
+const buildOcPreview = (sequence, monthRoman, year, isRange = false, endSequence = '') => {
   if (!sequence) return 'Not set';
   const roman = (monthRoman || getCurrentRomanMonthMeta().roman).toUpperCase();
   const normalizedYear = year || getCurrentRomanMonthMeta().year;
+  if (isRange && endSequence) {
+    return `${sequence} - ${endSequence}/${roman}/${normalizedYear}`;
+  }
   return `${sequence}/${roman}/${normalizedYear}`;
 };
 
@@ -107,12 +110,15 @@ const resolveSpkCodeValue = (type) => {
   return '-';
 };
 
-const buildSpkPreview = (sequence, monthRoman, type, year) => {
+const buildSpkPreview = (sequence, monthRoman, type, year, isRange = false, endSequence = '') => {
   if (!sequence) return 'Not set';
   const roman = (monthRoman || getCurrentRomanMonthMeta().roman).toUpperCase();
   const normalizedYear = year || getCurrentRomanMonthMeta().year;
   const codeValue = resolveSpkCodeValue(type);
   const displayCode = codeValue === '-' ? '' : codeValue;
+  if (isRange && endSequence) {
+    return `${sequence} - ${endSequence}/${roman}/${displayCode}/${normalizedYear}`;
+  }
   return `${sequence}/${roman}/${displayCode}/${normalizedYear}`;
 };
 
@@ -319,9 +325,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     customReason: '',
     winSubStatus: 'order',
     ocSequence: '',
+    ocSequenceEnd: '',
     ocMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
     ocYear: String(new Date().getFullYear()),
     spkSequence: '',
+    spkSequenceEnd: '',
     spkType: '-',
     spkMonthRoman: ROMAN_MONTHS[new Date().getMonth()],
     spkYear: String(new Date().getFullYear())
@@ -792,15 +800,63 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
   const openStatusModal = (header, offers) => {
     const currentMeta = getCurrentRomanMonthMeta();
-    const ocParts = (header.ocNumber || '').split('/');
+    
+    // Parse OC number (support range format: "10 - 100/XII/2025" or "10/XII/2025")
+    let ocSequence = '';
+    let ocSequenceEnd = '';
+    // First check ocSequenceNumber (might be "10 - 100" or "10")
+    if (header.ocSequenceNumber) {
+      const sequencePart = header.ocSequenceNumber.toString().trim();
+      const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (rangeMatch) {
+        ocSequence = rangeMatch[1];
+        ocSequenceEnd = rangeMatch[2];
+      } else {
+        ocSequence = sequencePart;
+      }
+    } else {
+      const ocParts = (header.ocNumber || '').split('/');
+      if (ocParts[0]) {
+        const sequencePart = ocParts[0].trim();
+        const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          ocSequence = rangeMatch[1];
+          ocSequenceEnd = rangeMatch[2];
+        } else {
+          ocSequence = sequencePart;
+        }
+      }
+    }
+    const ocRoman = (header.ocMonthRoman || currentMeta.roman).toUpperCase();
+    const ocYearValue = header.ocYear || currentMeta.year;
+
+    // Parse SPK number (support range format)
+    let spkSequence = '';
+    let spkSequenceEnd = '';
     const spkParts = (header.spkNumber || '').split('/');
-
-    const ocSequence = ocParts[0] || '';
-    const ocRoman = (ocParts[1] || currentMeta.roman).toUpperCase();
-    const ocYearValue = ocParts[2] || currentMeta.year;
-
+    // First check spkSequenceNumber (might be "10 - 100" or "10")
+    if (header.spkSequenceNumber) {
+      const sequencePart = header.spkSequenceNumber.toString().trim();
+      const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (rangeMatch) {
+        spkSequence = rangeMatch[1];
+        spkSequenceEnd = rangeMatch[2];
+      } else {
+        spkSequence = sequencePart;
+      }
+    } else {
+      if (spkParts[0]) {
+        const sequencePart = spkParts[0].trim();
+        const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          spkSequence = rangeMatch[1];
+          spkSequenceEnd = rangeMatch[2];
+        } else {
+          spkSequence = sequencePart;
+        }
+      }
+    }
     const currentSpkMeta = getCurrentRomanMonthMeta();
-    const inferredSequence = header.spkSequenceNumber || (spkParts[0] || '').trim();
     let inferredMonth = (header.spkMonthRoman || '').toUpperCase();
     let inferredType = deriveSpkTypeFromCode(header.spkLetterCode || header.spkCode);
     let inferredYear = header.spkYear || currentSpkMeta.year;
@@ -887,9 +943,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       customReason: '',
       winSubStatus: header?.winSubStatus || 'order',
       ocSequence,
+      ocSequenceEnd,
       ocMonthRoman: ocRoman,
       ocYear: ocYearValue,
-      spkSequence: inferredSequence,
+      spkSequence,
+      spkSequenceEnd,
       spkType: inferredType,
       spkMonthRoman: inferredMonth,
       spkYear: inferredYear
@@ -907,9 +965,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       customReason: '',
       winSubStatus: 'order',
       ocSequence: '',
+      ocSequenceEnd: '',
       ocMonthRoman: currentMeta.roman,
       ocYear: currentMeta.year,
       spkSequence: '',
+      spkSequenceEnd: '',
       spkType: '-',
       spkMonthRoman: currentMeta.roman,
       spkYear: currentMeta.year
@@ -931,7 +991,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       if (newStatus !== 'win') {
         updated.selectedOfferId = '';
         updated.selectedItemIds = [];
+        updated.ocSequence = '';
+        updated.ocSequenceEnd = '';
+        updated.ocMonthRoman = currentMeta.roman;
+        updated.ocYear = currentMeta.year;
         updated.spkSequence = '';
+        updated.spkSequenceEnd = '';
         updated.spkType = '-';
         updated.spkMonthRoman = currentMeta.roman;
         updated.spkYear = currentMeta.year;
@@ -1021,9 +1086,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         customReason,
         winSubStatus,
         ocSequence,
+        ocSequenceEnd,
         ocMonthRoman,
         ocYear,
         spkSequence,
+        spkSequenceEnd,
         spkType,
         spkMonthRoman,
         spkYear
@@ -1108,7 +1175,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
         const ocSequenceTrimmed = (ocSequence || '').trim();
         if (ocSequenceTrimmed) {
-          payload.ocSequenceNumber = ocSequenceTrimmed;
+          // If range is provided, send both start and end
+          if (ocSequenceEnd && ocSequenceEnd.trim()) {
+            payload.ocSequenceNumber = `${ocSequenceTrimmed} - ${ocSequenceEnd.trim()}`;
+          } else {
+            payload.ocSequenceNumber = ocSequenceTrimmed;
+          }
           payload.ocMonthRoman = (ocMonthRoman || currentMeta.roman).trim().toUpperCase();
           payload.ocYear = Number(ocYear || currentMeta.year);
         } else {
@@ -1117,7 +1189,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
         const spkSequenceTrimmed = (spkSequence || '').trim();
         if (spkSequenceTrimmed) {
-          payload.spkSequenceNumber = spkSequenceTrimmed;
+          // If range is provided, send both start and end
+          if (spkSequenceEnd && spkSequenceEnd.trim()) {
+            payload.spkSequenceNumber = `${spkSequenceTrimmed} - ${spkSequenceEnd.trim()}`;
+          } else {
+            payload.spkSequenceNumber = spkSequenceTrimmed;
+          }
           payload.spkLetterCode = resolveSpkCodeValue(spkType);
           payload.spkMonthRoman = (spkMonthRoman || currentMeta.roman).trim().toUpperCase();
           payload.spkYear = Number(spkYear || currentMeta.year);
@@ -1155,6 +1232,33 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       );
 
       // Update status form to reflect saved state
+      // Parse OC and SPK sequences from response (may be ranges)
+      let parsedOcSequence = '';
+      let parsedOcSequenceEnd = '';
+      if (status === 'win' && payload.ocSequenceNumber) {
+        const sequencePart = payload.ocSequenceNumber.toString().trim();
+        const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          parsedOcSequence = rangeMatch[1];
+          parsedOcSequenceEnd = rangeMatch[2];
+        } else {
+          parsedOcSequence = sequencePart;
+        }
+      }
+
+      let parsedSpkSequence = '';
+      let parsedSpkSequenceEnd = '';
+      if (status === 'win' && payload.spkSequenceNumber) {
+        const sequencePart = payload.spkSequenceNumber.toString().trim();
+        const rangeMatch = sequencePart.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          parsedSpkSequence = rangeMatch[1];
+          parsedSpkSequenceEnd = rangeMatch[2];
+        } else {
+          parsedSpkSequence = sequencePart;
+        }
+      }
+
       setStatusForm(prev => ({
         ...prev,
         status,
@@ -1162,13 +1266,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         selectedOfferId: payload.selectedOfferId || '',
         selectedItemIds: payload.selectedOfferItemIds || [],
         winSubStatus: status === 'win' ? (payload.winSubStatus || 'order') : prev.winSubStatus,
-        ocSequence: status === 'win' ? (payload.ocSequenceNumber || '') : prev.ocSequence,
+        ocSequence: status === 'win' ? parsedOcSequence : prev.ocSequence,
+        ocSequenceEnd: status === 'win' ? parsedOcSequenceEnd : prev.ocSequenceEnd,
         ocMonthRoman:
           status === 'win'
             ? (payload.ocMonthRoman || prev.ocMonthRoman || getCurrentRomanMonthMeta().roman)
             : prev.ocMonthRoman,
         ocYear: status === 'win' ? String(payload.ocYear || prev.ocYear || getCurrentRomanMonthMeta().year) : prev.ocYear,
-        spkSequence: status === 'win' ? (payload.spkSequenceNumber || '') : prev.spkSequence,
+        spkSequence: status === 'win' ? parsedSpkSequence : prev.spkSequence,
+        spkSequenceEnd: status === 'win' ? parsedSpkSequenceEnd : prev.spkSequenceEnd,
         spkType:
           status === 'win'
             ? deriveSpkTypeFromCode(payload.spkLetterCode)
@@ -2898,133 +3004,237 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               </div>
 
               <div className="space-y-5">
-                <div className="space-y-2">
+                {/* Order Confirmation Number */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-semibold text-gray-800">
                       Order Confirmation Number
                     </label>
-                    <span className="text-xs text-gray-500">
-                      Format: number/ROMAN/year
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      Single or Range
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={statusForm.ocSequence}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          ocSequence: digitsOnly
-                        }));
-                      }}
-                      placeholder="Number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <CustomDropdown
-                      options={ROMAN_MONTH_OPTIONS}
-                      value={statusForm.ocMonthRoman}
-                      onChange={(value) =>
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          ocMonthRoman: (value || prev.ocMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
-                        }))
-                      }
-                      placeholder="Month"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={statusForm.ocYear}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          ocYear: digitsOnly
-                        }));
-                      }}
-                      placeholder="Year"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  
+                  {/* Number Range Input */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                      Sequence Number
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Start Number *</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={statusForm.ocSequence}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setStatusForm((prev) => ({
+                              ...prev,
+                              ocSequence: digitsOnly
+                            }));
+                          }}
+                          placeholder="e.g., 10"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                      <div className="flex items-center pt-6">
+                        <span className="text-lg font-semibold text-gray-400">-</span>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">End Number (Optional)</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={statusForm.ocSequenceEnd}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setStatusForm((prev) => ({
+                              ...prev,
+                              ocSequenceEnd: digitsOnly
+                            }));
+                          }}
+                          placeholder="e.g., 100"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 italic">
+                      💡 Leave end empty for single number (e.g., 10), or enter end for range (e.g., 10-100)
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Preview:{' '}
-                    <span className="font-semibold text-gray-700">
-                      {buildOcPreview(
-                        statusForm.ocSequence,
-                        statusForm.ocMonthRoman,
-                        statusForm.ocYear
-                      )}
-                    </span>
-                  </p>
+
+                  {/* Month and Year */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">
+                        Month (Roman)
+                      </label>
+                      <CustomDropdown
+                        options={ROMAN_MONTH_OPTIONS}
+                        value={statusForm.ocMonthRoman}
+                        onChange={(value) =>
+                          setStatusForm((prev) => ({
+                            ...prev,
+                            ocMonthRoman: (value || prev.ocMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
+                          }))
+                        }
+                        placeholder="Select month"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">
+                        Year
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={statusForm.ocYear}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '');
+                          setStatusForm((prev) => ({
+                            ...prev,
+                            ocYear: digitsOnly
+                          }));
+                        }}
+                        placeholder="e.g., 2025"
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Preview */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-blue-700">Preview:</span>
+                      <span className="text-sm font-bold text-blue-900">
+                        {buildOcPreview(
+                          statusForm.ocSequence,
+                          statusForm.ocMonthRoman,
+                          statusForm.ocYear,
+                          !!statusForm.ocSequenceEnd,
+                          statusForm.ocSequenceEnd
+                        )}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
+                {/* SPK Number */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-semibold text-gray-800">
                       SPK Number
                     </label>
-                    <span className="text-xs text-gray-500">
-                      Format: number/ROMAN/(P | "" | KBS)/year
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      Single or Range
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={statusForm.spkSequence}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          spkSequence: digitsOnly
-                        }));
-                      }}
-                      placeholder="Number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <CustomDropdown
-                      options={ROMAN_MONTH_OPTIONS}
-                      value={statusForm.spkMonthRoman}
-                      onChange={(value) =>
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          spkMonthRoman: (value || prev.spkMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
-                        }))
-                      }
-                      placeholder="Month"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={statusForm.spkYear}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setStatusForm((prev) => ({
-                          ...prev,
-                          spkYear: digitsOnly
-                        }));
-                      }}
-                      placeholder="Year"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
-                      SPK Classification
+
+                  {/* Number Range Input */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                      Sequence Number
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Start Number *</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={statusForm.spkSequence}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setStatusForm((prev) => ({
+                              ...prev,
+                              spkSequence: digitsOnly
+                            }));
+                          }}
+                          placeholder="e.g., 10"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                      <div className="flex items-center pt-6">
+                        <span className="text-lg font-semibold text-gray-400">-</span>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">End Number (Optional)</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={statusForm.spkSequenceEnd}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setStatusForm((prev) => ({
+                              ...prev,
+                              spkSequenceEnd: digitsOnly
+                            }));
+                          }}
+                          placeholder="e.g., 100"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 italic">
+                      💡 Leave end empty for single number (e.g., 10), or enter end for range (e.g., 10-100)
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  </div>
+
+                  {/* Month and Year */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">
+                        Month (Roman)
+                      </label>
+                      <CustomDropdown
+                        options={ROMAN_MONTH_OPTIONS}
+                        value={statusForm.spkMonthRoman}
+                        onChange={(value) =>
+                          setStatusForm((prev) => ({
+                            ...prev,
+                            spkMonthRoman: (value || prev.spkMonthRoman || getCurrentRomanMonthMeta().roman).toUpperCase()
+                          }))
+                        }
+                        placeholder="Select month"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-1">
+                        Year
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={statusForm.spkYear}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '');
+                          setStatusForm((prev) => ({
+                            ...prev,
+                            spkYear: digitsOnly
+                          }));
+                        }}
+                        placeholder="e.g., 2025"
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* SPK Classification */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
+                      SPK Classification
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {SPK_TAX_OPTIONS.map((option) => (
                         <label
                           key={option.value}
-                          className={`flex flex-col rounded-lg border px-3 py-2 text-sm transition ${
+                          className={`flex flex-col rounded-lg border-2 px-4 py-3 text-sm transition cursor-pointer ${
                             statusForm.spkType === option.value
-                              ? 'border-blue-400 bg-blue-50 text-blue-700'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                         >
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 mb-1">
                             <input
                               type="radio"
                               name="spkType"
@@ -3040,33 +3250,41 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                             />
                             <span className="font-semibold">{option.label}</span>
                           </span>
-                          <span className="mt-1 text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 mt-1">
                             {option.description}
                           </span>
                         </label>
                       ))}
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Preview:{' '}
-                    <span className="font-semibold text-gray-700">
-                      {buildSpkPreview(
-                        statusForm.spkSequence,
-                        statusForm.spkMonthRoman,
-                        statusForm.spkType,
-                        statusForm.spkYear
-                      )}
-                    </span>
-                    {statusForm.spkType === 'P' && (
-                      <span className="ml-2 text-xs text-blue-600">Pajak</span>
-                    )}
-                    {statusForm.spkType === '-' && (
-                      <span className="ml-2 text-xs text-amber-600">Non pajak</span>
-                    )}
-                    {statusForm.spkType === 'KBS' && (
-                      <span className="ml-2 text-xs text-emerald-600">Non pajak khusus non CV KBS</span>
-                    )}
-                  </p>
+
+                  {/* Preview */}
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-purple-700">Preview:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-purple-900">
+                          {buildSpkPreview(
+                            statusForm.spkSequence,
+                            statusForm.spkMonthRoman,
+                            statusForm.spkType,
+                            statusForm.spkYear,
+                            !!statusForm.spkSequenceEnd,
+                            statusForm.spkSequenceEnd
+                          )}
+                        </span>
+                        {statusForm.spkType === 'P' && (
+                          <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-0.5 rounded">Pajak</span>
+                        )}
+                        {statusForm.spkType === '-' && (
+                          <span className="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded">Non pajak</span>
+                        )}
+                        {statusForm.spkType === 'KBS' && (
+                          <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">Non pajak khusus</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
