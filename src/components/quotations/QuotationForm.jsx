@@ -902,17 +902,28 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         }
       } else {
         // Edit existing offer
-        const offerData = {
-          offerItems: formData.offerItems,
-          excludePPN: formData.excludePPN,
-          notes: formData.notes,
-          notesImages: allNotesImages
-        };
-
         const offerId = quotation.offer?._id || quotation._id;
         // Use quotation ID instead of quotation number
         const quotationId = quotation.header?._id || quotation._id;
-        console.log('Updating offer with data:', offerData);
+        
+        // If offer is approved, only send notes and notesImages
+        let offerData;
+        if (isOfferApproved) {
+          offerData = {
+            notes: formData.notes,
+            notesImages: allNotesImages
+          };
+          console.log('Updating approved offer - only sending notes and notesImages:', offerData);
+        } else {
+          offerData = {
+            offerItems: formData.offerItems,
+            excludePPN: formData.excludePPN,
+            notes: formData.notes,
+            notesImages: allNotesImages
+          };
+          console.log('Updating offer with data:', offerData);
+        }
+        
         console.log('Notes images being sent:', allNotesImages);
         console.log('Uploaded image IDs:', uploadedImageIds);
         console.log('Using quotation ID:', quotationId);

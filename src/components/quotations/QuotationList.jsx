@@ -19,7 +19,8 @@ import {
   Save,
   Info,
   SlidersHorizontal,
-  XCircle
+  XCircle,
+  FileText
 } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
@@ -2252,14 +2253,25 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                         </>
                                       )}
                                       {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(offerGroup) || isOfferRejected(offerGroup)) && (
-                                        <button
-                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original || offerGroup })}
-                                          data-tooltip-id={`offer-revision-${offerGroup._id}`}
-                                          data-tooltip-content={isOfferRejected(offerGroup) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
-                                          className="text-purple-600 hover:text-purple-900 p-1"
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </button>
+                                        <>
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original || offerGroup })}
+                                            data-tooltip-id={`offer-notes-${offerGroup._id}`}
+                                            data-tooltip-content="Add or edit notes and notes images"
+                                            className="text-blue-600 hover:text-blue-900 p-1"
+                                            title="Notes"
+                                          >
+                                            <FileText className="h-4 w-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original || offerGroup })}
+                                            data-tooltip-id={`offer-revision-${offerGroup._id}`}
+                                            data-tooltip-content={isOfferRejected(offerGroup) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
+                                            className="text-purple-600 hover:text-purple-900 p-1"
+                                          >
+                                            <Plus className="h-4 w-4" />
+                                          </button>
+                                        </>
                                       )}
                                       {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(offerGroup) && !isOfferRejected(offerGroup) && (
                                         <button
@@ -2409,14 +2421,25 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                       </>
                                     )}
                                     {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(offerGroup.original) || isOfferRejected(offerGroup.original)) && (
-                                      <button
-                                        onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
-                                        data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
-                                        data-tooltip-content={isOfferRejected(offerGroup.original) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
-                                        className="text-purple-600 hover:text-purple-900 p-1"
-                                      >
-                                        <Plus className="h-4 w-4" />
-                                      </button>
+                                      <>
+                                        <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: offerGroup.original })}
+                                          data-tooltip-id={`offer-notes-${offerGroup.original?._id}`}
+                                          data-tooltip-content="Add or edit notes and notes images"
+                                          className="text-blue-600 hover:text-blue-900 p-1"
+                                          title="Notes"
+                                        >
+                                          <FileText className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: offerGroup.original })}
+                                          data-tooltip-id={`offer-revision-${offerGroup.original?._id}`}
+                                          data-tooltip-content={isOfferRejected(offerGroup.original) ? "Create revision (offer is rejected and cannot be edited)" : "Create revision (offer is approved and cannot be edited)"}
+                                          className="text-purple-600 hover:text-purple-900 p-1"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </button>
+                                      </>
                                     )}
                                     {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(offerGroup.original) && !isOfferRejected(offerGroup.original) && (
                                       <button
@@ -2552,14 +2575,25 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                                           </>
                                         )}
                                         {actionMode === 'full' && canEditQuotation(header) && (isOfferApproved(revision) || isOfferRejected(revision)) && (
-                                          <button
-                                            onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
-                                            data-tooltip-id={`offer-revision-${revision._id}`}
-                                            data-tooltip-content={isOfferRejected(revision) ? "Create revision (revision is rejected and cannot be edited)" : "Create revision (revision is approved and cannot be edited)"}
-                                            className="text-purple-600 hover:text-purple-900 p-1"
-                                          >
-                                            <Plus className="h-4 w-4" />
-                                          </button>
+                                          <>
+                                            <button
+                                              onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.EDIT_OFFER, header, offer: revision })}
+                                              data-tooltip-id={`offer-notes-${revision._id}`}
+                                              data-tooltip-content="Add or edit notes and notes images"
+                                              className="text-blue-600 hover:text-blue-900 p-1"
+                                              title="Notes"
+                                            >
+                                              <FileText className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => onEdit && onEdit({ mode: QUOTATION_FORM_MODES.REVISION, header, offer: revision })}
+                                              data-tooltip-id={`offer-revision-${revision._id}`}
+                                              data-tooltip-content={isOfferRejected(revision) ? "Create revision (revision is rejected and cannot be edited)" : "Create revision (revision is approved and cannot be edited)"}
+                                              className="text-purple-600 hover:text-purple-900 p-1"
+                                            >
+                                              <Plus className="h-4 w-4" />
+                                            </button>
+                                          </>
                                         )}
                                         {actionMode === 'full' && canDeleteQuotation(header) && !isOfferApproved(revision) && !isOfferRejected(revision) && (
                                           <button
@@ -2800,12 +2834,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 <React.Fragment key={offerGroup.original._id}>
                   <Tooltip id={`offer-view-${offerGroup.original._id}`} />
                   <Tooltip id={`offer-edit-${offerGroup.original._id}`} />
+                  <Tooltip id={`offer-notes-${offerGroup.original._id}`} />
                   <Tooltip id={`offer-revision-${offerGroup.original._id}`} />
                   <Tooltip id={`offer-delete-${offerGroup.original._id}`} />
                   {offerGroup.revisions && offerGroup.revisions.map((revision) => (
                     <React.Fragment key={revision._id}>
                       <Tooltip id={`offer-view-${revision._id}`} />
                       <Tooltip id={`offer-edit-${revision._id}`} />
+                      <Tooltip id={`offer-notes-${revision._id}`} />
                       <Tooltip id={`offer-revision-${revision._id}`} />
                       <Tooltip id={`offer-delete-${revision._id}`} />
             </React.Fragment>
@@ -2818,6 +2854,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 <React.Fragment key={offerGroup._id}>
                   <Tooltip id={`offer-view-${offerGroup._id}`} />
                   <Tooltip id={`offer-edit-${offerGroup._id}`} />
+                  <Tooltip id={`offer-notes-${offerGroup._id}`} />
                   <Tooltip id={`offer-revision-${offerGroup._id}`} />
                   <Tooltip id={`offer-delete-${offerGroup._id}`} />
                   <Tooltip id={`offer-approved-note-${offerGroup._id}`} />
