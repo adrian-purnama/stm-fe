@@ -568,14 +568,29 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       
       // Trigger async loading of full details for each quotation
       // Fetch header details and offers separately for faster perceived performance
-      headers.forEach(quotation => {
-        // Pass the full header object instead of just quotationNumber string
-        // This allows functions to use _id when available, avoiding URL encoding issues
+      // Limit concurrent requests to prevent memory issues and API overload
+      const fetchWithLimit = async (items, limit, fn) => {
+        for (let i = 0; i < items.length; i += limit) {
+          const batch = items.slice(i, i + limit);
+          // Process batch sequentially to avoid overwhelming the API
+          for (const item of batch) {
+            await fn(item);
+          }
+          // Small delay between batches to prevent memory buildup
+          if (i + limit < items.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+      };
+
+      // Process quotations in batches of 5 to limit concurrent requests
+      const quotationsToFetch = headers.filter(q => q.header);
+      await fetchWithLimit(quotationsToFetch, 5, async (quotation) => {
         if (quotation.header) {
-            // Fetch full header details (populated user fields, customer info, etc.)
-            fetchQuotationHeader(quotation.header);
-            // Fetch offers
-            fetchQuotationDetails(quotation.header);
+          // Fetch full header details (populated user fields, customer info, etc.)
+          await fetchQuotationHeader(quotation.header);
+          // Fetch offers
+          await fetchQuotationDetails(quotation.header);
         }
       });
       
