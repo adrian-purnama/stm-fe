@@ -271,7 +271,16 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
 
   // Check if fields should be disabled (all fields except notes/images when approved)
   const isFieldDisabled = useMemo(() => {
-    return mode === 'new-offer' || mode === 'edit-offer' || mode === 'revision' || isViewerOnly || isOfferApproved;
+    // For new offers and revisions, allow editing (unless viewer-only)
+    if (mode === 'new-offer' || mode === 'revision' || mode === 'create-quotation' || mode === 'create-from-rfq') {
+      return isViewerOnly;
+    }
+    // For edit-offer mode, disable if approved or viewer-only
+    if (mode === 'edit-offer') {
+      return isViewerOnly || isOfferApproved;
+    }
+    // Default: allow editing unless viewer-only
+    return isViewerOnly;
   }, [mode, isViewerOnly, isOfferApproved]);
 
   useEffect(() => {

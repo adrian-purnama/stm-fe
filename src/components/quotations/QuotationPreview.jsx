@@ -898,167 +898,88 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                     
                     {/* Drawings Preview - After Signature */}
                     {(() => {
-                      const itemsWithDrawings = currentOffer?.offerItems?.filter(item => 
-                        item.drawingSpecification && 
-                        item.drawingSpecification.quotationImage && 
-                        item.drawingSpecification.quotationImage.fileId
+                      // Find items with drawing specifications (with or without images)
+                      const itemsWithDrawingSpecs = currentOffer?.offerItems?.filter(item => 
+                        item.drawingSpecification
                       ) || [];
                       
-                      if (itemsWithDrawings.length > 0) {
+                      // Separate items with images from items without images
+                      const itemsWithDrawings = itemsWithDrawingSpecs.filter(item => 
+                        item.drawingSpecification.quotationImage && 
+                        item.drawingSpecification.quotationImage.fileId
+                      );
+                      
+                      const itemsWithoutImages = itemsWithDrawingSpecs.filter(item => 
+                        !item.drawingSpecification.quotationImage || 
+                        !item.drawingSpecification.quotationImage.fileId
+                      );
+                      
+                      if (itemsWithDrawingSpecs.length > 0) {
                         return (
                           <div className="bg-white p-4 rounded border border-blue-200 relative mt-6">
                             {/* Page break indicator */}
                             <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                               <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium border border-blue-200">
                                 📄 Separate Page (Lampiran)
-                      </div>
-                    </div>
-                            <div className="text-center mb-4 pb-2 border-b border-gray-200">
-                              <h4 className="font-bold text-lg text-blue-800">LAMPIRAN</h4>
-                              <h5 className="font-semibold text-blue-700">Drawing Specifications ({itemsWithDrawings.length})</h5>
-                              <p className="text-sm text-gray-600">Quotation: {header.quotationNumber}</p>
-                            </div>
-                            <div className="space-y-6">
-                              {itemsWithDrawings.map((item, index) => {
-                                const drawing = item.drawingSpecification;
-                                
-                                // Use quotationImage for display (JPG file)
-                                const quotationImage = drawing.quotationImage;
-                                
-                                // Create asset URL for the quotation image
-                                const assetUrl = getDrawingAssetUrl(drawing._id, quotationImage.fileId);
-                                
-                                return (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                                    <div className="mb-3">
-                                      <h5 className="font-medium text-gray-900">
-                                        Item {(currentOffer?.offerItems || []).indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
-                                      </h5>
-                                      <div className="text-sm text-gray-600 space-y-1">
-                                        <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>
-                                        <p><strong>Quotation Image:</strong> {quotationImage.originalName}</p>
-                                        <p><strong>File Size:</strong> {formatFileSize(quotationImage.fileSize)}</p>
-                                        <p><strong>Upload Date:</strong> {new Date(quotationImage.uploadDate).toLocaleDateString('id-ID')}</p>
-                  </div>
-                </div>
-
-                                    {/* Image Preview - Always show image since quotationImage is always JPG */}
-                                    <div className="mt-4">
-                                      <h6 className="text-sm font-medium text-gray-700 mb-2">Drawing Preview:</h6>
-                                      <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                                        <img
-                                          src={assetUrl}
-                                          alt={`Drawing ${drawing.drawingNumber}`}
-                                          className="w-full h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                                          onClick={() => window.open(assetUrl, '_blank')}
-                                          onError={(e) => {
-                                            console.error('Image failed to load:', assetUrl);
-                                            e.target.style.display = 'none';
-                                            e.target.nextSibling.style.display = 'flex';
-                                          }}
-                                        />
-                                        <div className="w-full h-64 bg-gray-100 items-center justify-center text-gray-500 hidden">
-                                          <div className="text-center">
-                                            <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                                            <p className="text-sm">Image could not be loaded</p>
-                                            <p className="text-xs text-gray-400">{quotationImage.originalName}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="mt-2 flex justify-between items-center">
-                                        <button
-                                          onClick={() => window.open(assetUrl, '_blank')}
-                                          className="text-sm text-blue-600 hover:text-blue-800 underline"
-                                        >
-                                          View Full Size
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            const link = document.createElement('a');
-                                            link.href = `${assetUrl}&download=true`;
-                                            link.download = quotationImage.originalName;
-                                            link.click();
-                                          }}
-                                          className="text-sm text-green-600 hover:text-green-800 underline"
-                                        >
-                                          Download
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                    
-                    {/* Notes Images Preview - After Drawings - Hidden for requesters */}
-                    {!isRequester && (() => {
-                      const notesImages = currentOffer?.notesImages || [];
-                      
-                      if (notesImages.length > 0) {
-                        return (
-                          <div className="bg-white p-4 rounded border border-green-200 relative mt-6">
-                            {/* Page break indicator */}
-                            <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                              <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium border border-green-200">
-                                📷 Notes Images ({notesImages.length})
                               </div>
                             </div>
                             <div className="text-center mb-4 pb-2 border-b border-gray-200">
-                              <h4 className="font-bold text-lg text-green-800">NOTES IMAGES</h4>
-                              <h5 className="font-semibold text-green-700">Additional Images ({notesImages.length})</h5>
+                              <h4 className="font-bold text-lg text-blue-800">LAMPIRAN</h4>
+                              <h5 className="font-semibold text-blue-700">Drawing Specifications</h5>
                               <p className="text-sm text-gray-600">Quotation: {header.quotationNumber}</p>
+                              {itemsWithDrawings.length > 0 && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  {itemsWithDrawings.length} drawing image(s) will be included in the document
+                                </p>
+                              )}
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {notesImages.map((notesImage, index) => {
-                                // Handle both populated objects and ObjectIds
-                                const imageId = notesImage._id || notesImage.id || notesImage;
-                                const imageFile = notesImage.imageFile;
-                                const originalName = imageFile?.originalName || `Notes Image ${index + 1}`;
-                                const fileId = imageFile?.fileId;
-                                
-                                // Create asset URL for the notes image
-                                const assetUrl = getNotesImageAssetUrl(imageId, fileId);
-                                
-                                return (
-                                  <div key={imageId} className="border border-gray-200 rounded-lg p-4">
-                                    <div className="mb-3">
-                                      <h5 className="font-medium text-gray-900">
-                                        Notes Image {index + 1}
-                                      </h5>
-                                      <div className="text-sm text-gray-600 space-y-1">
-                                        <p><strong>File:</strong> {originalName}</p>
-                                        {imageFile?.fileType && <p><strong>File Type:</strong> {imageFile.fileType}</p>}
-                                        {imageFile?.fileSize && <p><strong>File Size:</strong> {formatFileSize(imageFile.fileSize)}</p>}
-                                        {imageFile?.uploadDate && <p><strong>Upload Date:</strong> {new Date(imageFile.uploadDate).toLocaleDateString('id-ID')}</p>}
+                            
+                            {/* Items with drawing images */}
+                            {itemsWithDrawings.length > 0 && (
+                              <div className="space-y-6">
+                                {itemsWithDrawings.map((item, index) => {
+                                  const drawing = item.drawingSpecification;
+                                  
+                                  // Use quotationImage for display (JPG/PNG/PDF file)
+                                  const quotationImage = drawing.quotationImage;
+                                  
+                                  // Create asset URL for the quotation image
+                                  const assetUrl = getDrawingAssetUrl(drawing._id, quotationImage.fileId);
+                                  
+                                  return (
+                                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+                                      <div className="mb-3">
+                                        <h5 className="font-medium text-gray-900">
+                                          Item {(currentOffer?.offerItems || []).indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
+                                        </h5>
+                                        <div className="text-sm text-gray-600 space-y-1">
+                                          <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>
+                                          <p><strong>Quotation Image:</strong> {quotationImage.originalName}</p>
+                                          {quotationImage.fileSize && <p><strong>File Size:</strong> {formatFileSize(quotationImage.fileSize)}</p>}
+                                          {quotationImage.uploadDate && <p><strong>Upload Date:</strong> {new Date(quotationImage.uploadDate).toLocaleDateString('id-ID')}</p>}
+                                        </div>
                                       </div>
-                                    </div>
 
-                                    {/* Image Preview */}
-                                    {fileId ? (
+                                      {/* Image Preview */}
                                       <div className="mt-4">
-                                        <h6 className="text-sm font-medium text-gray-700 mb-2">Image Preview:</h6>
+                                        <h6 className="text-sm font-medium text-gray-700 mb-2">Drawing Preview (Will be included in document):</h6>
                                         <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
                                           <img
                                             src={assetUrl}
-                                            alt={originalName}
-                                            className="w-full h-48 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                            alt={`Drawing ${drawing.drawingNumber}`}
+                                            className="w-full h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
                                             onClick={() => window.open(assetUrl, '_blank')}
                                             onError={(e) => {
-                                              console.error('Notes image failed to load:', assetUrl);
+                                              console.error('Image failed to load:', assetUrl);
                                               e.target.style.display = 'none';
                                               e.target.nextSibling.style.display = 'flex';
                                             }}
                                           />
-                                          <div className="w-full h-48 bg-gray-100 items-center justify-center text-gray-500 hidden">
+                                          <div className="w-full h-64 bg-gray-100 items-center justify-center text-gray-500 hidden">
                                             <div className="text-center">
                                               <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                                               <p className="text-sm">Image could not be loaded</p>
-                                              <p className="text-xs text-gray-400">{originalName}</p>
+                                              <p className="text-xs text-gray-400">{quotationImage.originalName}</p>
                                             </div>
                                           </div>
                                         </div>
@@ -1073,7 +994,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                             onClick={() => {
                                               const link = document.createElement('a');
                                               link.href = `${assetUrl}&download=true`;
-                                              link.download = originalName;
+                                              link.download = quotationImage.originalName;
                                               link.click();
                                             }}
                                             className="text-sm text-green-600 hover:text-green-800 underline"
@@ -1082,27 +1003,46 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                           </button>
                                         </div>
                                       </div>
-                                    ) : (
-                                      <div className="mt-4">
-                                        <h6 className="text-sm font-medium text-gray-700 mb-2">Image Information:</h6>
-                                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                                          <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                                          <p className="text-sm text-gray-600 mb-2">
-                                            Loading image information...
-                                          </p>
-                                          <p className="text-xs text-gray-400">{originalName}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            
+                            {/* Items with drawing specs but no images */}
+                            {itemsWithoutImages.length > 0 && (
+                              <div className="mt-6 space-y-3">
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                  <h6 className="text-sm font-semibold text-yellow-800 mb-2">
+                                    ⚠️ Items with Drawing Specifications but No Images ({itemsWithoutImages.length})
+                                  </h6>
+                                  <p className="text-xs text-yellow-700 mb-3">
+                                    These items have drawing specifications selected but no quotation images uploaded. 
+                                    They will appear in the document text but without images.
+                                  </p>
+                                  <div className="space-y-2">
+                                    {itemsWithoutImages.map((item, index) => {
+                                      const drawing = item.drawingSpecification;
+                                      return (
+                                        <div key={index} className="text-xs text-yellow-800 bg-yellow-100 rounded px-3 py-2">
+                                          <strong>Item {(currentOffer?.offerItems || []).indexOf(item) + 1}:</strong> {item.karoseri} - {item.chassis}
+                                          {drawing.drawingNumber && (
+                                            <span className="ml-2">(Drawing: {drawing.drawingNumber})</span>
+                                          )}
                                         </div>
-                                      </div>
-                                    )}
+                                      );
+                                    })}
                                   </div>
-                                );
-                              })}
-                            </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       }
                       return null;
                     })()}
+                    
+                    {/* Notes Images are NOT included in the document - section removed */}
                   </div>
                       </div>
                     </div>
