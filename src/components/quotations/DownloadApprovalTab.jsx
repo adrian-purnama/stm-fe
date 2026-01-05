@@ -289,7 +289,19 @@ const DownloadApprovalTab = () => {
                       </h3>
                       <span className="text-xs sm:text-sm text-gray-500">Offer: {offerNumber}</span>
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-600 mb-3 break-words">Customer: {customerName}</p>
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">Customer:</span>
+                        <span className="text-sm sm:text-base font-semibold text-gray-900 break-words">{customerName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">Total:</span>
+                        <span className="text-sm sm:text-base font-semibold text-gray-900">
+                          {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalNetto)}
+                        </span>
+                      </div>
+                    </div>
                     
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
                       {/* Only show Engineer badge if user has engineer permission */}
@@ -306,9 +318,6 @@ const DownloadApprovalTab = () => {
                           {getApprovalStatusBadge(offer, 'management')}
                         </div>
                       )}
-                      <div className="text-xs sm:text-sm font-medium text-gray-900">
-                        Total: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalNetto)}
-                      </div>
                     </div>
 
                     {/* Approval/Rejection info - Only show for permissions user has */}
