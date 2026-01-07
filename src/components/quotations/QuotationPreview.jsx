@@ -83,6 +83,70 @@ const formatDiscountDescriptor = (item, breakdown) => {
   return formatPrice(breakdown.discountPerUnit);
 };
 
+// Normalize key segment for drawing number (same logic as backend model)
+const normalizeKeySegment = (str) => {
+  if (!str) return '';
+  return String(str)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/\//g, '')
+    .replace(/-/g, '');
+};
+
+// Format features for drawing number (same logic as backend model)
+const formatFeatures = (features) => {
+  if (!features || features.length === 0) return '';
+  
+  return features
+    .map(feature => {
+      if (!feature.featureId) return null;
+      // Get feature shortName if populated, otherwise use featureId
+      const featureKey = feature.featureId.shortName || feature.featureId.name || feature.featureId.toString();
+      const specValue = feature.spec ? normalizeKeySegment(feature.spec) : '';
+      return specValue ? `${normalizeKeySegment(featureKey)}_${specValue}` : normalizeKeySegment(featureKey);
+    })
+    .filter(Boolean)
+    .join('-');
+};
+
+// Compute drawing number from populated drawing specification object
+// This is needed because virtual fields don't work with .lean() queries
+const computeDrawingNumber = (drawing) => {
+  if (!drawing) return null;
+  
+  try {
+    // Get body type shortName
+    const bodyTypeKey = drawing.bodyTypeId?.shortName || drawing.bodyTypeId?.name || drawing.bodyTypeId?.toString() || '';
+    
+    // Get chassis type shortName
+    const chassisKey = drawing.chassisTypeId?.shortName || drawing.chassisTypeId?.name || drawing.chassisTypeId?.toString() || '';
+    
+    // Get size type shortName
+    const sizeKey = drawing.sizeTypeId?.shortName || drawing.sizeTypeId?.name || drawing.sizeTypeId?.toString() || '';
+    
+    // Normalize other fields
+    const chassisModelKey = normalizeKeySegment(drawing.chassisModel || '');
+    const dimensionKey = normalizeKeySegment(drawing.dimension || '');
+    const featuresKey = formatFeatures(drawing.features || []);
+    
+    // Build composite key: BODYTYPE/CHASSIS/CHASSISMODEL/SIZE/DIMENSION/FEATURES
+    const keyParts = [
+      normalizeKeySegment(bodyTypeKey) || '-',
+      chassisKey ? normalizeKeySegment(chassisKey) : '-',
+      chassisModelKey || '-',
+      sizeKey ? normalizeKeySegment(sizeKey) : '-',
+      dimensionKey || '-',
+      featuresKey || '-'
+    ];
+    
+    return keyParts.join('/');
+  } catch (error) {
+    console.error('Error computing drawing number:', error);
+    return null;
+  }
+};
+
 const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
   const { user } = useContext(UserContext);
   const [loading, setLoading] = useState(false);
@@ -780,7 +844,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                 <p className="text-sm text-gray-600">
                                   Spesifikasi lain sesuai gambar{' '}
                                   <span className="font-medium text-gray-800">
-                                    {item.drawingSpecification.drawingNumber || 'Selected'}
+                                    {computeDrawingNumber(item.drawingSpecification) || 'Selected'}
                                   </span>
                                 </p>
                               )}
@@ -953,7 +1017,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                           Item {(currentOffer?.offerItems || []).indexOf(item) + 1}: {item.karoseri} - {item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}
                                         </h5>
                                         <div className="text-sm text-gray-600 space-y-1">
-                                          <p><strong>Drawing Number:</strong> {drawing.drawingNumber}</p>
+                                          <p><strong>Drawing Number:</strong> {computeDrawingNumber(drawing) || 'N/A'}</p>
                                           <p><strong>Quotation Image:</strong> {quotationImage.originalName}</p>
                                           {quotationImage.fileSize && <p><strong>File Size:</strong> {formatFileSize(quotationImage.fileSize)}</p>}
                                           {quotationImage.uploadDate && <p><strong>Upload Date:</strong> {new Date(quotationImage.uploadDate).toLocaleDateString('id-ID')}</p>}
@@ -966,7 +1030,7 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                         <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
                                           <img
                                             src={assetUrl}
-                                            alt={`Drawing ${drawing.drawingNumber}`}
+                                            alt={`Drawing ${computeDrawingNumber(drawing) || 'N/A'}`}
                                             className="w-full h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
                                             onClick={() => window.open(assetUrl, '_blank')}
                                             onError={(e) => {
@@ -1023,11 +1087,12 @@ const QuotationPreview = ({ quotationData, onBack, onDownload }) => {
                                   <div className="space-y-2">
                                     {itemsWithoutImages.map((item, index) => {
                                       const drawing = item.drawingSpecification;
+                                      const computedDrawingNumber = computeDrawingNumber(drawing);
                                       return (
                                         <div key={index} className="text-xs text-yellow-800 bg-yellow-100 rounded px-3 py-2">
                                           <strong>Item {(currentOffer?.offerItems || []).indexOf(item) + 1}:</strong> {item.karoseri} - {item.chassis}
-                                          {drawing.drawingNumber && (
-                                            <span className="ml-2">(Drawing: {drawing.drawingNumber})</span>
+                                          {computedDrawingNumber && (
+                                            <span className="ml-2">(Drawing: {computedDrawingNumber})</span>
                                           )}
                                         </div>
                                       );
