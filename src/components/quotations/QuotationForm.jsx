@@ -716,6 +716,50 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
 
 
 
+  // Clean specifications by removing items with empty names or specifications
+  const cleanSpecifications = (specifications) => {
+    if (!specifications || !Array.isArray(specifications)) {
+      return [];
+    }
+    
+    return specifications
+      .map(spec => {
+        // Filter out items with empty name or specification
+        const validItems = (spec.items || []).filter(item => 
+          item.name && item.name.trim() !== '' && 
+          item.specification && item.specification.trim() !== ''
+        );
+        
+        // Only include the spec category if it has valid items
+        if (validItems.length === 0) {
+          return null;
+        }
+        
+        return {
+          ...spec,
+          items: validItems
+        };
+      })
+      .filter(spec => spec !== null); // Remove null entries
+  };
+
+  // Clean offer items before submission
+  const cleanOfferItems = (items) => {
+    if (!items || !Array.isArray(items)) {
+      return [];
+    }
+    
+    return items.map(item => {
+      // Clean specifications for each item
+      const cleanedSpecifications = cleanSpecifications(item.specifications);
+      
+      return {
+        ...item,
+        specifications: cleanedSpecifications
+      };
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -750,9 +794,27 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       const uploadedImageIds = await uploadPendingImages();
       const allNotesImages = [...formData.notesImages, ...uploadedImageIds];
       
+      // Clean offer items before submission (remove invalid specification items)
+      const cleanedOfferItems = cleanOfferItems(formData.offerItems);
+      
+      // Check if any items were cleaned (warn user if specifications were removed)
+      const originalSpecCount = formData.offerItems.reduce((sum, item) => 
+        sum + (item.specifications || []).reduce((s, spec) => s + (spec.items || []).length, 0), 0
+      );
+      const cleanedSpecCount = cleanedOfferItems.reduce((sum, item) => 
+        sum + (item.specifications || []).reduce((s, spec) => s + (spec.items || []).length, 0), 0
+      );
+      
+      if (originalSpecCount > cleanedSpecCount) {
+        const removedCount = originalSpecCount - cleanedSpecCount;
+        console.warn(`[DEBUG] Removed ${removedCount} invalid specification item(s) with empty names or values`);
+        toast.warning(`Removed ${removedCount} invalid specification item(s) with empty names or values before saving.`);
+      }
+      
       console.log('[DEBUG] Form submission - formData.notesImages:', formData.notesImages);
       console.log('[DEBUG] Form submission - uploadedImageIds:', uploadedImageIds);
       console.log('[DEBUG] Form submission - allNotesImages:', allNotesImages);
+      console.log('[DEBUG] Form submission - cleaned offer items:', cleanedOfferItems);
 
       if (mode === 'create-quotation' || mode === 'create-from-rfq') {
         // Create new quotation (header + first offer)
@@ -762,14 +824,14 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         };
         
         const offerData = {
-          offerItems: formData.offerItems,
+          offerItems: cleanedOfferItems,
           excludePPN: formData.excludePPN,
           notes: formData.notes,
           notesImages: allNotesImages
         };
 
         console.log('Creating quotation with data:', { headerData, offerData, rfqId });
-        console.log('Offer items being sent:', formData.offerItems);
+        console.log('Offer items being sent:', cleanedOfferItems);
         console.log('Notes images being sent:', allNotesImages);
         console.log('Uploaded image IDs:', uploadedImageIds);
 
@@ -794,7 +856,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
       } else if (mode === 'new-offer') {
         // Create additional offer
         const offerData = {
-          offerItems: formData.offerItems,
+          offerItems: cleanedOfferItems,
           excludePPN: formData.excludePPN,
           notes: formData.notes,
           notesImages: allNotesImages
@@ -805,8 +867,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('Uploaded image IDs:', uploadedImageIds);
         console.log('Form data offerItems:', formData.offerItems);
         console.log('Form data offerItems length:', formData.offerItems.length);
-        console.log('Offer data offerItems:', offerData.offerItems);
-        console.log('Offer data offerItems length:', offerData.offerItems.length);
+        console.log('Cleaned offer items:', cleanedOfferItems);
+        console.log('Cleaned offer items length:', cleanedOfferItems.length);
         
         setSubmitProgress({ step: 'creating', message: 'Creating new offer...' });
         // Use quotation ID instead of quotation number
@@ -831,7 +893,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         // Create a revision of the current offer
         // For revisions, only send new images - backend will copy parent images
         const offerData = {
-          offerItems: formData.offerItems,
+          offerItems: cleanedOfferItems,
           excludePPN: formData.excludePPN,
           notes: formData.notes,
           notesImages: uploadedImageIds, // Only new images, backend will merge with parent
@@ -925,7 +987,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           console.log('Updating approved offer - only sending notes and notesImages:', offerData);
         } else {
           offerData = {
-            offerItems: formData.offerItems,
+            offerItems: cleanedOfferItems,
             excludePPN: formData.excludePPN,
             notes: formData.notes,
             notesImages: allNotesImages

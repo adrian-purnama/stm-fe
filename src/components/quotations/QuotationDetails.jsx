@@ -42,16 +42,17 @@ const STATUS_OPTIONS = [
 
 // Predefined reasons for loss and close statuses
 const LOSS_REASONS = [
-  { value: 'harga', label: 'Harga' },
+  { value: 'harga', label: 'Price' },
   { value: 'delivery', label: 'Delivery' },
-  { value: 'notfollowedup', label: 'Not Followed Up' },
-  { value: 'custom', label: 'Custom' }
+  { value: 'not_followed_up', label: 'Not Followed Up' },
+  { value: 'custom_loss', label: 'Custom Reason' }
 ];
 
 const CLOSE_REASONS = [
-  { value: 'project_canceled', label: 'Project Canceled' },
-  { value: 'change_specification', label: 'Change Specification' },
-  { value: 'custom', label: 'Custom' }
+  { value: 'spek_berubah', label: 'Specification Changed' },
+  { value: 'scope_berubah', label: 'Scope Changed' },
+  { value: 'no_feedback', label: 'No Feedback' },
+  { value: 'custom_close', label: 'Custom Reason' }
 ];
 
 const statusClasses = {

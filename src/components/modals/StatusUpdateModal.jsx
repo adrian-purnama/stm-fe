@@ -319,6 +319,7 @@ const StatusUpdateModal = ({ isOpen, onClose, quotation, onUpdate }) => {
   const closeReasonOptions = [
     { value: 'spek_berubah', label: 'Specification Changed' },
     { value: 'scope_berubah', label: 'Scope Changed' },
+    { value: 'no_feedback', label: 'No Feedback' },
     { value: 'custom_close', label: 'Custom Reason' }
   ];
 
