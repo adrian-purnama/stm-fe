@@ -947,17 +947,55 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     const effectiveSelectedItemIds =
       headerSelectedItemIds.length > 0 ? headerSelectedItemIds : acceptedSelection.itemIds;
 
+    // Determine if current reason is a custom reason
+    const currentStatus = header?.status?.type || 'open';
+    const currentReason = header?.status?.reason || '';
+    
+    // Check if reason is one of the predefined values
+    const predefinedLossReasons = ['harga', 'delivery', 'not_followed_up'];
+    const predefinedCloseReasons = ['spek_berubah', 'scope_berubah', 'no_feedback'];
+    const allPredefinedReasons = [...predefinedLossReasons, ...predefinedCloseReasons];
+    
+    // Check if reason matches a predefined value (case-insensitive comparison)
+    const normalizedReason = currentReason.toLowerCase().trim();
+    const isPredefinedReason = allPredefinedReasons.some(predefined => 
+      normalizedReason === predefined.toLowerCase() || 
+      normalizedReason === predefined
+    );
+    
+    // If reason exists but is not predefined, it's a custom reason
+    let formReason = currentReason;
+    let formCustomReason = '';
+    
+    if (currentReason && !isPredefinedReason) {
+      // It's a custom reason - set dropdown to custom and fill textarea
+      if (currentStatus === 'loss') {
+        formReason = 'custom_loss';
+      } else if (currentStatus === 'close') {
+        formReason = 'custom_close';
+      }
+      formCustomReason = currentReason; // Store the actual custom reason text
+    } else if (currentReason) {
+      // It's a predefined reason - use as is
+      formReason = currentReason;
+      formCustomReason = '';
+    } else {
+      // No reason set
+      formReason = '';
+      formCustomReason = '';
+    }
+
     setStatusModal({
       isOpen: true,
       header,
       offers
     });
     setStatusForm({
-      status: header?.status?.type || 'open',
-      reason: header?.status?.reason || '',
+      status: currentStatus,
+      reason: formReason,
       selectedOfferId: effectiveSelectedOfferId,
       selectedItemIds: effectiveSelectedItemIds,
-      customReason: '',
+      customReason: formCustomReason,
       winSubStatus: header?.winSubStatus || 'order',
       ocSequence,
       ocSequenceEnd,
@@ -1124,7 +1162,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         return;
       }
 
-      if ((status === 'loss' || status === 'close') && reason === 'custom' && !customReason.trim()) {
+      if ((status === 'loss' || status === 'close') && (reason === 'custom_loss' || reason === 'custom_close') && !customReason.trim()) {
         toast.error('Please enter a custom reason');
         return;
       }
@@ -1172,7 +1210,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
       // Determine the final reason to send
       let finalReason = reason;
-      if (reason === 'custom') {
+      if (reason === 'custom_loss' || reason === 'custom_close') {
         finalReason = customReason;
       }
 
@@ -2909,7 +2947,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 placeholder="Select reason"
                 required
               />
-              {statusForm.reason === 'custom' && (
+              {(statusForm.reason === 'custom_loss' || statusForm.reason === 'custom_close') && (
                 <div className="mt-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Custom Reason *</label>
                   <textarea
