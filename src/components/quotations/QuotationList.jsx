@@ -305,15 +305,16 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [chips, setChips] = useState([]); // [{ type: 'status', value: 'open' }, ...]
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
     status: [],
-    lineOfBusiness: [],
-    customer: '',
-    marketing: '',
-    dateFrom: '',
-    dateTo: ''
+    bodyType: '',
+    chassisType: ''
   });
+  const [bodyTypes, setBodyTypes] = useState([]);
+  const [chassisTypes, setChassisTypes] = useState([]);
+  const [loadingBodyTypes, setLoadingBodyTypes] = useState(false);
+  const [loadingChassisTypes, setLoadingChassisTypes] = useState(false);
+  const [showSearchHelp, setShowSearchHelp] = useState(false);
   const [statusModal, setStatusModal] = useState({
     isOpen: false,
     header: null,
@@ -349,6 +350,46 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     const preferences = getSectionPreferences(PREFERENCE_SECTIONS.QUOTATIONS);
     setIsFilterCollapsed(preferences.isFilterCollapsed ?? true);
     setFavoriteStatuses(preferences.favoriteStatuses ?? ['open']);
+  }, []);
+
+  // Load body types and chassis types
+  useEffect(() => {
+    const loadBodyTypes = async () => {
+      setLoadingBodyTypes(true);
+      try {
+        const response = await ApiHelper.get('/api/body-types/list');
+        const options = (response.data.data || []).map((bodyType) => ({
+          value: bodyType._id,
+          label: bodyType.shortName ? `${bodyType.name} (${bodyType.shortName})` : bodyType.name
+        }));
+        setBodyTypes(options);
+      } catch (error) {
+        console.error('Error loading body types:', error);
+        toast.error('Failed to load body types');
+      } finally {
+        setLoadingBodyTypes(false);
+      }
+    };
+
+    const loadChassisTypes = async () => {
+      setLoadingChassisTypes(true);
+      try {
+        const response = await ApiHelper.get('/api/chassis-types/list');
+        const options = (response.data.data || []).map((chassisType) => ({
+          value: chassisType._id,
+          label: chassisType.shortName ? `${chassisType.name} (${chassisType.shortName})` : chassisType.name
+        }));
+        setChassisTypes(options);
+      } catch (error) {
+        console.error('Error loading chassis types:', error);
+        toast.error('Failed to load chassis types');
+      } finally {
+        setLoadingChassisTypes(false);
+      }
+    };
+
+    loadBodyTypes();
+    loadChassisTypes();
   }, []);
 
   // Parse search tokens (like RFQ)
@@ -407,68 +448,41 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
       status: [],
-      lineOfBusiness: [],
-      customer: '',
-      marketing: '',
-      dateFrom: '',
-      dateTo: ''
+      bodyType: '',
+      chassisType: ''
     });
   };
 
-  // Build advanced filter chips
-  const advancedFilterChips = [];
+  // Build filter chips for display
+  const filterChips = [];
   const capitalize = (value = '') =>
     value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 
   (advancedFilters.status || []).forEach((value) => {
-    advancedFilterChips.push({
+    filterChips.push({
       key: `status-${value}`,
       label: `Status: ${capitalize(value)}`,
       onRemove: () => toggleMultiFilter('status', value)
     });
   });
 
-  (advancedFilters.lineOfBusiness || []).forEach((value) => {
-    advancedFilterChips.push({
-      key: `lob-${value}`,
-      label: `Line of Business: ${capitalize(value)}`,
-      onRemove: () => toggleMultiFilter('lineOfBusiness', value)
-    });
-  });
-
-  if (advancedFilters.customer) {
-    advancedFilterChips.push({
-      key: 'customer',
-      label: `Customer: ${advancedFilters.customer}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, customer: '' }))
+  if (advancedFilters.bodyType) {
+    const bodyTypeLabel = bodyTypes.find(bt => bt.value === advancedFilters.bodyType)?.label || advancedFilters.bodyType;
+    filterChips.push({
+      key: 'bodyType',
+      label: `Body Type: ${bodyTypeLabel}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, bodyType: '' }))
     });
   }
 
-  if (advancedFilters.marketing) {
-    advancedFilterChips.push({
-      key: 'marketing',
-      label: `Marketing: ${advancedFilters.marketing}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, marketing: '' }))
+  if (advancedFilters.chassisType) {
+    const chassisTypeLabel = chassisTypes.find(ct => ct.value === advancedFilters.chassisType)?.label || advancedFilters.chassisType;
+    filterChips.push({
+      key: 'chassisType',
+      label: `Chassis Type: ${chassisTypeLabel}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, chassisType: '' }))
     });
   }
-
-  if (advancedFilters.dateFrom) {
-    advancedFilterChips.push({
-      key: 'dateFrom',
-      label: `From: ${advancedFilters.dateFrom}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, dateFrom: '' }))
-    });
-  }
-
-  if (advancedFilters.dateTo) {
-    advancedFilterChips.push({
-      key: 'dateTo',
-      label: `To: ${advancedFilters.dateTo}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, dateTo: '' }))
-    });
-  }
-
-  const advancedFilterCount = advancedFilterChips.length;
 
   // Initial load effect
   useEffect(() => {
@@ -522,24 +536,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         search: search.trim() || undefined
       };
 
-      // Add advanced filters
+      // Add filters
       if (advancedFilters.status?.length) {
         params.status = advancedFilters.status;
       }
-      if (advancedFilters.lineOfBusiness?.length) {
-        params.lineOfBusiness = advancedFilters.lineOfBusiness;
+      if (advancedFilters.bodyType) {
+        params.bodyType = advancedFilters.bodyType;
       }
-      if (advancedFilters.customer) {
-        params.customer = advancedFilters.customer;
-      }
-      if (advancedFilters.marketing) {
-        params.marketing = advancedFilters.marketing;
-      }
-      if (advancedFilters.dateFrom) {
-        params.startDate = advancedFilters.dateFrom;
-      }
-      if (advancedFilters.dateTo) {
-        params.endDate = advancedFilters.dateTo;
+      if (advancedFilters.chassisType) {
+        params.chassisType = advancedFilters.chassisType;
       }
 
       // Remove undefined values
@@ -1701,20 +1706,21 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         )}
       </div>
 
-      {/* Search and Filter UI (like RFQ) */}
+      {/* Search and Filter UI */}
       <div className="space-y-3">
+        {/* Search Input */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1 w-full">
             <input
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Search by quotation number, customer, or use filters: status:open customer:ABC marketing:name..."
+              placeholder="Search: 2/quo/XII/2025 | customer:ABC | requester:John | approver:Jane | from:2025-01-01 to:2025-12-31"
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onAddChipFromInput()}
             />
           </div>
           <button 
-            onClick={() => {}}
+            onClick={() => setShowSearchHelp(true)}
             className="inline-flex items-center justify-center rounded-lg p-2.5 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
             title="Search help"
           >
@@ -1722,166 +1728,71 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setShowAdvancedFilters((prev) => !prev)}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            {showAdvancedFilters ? 'Hide advanced filters' : 'Show advanced filters'}
-            {advancedFilterCount > 0 && (
-              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-white text-blue-600 font-semibold">
-                {advancedFilterCount}
-              </span>
-            )}
-          </button>
-        </div>
+        {/* Inline Filters */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          {/* Body Type Dropdown */}
+          <div className="flex-1 sm:flex-initial sm:w-48">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Body Type</label>
+            <CustomDropdown
+              options={bodyTypes}
+              value={advancedFilters.bodyType}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, bodyType: value }))}
+              placeholder={loadingBodyTypes ? "Loading..." : "Select body type"}
+              disabled={loadingBodyTypes}
+              searchable={true}
+            />
+          </div>
 
-        {showAdvancedFilters && (
-          <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                <SlidersHorizontal className="w-4 h-4 text-blue-500" />
-                Advanced Filters
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowAdvancedFilters(false)}
-                  className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+          {/* Chassis Type Dropdown */}
+          <div className="flex-1 sm:flex-initial sm:w-48">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Chassis Type</label>
+            <CustomDropdown
+              options={chassisTypes}
+              value={advancedFilters.chassisType}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, chassisType: value }))}
+              placeholder={loadingChassisTypes ? "Loading..." : "Select chassis type"}
+              disabled={loadingChassisTypes}
+              searchable={true}
+            />
+          </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</p>
-                <div className="flex flex-wrap gap-2">
-                  {statusOptions.filter(s => s.value).map((option) => {
-                    const active = advancedFilters.status.includes(option.value);
-                    return (
-                      <button
-                        key={option.value}
-                        onClick={() => toggleMultiFilter('status', option.value)}
-                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
-                          active
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Line of Business</p>
-                <div className="flex flex-wrap gap-2">
-                  {['karoseri', 'service', 'sparepart'].map((value) => {
-                    const active = advancedFilters.lineOfBusiness.includes(value);
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => toggleMultiFilter('lineOfBusiness', value)}
-                        className={`px-3 py-1.5 rounded-lg text-sm border transition ${
-                          active
-                            ? 'bg-purple-600 text-white border-purple-600'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-purple-400 hover:text-purple-600'
-                        }`}
-                      >
-                        {capitalize(value)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Customer</p>
-                <input
-                  type="text"
-                  value={advancedFilters.customer}
-                  onChange={(e) => setAdvancedFilters((prev) => ({ ...prev, customer: e.target.value }))}
-                  placeholder="Customer name..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Marketing</p>
-                <input
-                  type="text"
-                  value={advancedFilters.marketing}
-                  onChange={(e) => setAdvancedFilters((prev) => ({ ...prev, marketing: e.target.value }))}
-                  placeholder="Marketing name..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Date Range</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">From</label>
-                    <input
-                      type="date"
-                      value={advancedFilters.dateFrom}
-                      onChange={(e) =>
-                        setAdvancedFilters((prev) => ({
-                          ...prev,
-                          dateFrom: e.target.value
-                        }))
-                      }
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">To</label>
-                    <input
-                      type="date"
-                      value={advancedFilters.dateTo}
-                      min={advancedFilters.dateFrom || undefined}
-                      onChange={(e) =>
-                        setAdvancedFilters((prev) => ({
-                          ...prev,
-                          dateTo: e.target.value
-                        }))
-                      }
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
+          {/* Status Filter */}
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.filter(s => s.value).map((option) => {
+                const active = advancedFilters.status.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => toggleMultiFilter('status', option.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+                      active
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Chips UI */}
-      <div className="mb-2 flex flex-wrap gap-2">
-        {chips.map((chip, i) => (
-          <span key={i} className="inline-flex items-center rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
-            {chip.type}:{chip.value}
-            <button className="ml-1" onClick={() => onRemoveChip(i)}>
-              <XCircle className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        {chips.length > 0 && (
-          <button
-            onClick={() => setChips([])}
-            className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-200"
-          >
-            Clear Filters
-          </button>
-        )}
-      </div>
-      {advancedFilterChips.length > 0 && (
+      {/* Filter Chips UI */}
+      {(chips.length > 0 || filterChips.length > 0) && (
         <div className="mb-2 flex flex-wrap gap-2">
-          {advancedFilterChips.map((chip) => (
+          {chips.map((chip, i) => (
+            <span key={i} className="inline-flex items-center rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+              {chip.type}:{chip.value}
+              <button className="ml-1" onClick={() => onRemoveChip(i)}>
+                <XCircle className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {filterChips.map((chip) => (
             <span
               key={chip.key}
               className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs text-purple-700"
@@ -1895,12 +1806,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               </button>
             </span>
           ))}
-          <button
-            onClick={clearAdvancedFilters}
-            className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-          >
-            Clear advanced filters
-          </button>
+          {(chips.length > 0 || filterChips.length > 0) && (
+            <button
+              onClick={() => {
+                setChips([]);
+                clearAdvancedFilters();
+              }}
+              className="px-2.5 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+            >
+              Clear All Filters
+            </button>
+          )}
         </div>
       )}
 
