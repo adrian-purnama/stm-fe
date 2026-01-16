@@ -393,7 +393,17 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   }, []);
 
   // Parse search tokens (like RFQ)
+  // Quotation number pattern: e.g., "11/QUO/STM/XI/2025" or "2/quo/XII/2025"
+  const QUOTATION_NUMBER_PATTERN = /^\d+\/[A-Z]+\/[A-Z]+\/[IVX]+\/\d+$/i;
+  
   const parseTokens = useCallback((input) => {
+    const trimmed = input.trim();
+    
+    // Check if the entire input looks like a quotation number
+    if (QUOTATION_NUMBER_PATTERN.test(trimmed)) {
+      return [{ type: 'global', value: trimmed }];
+    }
+    
     const regex = /([a-z]+):("[^"]+"|\S+)|"([^"]+)"|(\S+)/g;
     const found = [];
     let m;
@@ -405,7 +415,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       } else if (m[3]) {
         found.push({ type: 'phrase', value: m[3] });
       } else if (m[4]) {
-        found.push({ type: 'global', value: m[4] });
+        // Check if this token looks like a quotation number
+        if (QUOTATION_NUMBER_PATTERN.test(m[4])) {
+          found.push({ type: 'global', value: m[4] });
+        } else {
+          found.push({ type: 'global', value: m[4] });
+        }
       }
     }
     return found;
@@ -501,7 +516,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chips, searchInput, advancedFilters]);
+  }, [searchInput, advancedFilters]);
 
   // Fetch quotation headers only (fast initial load)
   const fetchQuotations = async (reset = false) => {
@@ -519,21 +534,13 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         setLoadingMore(true);
       }
       
-      // Build search string from chips and searchInput
-      let search = '';
-      chips.forEach((chip) => {
-        if (chip.type === 'phrase') search += ' "' + chip.value + '"';
-        else if (chip.type === 'global') search += ' ' + chip.value;
-        else search += ` ${chip.type}:${chip.value}`;
-      });
-      if (searchInput.trim()) search += ' ' + searchInput.trim();
-      
+      // Simple search - just send the searchInput directly
       const params = {
         page: pageToFetch,
         limit: 10,
         filterMode,
         lightweight: 'true', // Request lightweight mode for fast header load
-        search: search.trim() || undefined
+        search: searchInput.trim() || undefined
       };
 
       // Add filters
@@ -554,6 +561,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         }
       });
 
+      console.log('[QuotationList] Fetching with params:', params);
       const response = await ApiHelper.get(apiEndpoint, { params });
       const headers = Array.isArray(response.data.data) ? response.data.data : [];
       const paginationData = response.data.pagination || { current: 1, pages: 1, total: 0 };
