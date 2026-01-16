@@ -348,6 +348,83 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           }
         }
 
+        // For non_karoseri items: populate bodyTypeId and chassisTypeId from RFQ level if not already set (optional)
+        if (rfqToEdit.lineOfBusiness?.type === 'non_karoseri') {
+          // Determine bodyTypeId - check existing fields first, then RFQ level (optional)
+          let resolvedBodyTypeId = null;
+          if (item.bodyTypeId) {
+            resolvedBodyTypeId = typeof item.bodyTypeId === 'object' && item.bodyTypeId !== null
+              ? item.bodyTypeId._id || item.bodyTypeId.id || null
+              : item.bodyTypeId;
+          } else if (item.templateSourceId && item.templateSourceModel === 'BodyType') {
+            // If templateSourceId exists and points to BodyType, use it
+            resolvedBodyTypeId = typeof item.templateSourceId === 'object' && item.templateSourceId !== null
+              ? item.templateSourceId._id || item.templateSourceId.id || null
+              : item.templateSourceId;
+          } else if (rfqBodyTypeId) {
+            // Otherwise, use RFQ-level bodyTypeId (if available)
+            resolvedBodyTypeId = rfqBodyTypeId;
+          }
+
+          // Set bodyTypeId if found (optional)
+          if (resolvedBodyTypeId) {
+            item.bodyTypeId = resolvedBodyTypeId;
+            // Also set templateSourceId (form uses this for dropdown)
+            const currentTemplateSourceId =
+              item.templateSourceId && typeof item.templateSourceId === 'object'
+                ? item.templateSourceId._id || item.templateSourceId.id || null
+                : item.templateSourceId || null;
+
+            // Set templateSourceId if not already set or if it doesn't match bodyTypeId
+            if (!currentTemplateSourceId || currentTemplateSourceId !== resolvedBodyTypeId) {
+              item.templateSourceId = resolvedBodyTypeId;
+              item.templateSourceModel = 'BodyType';
+            } else {
+              // Ensure templateSourceId is a string ID, not an object
+              item.templateSourceId = currentTemplateSourceId;
+              if (!item.templateSourceModel) {
+                item.templateSourceModel = 'BodyType';
+              }
+            }
+          }
+
+          // Populate chassisTypeId from RFQ level if not already set (optional)
+          if (!item.chassisTypeId && rfqChassisTypeId) {
+            item.chassisTypeId = rfqChassisTypeId;
+          }
+
+          // Ensure templateMode is set (can be empty for non_karoseri)
+          if (!item.templateMode) {
+            // If templateSourceId exists and templateSourceModel is 'BodyType', set to 'bodyType'
+            if (item.templateSourceId && item.templateSourceModel === 'BodyType') {
+              item.templateMode = 'bodyType';
+            } else if (item.templateSourceId && item.templateSourceModel === 'DrawingSpecification') {
+              item.templateMode = 'drawing';
+            } else if (item.bodyTypeId || item.chassisTypeId) {
+              // If bodyType or chassisType is set, default to manual
+              item.templateMode = 'manual';
+            } else {
+              // Otherwise, leave empty (no template mode)
+              item.templateMode = '';
+            }
+          }
+
+          // Initialize order values for specification items if missing
+          if (item.specifications && Array.isArray(item.specifications)) {
+            item.specifications.forEach((spec) => {
+              if (spec.items && Array.isArray(spec.items)) {
+                spec.items.forEach((specItem, index) => {
+                  if (specItem.order === undefined || specItem.order === null) {
+                    specItem.order = index;
+                  }
+                });
+                // Sort items by order after assigning
+                spec.items.sort((a, b) => (a.order || 0) - (b.order || 0));
+              }
+            });
+          }
+        }
+
         return item;
       }) : [];
 
@@ -537,6 +614,16 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       newItem.chassisTypeId = '';
       newItem.bodyTypeId = '';
       newItem.templateMode = 'manual';
+      newItem.templateSourceId = '';
+      newItem.drawingSpecification = '';
+      newItem.specifications = [];
+    } else if (lineOfBusinessType === 'non_karoseri') {
+      newItem.karoseri = '';
+      newItem.chassis = '';
+      newItem.chassisModel = '';
+      newItem.chassisTypeId = '';
+      newItem.bodyTypeId = '';
+      newItem.templateMode = ''; // Optional - can be empty
       newItem.templateSourceId = '';
       newItem.drawingSpecification = '';
       newItem.specifications = [];
@@ -959,6 +1046,28 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           newErrors[`items.${index}.templateSourceId`] = 'Please select a drawing';
         }
       });
+    } else if (lineOfBusinessType === 'non_karoseri') {
+      if (formData.items.length === 0) {
+        newErrors.items = 'At least one item is required';
+      }
+
+      // Validate each item - similar to karoseri but with optional bodyType/chassisType
+      formData.items.forEach((item, index) => {
+        // Quantity is required
+        if (!item.quantity || item.quantity < 1) {
+          newErrors[`items.${index}.quantity`] = 'Quantity must be at least 1';
+        }
+
+        // Estimated Revenue is required (0 is a valid value)
+        const estimatedRev = item.estimatedRevenue;
+        if (estimatedRev === undefined || estimatedRev === null || estimatedRev === '' ||
+          isNaN(estimatedRev) || (typeof estimatedRev === 'number' && estimatedRev < 0)) {
+          newErrors[`items.${index}.estimatedRevenue`] = 'Estimated revenue per quantity is required and must be >= 0';
+        }
+
+        // templateMode is optional - no validation errors if missing
+        // bodyType and chassisType are optional - no validation errors if missing
+      });
     } else if (lineOfBusinessType === 'service') {
       // Validate service items
       if (!formData.items || formData.items.length === 0) {
@@ -1126,6 +1235,59 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
           } else {
             delete cleanedItem.bodyTypeId;
             cleanedItem.templateSourceModel = item.templateMode === 'bodyType' ? 'BodyType' : 'DrawingSpecification';
+          }
+
+          if (cleanedItem.templateMode !== 'drawing') {
+            delete cleanedItem.drawingSpecification;
+          }
+
+          cleanedItem.estimatedRevenue = parseFloat(cleanedItem.estimatedRevenue) || 0;
+
+          return cleanedItem;
+        });
+      } else if (lineOfBusinessType === 'non_karoseri') {
+        // For non_karoseri, extract bodyTypeId and chassisTypeId from first item if available (optional)
+        if (formData.items && formData.items.length > 0) {
+          const firstItem = formData.items[0];
+
+          // Extract bodyTypeId: use bodyTypeId field if available, otherwise fall back to templateSourceId
+          // For manual and bodyType modes, templateSourceId is the bodyTypeId
+          // For drawing mode, bodyTypeId should be stored separately when drawing is selected
+          let bodyTypeId = firstItem.bodyTypeId || firstItem.templateSourceId;
+
+          // Extract chassisTypeId from first item
+          const chassisTypeId = firstItem.chassisTypeId;
+
+          // Only set at RFQ level if they exist (optional)
+          if (bodyTypeId) {
+            submitData.bodyTypeId = bodyTypeId;
+          }
+          if (chassisTypeId) {
+            submitData.chassisTypeId = chassisTypeId;
+          }
+        }
+
+        // Clean up items: similar to karoseri but handle optional templateMode
+        submitData.items = formData.items.map(item => {
+          const cleanedItem = { ...item };
+
+          // If templateMode is empty or not set, treat as manual but don't require fields
+          if (!item.templateMode || item.templateMode === '') {
+            // No template mode - remove templateSourceId and related fields, and don't send templateMode
+            delete cleanedItem.templateSourceId;
+            delete cleanedItem.bodyTypeId;
+            delete cleanedItem.templateMode; // Don't send empty templateMode for non_karoseri
+            cleanedItem.templateSourceModel = null;
+          } else if (item.templateMode === 'manual') {
+            delete cleanedItem.templateSourceId;
+            delete cleanedItem.bodyTypeId;
+            cleanedItem.templateSourceModel = null;
+            // Keep templateMode for manual mode (backend will handle it)
+          } else {
+            // bodyType or drawing mode - preserve templateMode
+            delete cleanedItem.bodyTypeId;
+            cleanedItem.templateSourceModel = item.templateMode === 'bodyType' ? 'BodyType' : 'DrawingSpecification';
+            // Keep templateMode - backend will save it for non_karoseri
           }
 
           if (cleanedItem.templateMode !== 'drawing') {
@@ -1862,6 +2024,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
               <CustomDropdown
                 options={[
                   { value: 'karoseri', label: 'Karoseri' },
+                  { value: 'non_karoseri', label: 'Non Karoseri' },
                   { value: 'service', label: 'Service' },
                   { value: 'sparepart', label: 'Sparepart' }
                 ]}
@@ -1875,7 +2038,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                   setErrors(prev => {
                     const newErrors = { ...prev };
                     Object.keys(newErrors).forEach(key => {
-                      if (key.startsWith('items.') || key.startsWith('service.') || key.startsWith('sparepart.')) {
+                      if (key.startsWith('items.') || key.startsWith('service.') || key.startsWith('sparepart.') || key.startsWith('non_karoseri.')) {
                         delete newErrors[key];
                       }
                     });
@@ -2251,6 +2414,593 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                               {errors[`items.${itemIndex}.chassis`] && (
                                 <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.chassis`]}</p>
                               )}
+                              {!loadingChassisTypes && Array.isArray(chassisTypes) && chassisTypes.length === 0 && (
+                                <p className="mt-1 text-xs text-yellow-600">No chassis types available. Please create chassis types first.</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={item.chassisModel || ''}
+                                onChange={(e) => updateItem(itemIndex, 'chassisModel', e.target.value)}
+                                placeholder="e.g., Dutro 500, Hino 200, etc."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                disabled={loading}
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Specify the specific chassis model if needed (e.g., "Dutro 500")
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Item Notes */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Notes
+                        </label>
+                        <textarea
+                          value={item.notes}
+                          onChange={(e) => updateItem(itemIndex, 'notes', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter item notes"
+                          disabled={loading}
+                          rows="2"
+                        />
+                      </div>
+
+                      {/* Specifications Section */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Specifications (Editable)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => addSpecificationCategory(itemIndex)}
+                            className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700"
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add Category
+                          </button>
+                        </div>
+
+                        {item.specifications && item.specifications.map((spec, specIndex) => {
+                          // Normalize order values for backward compatibility
+                          const normalizedItems = (spec.items || []).map((item, idx) => ({
+                            ...item,
+                            order: item.order !== undefined && item.order !== null ? item.order : idx
+                          })).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          
+                          return (
+                          <div key={specIndex} className="border border-gray-200 rounded-md p-3 mb-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <input
+                                type="text"
+                                value={spec.category || ''}
+                                onChange={(e) => updateSpecificationCategory(itemIndex, specIndex, 'category', e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    // If category has no items yet, add first item and focus on its name field
+                                    if (!spec.items || spec.items.length === 0) {
+                                      addSpecificationItem(itemIndex, specIndex, true);
+                                    } else {
+                                      // Focus on first spec name field in this category
+                                      const refKey = `spec-name-${itemIndex}-${specIndex}-0`;
+                                      if (specInputRefs.current[refKey]) {
+                                        specInputRefs.current[refKey].focus();
+                                      }
+                                    }
+                                  }
+                                }}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Category name"
+                                disabled={loading}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeSpecificationCategory(itemIndex, specIndex)}
+                                className="ml-2 text-red-600 hover:text-red-800"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              {normalizedItems.map((specItem, sortedIndex) => {
+                                const isFirst = sortedIndex === 0;
+                                const isLast = sortedIndex === normalizedItems.length - 1;
+                                
+                                return (
+                                  <div key={specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex} className="flex items-center gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => moveSpecificationItemUp(itemIndex, specIndex, sortedIndex)}
+                                        disabled={isFirst}
+                                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isFirst ? 'hover:bg-gray-100 rounded' : ''}`}
+                                        title="Move up"
+                                      >
+                                        <ChevronUp className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => moveSpecificationItemDown(itemIndex, specIndex, sortedIndex)}
+                                        disabled={isLast}
+                                        className={`text-gray-600 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed p-0.5 ${!isLast ? 'hover:bg-gray-100 rounded' : ''}`}
+                                        title="Move down"
+                                      >
+                                        <ChevronDown className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  <input
+                                    ref={(el) => {
+                                        const refKey = `spec-name-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                      if (el) {
+                                        specInputRefs.current[refKey] = el;
+                                      } else {
+                                        delete specInputRefs.current[refKey];
+                                      }
+                                    }}
+                                    type="text"
+                                    value={specItem.name || ''}
+                                      onChange={(e) => {
+                                        // Find the original index by order value in normalized items
+                                        const originalIndex = normalizedItems.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalIndex !== -1) {
+                                          // Find in original spec.items array
+                                          const originalSpecIndex = spec.items.findIndex((item) => {
+                                            const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                            const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                            return itemOrder === specItemOrder;
+                                          });
+                                          if (originalSpecIndex !== -1) {
+                                            updateSpecificationItem(itemIndex, specIndex, originalSpecIndex, 'name', e.target.value);
+                                          }
+                                        }
+                                      }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        // Move focus to value field
+                                          const valueRefKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                        if (specInputRefs.current[valueRefKey]) {
+                                          specInputRefs.current[valueRefKey].focus();
+                                        }
+                                      }
+                                    }}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Specification name"
+                                    disabled={loading}
+                                  />
+                                  <span className="text-gray-500">:</span>
+                                  <input
+                                    ref={(el) => {
+                                        const refKey = `spec-value-${itemIndex}-${specIndex}-${sortedIndex}`;
+                                      if (el) {
+                                        specInputRefs.current[refKey] = el;
+                                      } else {
+                                        delete specInputRefs.current[refKey];
+                                      }
+                                    }}
+                                    type="text"
+                                    value={specItem.specification || ''}
+                                      onChange={(e) => {
+                                        // Find the original index by order value in original spec.items array
+                                        const originalSpecIndex = spec.items.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalSpecIndex !== -1) {
+                                          updateSpecificationItem(itemIndex, specIndex, originalSpecIndex, 'specification', e.target.value);
+                                        }
+                                      }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        // Always add new item to current category and focus on its name field
+                                        addSpecificationItem(itemIndex, specIndex, true);
+                                      }
+                                    }}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Specification value"
+                                    disabled={loading}
+                                  />
+                                  <button
+                                    type="button"
+                                      onClick={() => {
+                                        // Find the original index by order value
+                                        const originalIndex = spec.items.findIndex((item) => {
+                                          const itemOrder = item.order !== undefined && item.order !== null ? item.order : sortedIndex;
+                                          const specItemOrder = specItem.order !== undefined && specItem.order !== null ? specItem.order : sortedIndex;
+                                          return itemOrder === specItemOrder;
+                                        });
+                                        if (originalIndex !== -1) {
+                                          removeSpecificationItem(itemIndex, specIndex, originalIndex);
+                                        }
+                                      }}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                );
+                              })}
+
+                              <button
+                                type="button"
+                                onClick={() => addSpecificationItem(itemIndex, specIndex)}
+                                className="inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add Specification
+                              </button>
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Non Karoseri Form - Similar to Karoseri but with optional bodyType/chassisType */}
+            {formData.lineOfBusiness?.type === 'non_karoseri' && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Items <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Item
+                  </button>
+                </div>
+
+                {errors.items && (
+                  <p className="mb-2 text-sm text-red-600">{errors.items}</p>
+                )}
+
+                {formData.items.map((item, itemIndex) => (
+                  <div key={itemIndex} className="border-2 border-gray-300 rounded-xl shadow-sm bg-white mb-6">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-gray-300 rounded-t-xl px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-base font-bold text-gray-900">Item {itemIndex + 1}</h4>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(itemIndex)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      {/* Item Configuration Section */}
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                        <h5 className="text-sm font-semibold text-gray-800 mb-3">Configuration</h5>
+
+                        {/* Template Mode Selection - Optional */}
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Specification Source <span className="text-xs text-gray-500">(Optional)</span>
+                          </label>
+                          <CustomDropdown
+                            options={[
+                              { value: '', label: 'None - Manual Entry' },
+                              { value: 'manual', label: 'Manual - Enter everything manually' },
+                              { value: 'bodyType', label: 'Body Type Template - Use default body type specs' },
+                              { value: 'drawing', label: 'Drawing - Copy from existing drawing' }
+                            ]}
+                            value={item.templateMode || ''}
+                            onChange={(value) => {
+                              // Preserve estimatedRevenue and quantity when switching template modes
+                              const currentEstimatedRevenue = item.estimatedRevenue !== undefined && item.estimatedRevenue !== null ? item.estimatedRevenue : 0;
+                              const currentQuantity = item.quantity || 1;
+
+                              updateItem(itemIndex, 'templateMode', value || '');
+                              updateItem(itemIndex, 'templateSourceModel', value === 'bodyType' ? 'BodyType' : value === 'drawing' ? 'DrawingSpecification' : null);
+                              updateItem(itemIndex, 'karoseri', '');
+                              updateItem(itemIndex, 'chassis', '');
+                              updateItem(itemIndex, 'chassisModel', '');
+                              updateItem(itemIndex, 'templateSourceId', '');
+                              updateItem(itemIndex, 'bodyTypeId', '');
+                              updateItem(itemIndex, 'chassisTypeId', '');
+                              updateItem(itemIndex, 'drawingSpecification', '');
+                              updateItem(itemIndex, 'specifications', []);
+
+                              // Ensure estimatedRevenue and quantity are preserved
+                              updateItem(itemIndex, 'estimatedRevenue', currentEstimatedRevenue);
+                              updateItem(itemIndex, 'quantity', currentQuantity);
+                            }}
+                            placeholder="Select specification source (optional)"
+                            disabled={loading}
+                          />
+                          <p className="mt-1 text-xs text-gray-500">
+                            {!item.templateMode && 'Leave empty to enter specifications manually without body type or chassis'}
+                            {item.templateMode === 'manual' && 'Select body type and chassis (both optional), and add specifications manually'}
+                            {item.templateMode === 'bodyType' && 'Select a body type to auto-fill specifications. Chassis info is optional.'}
+                            {item.templateMode === 'drawing' && 'Select an existing drawing to copy all specs, body type, and chassis info.'}
+                          </p>
+                        </div>
+
+                        {/* Basic Info Fields - Quantity + Estimated Revenue + Context-specific fields */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Quantity - always shown */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Quantity <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={item.quantity || ''}
+                              onChange={(e) => updateItem(itemIndex, 'quantity', parseInt(e.target.value) || 1)}
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors[`items.${itemIndex}.quantity`] ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                              placeholder="Enter quantity"
+                              disabled={loading}
+                              min="1"
+                              step="1"
+                            />
+                            {errors[`items.${itemIndex}.quantity`] && (
+                              <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.quantity`]}</p>
+                            )}
+                          </div>
+
+                          {/* Estimated Revenue - always shown */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Estimated Revenue per Quantity (IDR) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={(item.estimatedRevenue !== undefined && item.estimatedRevenue !== null && item.estimatedRevenue !== '')
+                                ? new Intl.NumberFormat('id-ID').format(item.estimatedRevenue)
+                                : ''}
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(/\./g, '');
+                                // If empty, set to empty string (will be handled on blur)
+                                if (rawValue === '') {
+                                  updateItem(itemIndex, 'estimatedRevenue', '');
+                                } else {
+                                  const numValue = parseFloat(rawValue);
+                                  // Only update if it's a valid number
+                                  if (!isNaN(numValue)) {
+                                    updateItem(itemIndex, 'estimatedRevenue', numValue);
+                                  }
+                                }
+                              }}
+                              onBlur={() => {
+                                // Ensure value is always a number (default to 0 if empty/invalid)
+                                const currentValue = item.estimatedRevenue;
+                                if (currentValue === undefined || currentValue === null || currentValue === '' || isNaN(currentValue)) {
+                                  updateItem(itemIndex, 'estimatedRevenue', 0);
+                                } else {
+                                  // Ensure it's a number (in case it's a string)
+                                  const numValue = typeof currentValue === 'string' ? parseFloat(currentValue) || 0 : currentValue;
+                                  updateItem(itemIndex, 'estimatedRevenue', Math.max(0, numValue));
+                                }
+                              }}
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors[`items.${itemIndex}.estimatedRevenue`] ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                              placeholder="Enter estimated revenue per quantity"
+                              disabled={loading}
+                            />
+                            {errors[`items.${itemIndex}.estimatedRevenue`] && (
+                              <p className="mt-1 text-sm text-red-600">{errors[`items.${itemIndex}.estimatedRevenue`]}</p>
+                            )}
+                          </div>
+
+                          {/* Manual Mode: Show Body Type and Chassis fields - Optional */}
+                          {item.templateMode === 'manual' && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Body Type <span className="text-xs text-gray-500">(Optional)</span>
+                                </label>
+                                <CustomDropdown
+                                  options={Array.isArray(bodyTypes) ? bodyTypes.map(bt => ({
+                                    value: bt._id,
+                                    label: `${bt.name || ''} (${bt.shortName || ''})`
+                                  })) : []}
+                                  value={item.templateSourceId || ''}
+                                  onChange={(value) => {
+                                    updateItem(itemIndex, 'templateSourceId', value);
+                                    updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                                    const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
+                                    if (selectedBodyType) {
+                                      updateItem(itemIndex, 'karoseri', selectedBodyType.name);
+                                    }
+                                  }}
+                                  placeholder={loadingBodyTypes ? "Loading body types..." : "Select body type (optional)"}
+                                  disabled={loading || loadingBodyTypes}
+                                />
+                                {!loadingBodyTypes && Array.isArray(bodyTypes) && bodyTypes.length === 0 && (
+                                  <p className="mt-1 text-xs text-yellow-600">No body types available. Please create body types first.</p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Chassis Type <span className="text-xs text-gray-500">(Optional)</span>
+                                </label>
+                                <CustomDropdown
+                                  options={Array.isArray(chassisTypes) ? chassisTypes.map(ct => ({
+                                    value: ct._id,
+                                    label: `${ct.name || ''} (${ct.shortName || ''})`
+                                  })) : []}
+                                  value={item.chassisTypeId || ''}
+                                  onChange={(value) => {
+                                    updateItem(itemIndex, 'chassisTypeId', value);
+                                    const selectedChassisType = Array.isArray(chassisTypes) ? chassisTypes.find(ct => ct._id === value) : null;
+                                    if (selectedChassisType) {
+                                      updateItem(itemIndex, 'chassis', selectedChassisType.name);
+                                    }
+                                  }}
+                                  placeholder={loadingChassisTypes ? "Loading chassis types..." : "Select chassis type (optional)"}
+                                  disabled={loading || loadingChassisTypes}
+                                />
+                                {!loadingChassisTypes && Array.isArray(chassisTypes) && chassisTypes.length === 0 && (
+                                  <p className="mt-1 text-xs text-yellow-600">No chassis types available. Please create chassis types first.</p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Chassis Model <span className="text-xs text-gray-500">(Optional)</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={item.chassisModel || ''}
+                                  onChange={(e) => updateItem(itemIndex, 'chassisModel', e.target.value)}
+                                  placeholder="e.g., Dutro 500, Hino 200, etc."
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  disabled={loading}
+                                />
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Specify the specific chassis model if needed (e.g., "Dutro 500")
+                                </p>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Body Type Template Mode: Show Body Type selector - Optional */}
+                          {item.templateMode === 'bodyType' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Body Type <span className="text-xs text-gray-500">(Optional)</span>
+                              </label>
+                              <CustomDropdown
+                                options={Array.isArray(bodyTypes) ? bodyTypes.map(bt => ({
+                                  value: bt._id,
+                                  label: `${bt.name || ''} (${bt.shortName || ''})`
+                                })) : []}
+                                value={item.templateSourceId || ''}
+                                onChange={(value) => {
+                                  updateItem(itemIndex, 'templateSourceId', value);
+                                  updateItem(itemIndex, 'bodyTypeId', value); // Also store as bodyTypeId for RFQ-level extraction
+                                  updateItem(itemIndex, 'templateSourceModel', 'BodyType');
+                                  const selectedBodyType = Array.isArray(bodyTypes) ? bodyTypes.find(bt => bt._id === value) : null;
+                                  if (selectedBodyType) {
+                                    updateItem(itemIndex, 'karoseri', selectedBodyType.name || '');
+                                    if (selectedBodyType.defaultSpecifications) {
+                                      updateItem(itemIndex, 'specifications', selectedBodyType.defaultSpecifications);
+                                      toast.success('Body type specifications loaded!');
+                                    }
+                                  }
+                                }}
+                                placeholder={loadingBodyTypes ? "Loading body types..." : "Select body type (optional)"}
+                                disabled={loading || loadingBodyTypes}
+                              />
+                              {!loadingBodyTypes && Array.isArray(bodyTypes) && bodyTypes.length === 0 && (
+                                <p className="mt-1 text-xs text-yellow-600">No body types available. Please create body types first.</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Drawing Mode: Show Drawing selector button - Optional */}
+                          {item.templateMode === 'drawing' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Drawing <span className="text-xs text-gray-500">(Optional)</span>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => openDrawingSelector(itemIndex)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between"
+                              >
+                                <span>
+                                  {item.templateSourceId ? (
+                                    (() => {
+                                      const selectedDrawing = Array.isArray(drawings) ? drawings.find(d => d._id === item.templateSourceId) : null;
+                                      if (selectedDrawing) {
+                                        const bodyTypeName = selectedDrawing.bodyTypeId?.name || 'Unknown Body';
+                                        const chassisTypeName = selectedDrawing.chassisTypeId?.name || 'Unknown Chassis';
+                                        return `${selectedDrawing.drawingNumber || 'Drawing'} (${bodyTypeName} / ${chassisTypeName})`;
+                                      }
+                                      return 'Select drawing';
+                                    })()
+                                  ) : (
+                                    'Click to select drawing (optional)'
+                                  )}
+                                </span>
+                                <Search className="h-4 w-4 text-gray-400" />
+                              </button>
+                              {item.templateSourceId && (
+                                <p className="mt-1 text-xs text-gray-500">Drawing selected. Click to change.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Show loaded drawing details for drawing mode */}
+                        {item.templateMode === 'drawing' && item.templateSourceId && (
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div>
+                              <label className="block text-xs font-medium text-green-700 mb-1">
+                                Body Type (from drawing)
+                              </label>
+                              <div className="text-sm text-green-900 font-medium">
+                                {item.karoseri || 'Loading...'}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-green-700 mb-1">
+                                Chassis Type (from drawing)
+                              </label>
+                              <div className="text-sm text-green-900 font-medium">
+                                {item.chassis || 'Loading...'} {item.chassisModel ? `- ${item.chassisModel}` : ''}
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-xs text-green-700 italic">
+                                Specifications below are preloaded from the drawing
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Show chassis field for bodyType mode - Optional */}
+                        {item.templateMode === 'bodyType' && (
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Chassis Type <span className="text-xs text-gray-500">(Optional)</span>
+                              </label>
+                              <CustomDropdown
+                                options={Array.isArray(chassisTypes) ? chassisTypes.map(ct => ({
+                                  value: ct._id,
+                                  label: `${ct.name || ''} (${ct.shortName || ''})`
+                                })) : []}
+                                value={item.chassisTypeId || ''}
+                                onChange={(value) => {
+                                  updateItem(itemIndex, 'chassisTypeId', value);
+                                  const selectedChassisType = Array.isArray(chassisTypes) ? chassisTypes.find(ct => ct._id === value) : null;
+                                  if (selectedChassisType) {
+                                    updateItem(itemIndex, 'chassis', selectedChassisType.name);
+                                  }
+                                }}
+                                placeholder={loadingChassisTypes ? "Loading chassis types..." : "Select chassis type (optional)"}
+                                disabled={loading || loadingChassisTypes}
+                              />
                               {!loadingChassisTypes && Array.isArray(chassisTypes) && chassisTypes.length === 0 && (
                                 <p className="mt-1 text-xs text-yellow-600">No chassis types available. Please create chassis types first.</p>
                               )}

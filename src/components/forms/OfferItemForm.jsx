@@ -47,13 +47,28 @@ const OfferItemForm = ({
       notes: item?.notes || ''
     };
 
-    if (lineOfBusinessType === 'karoseri') {
+    if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
       // Extract ObjectId from drawingSpecification if it's a populated object
       const drawingSpecId = item?.drawingSpecification 
         ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
           ? item.drawingSpecification._id 
           : item.drawingSpecification)
         : null;
+      
+      // Preserve templateMode from RFQ - for non_karoseri, it can be null/undefined/empty
+      // For karoseri, default to 'manual' if not set
+      // Check if templateMode exists and is a valid value (not null, undefined, or empty string)
+      const preservedTemplateMode = lineOfBusinessType === 'non_karoseri' 
+        ? (item?.templateMode && ['manual', 'bodyType', 'drawing'].includes(item.templateMode) ? item.templateMode : undefined)
+        : (item?.templateMode || 'manual');
+      
+      console.log('[OfferItemForm] getInitialFormData - templateMode:', {
+        itemTemplateMode: item?.templateMode,
+        itemTemplateSourceId: item?.templateSourceId,
+        itemDrawingSpecification: item?.drawingSpecification,
+        lineOfBusinessType,
+        preservedTemplateMode
+      });
       
       return {
         ...baseData,
@@ -64,7 +79,7 @@ const OfferItemForm = ({
         bodyTypeId: item?.bodyTypeId || '',
         chassisTypeId: item?.chassisTypeId || '',
         sizeTypeId: item?.sizeTypeId || '',
-        templateMode: item?.templateMode || 'manual',
+        templateMode: preservedTemplateMode,
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
@@ -188,13 +203,22 @@ const OfferItemForm = ({
     };
 
     let newFormData;
-    if (lineOfBusinessType === 'karoseri') {
+    let preservedTemplateMode = undefined; // Initialize outside the if block
+    
+    if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
       // Extract ObjectId from drawingSpecification if it's a populated object
       const drawingSpecId = item?.drawingSpecification 
         ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
           ? item.drawingSpecification._id 
           : item.drawingSpecification)
         : null;
+      
+      // Preserve templateMode from RFQ - for non_karoseri, it can be null/undefined/empty
+      // For karoseri, default to 'manual' if not set
+      // For non_karoseri: preserve valid values ('manual', 'bodyType', 'drawing'), otherwise undefined
+      preservedTemplateMode = lineOfBusinessType === 'non_karoseri' 
+        ? (item?.templateMode && ['manual', 'bodyType', 'drawing'].includes(item.templateMode) ? item.templateMode : undefined)
+        : (item?.templateMode || 'manual');
       
       newFormData = {
         ...baseData,
@@ -205,7 +229,7 @@ const OfferItemForm = ({
         bodyTypeId: item?.bodyTypeId?._id || item?.bodyTypeId || '',
         chassisTypeId: item?.chassisTypeId?._id || item?.chassisTypeId || '',
         sizeTypeId: item?.sizeTypeId || '',
-        templateMode: item?.templateMode || 'manual',
+        templateMode: preservedTemplateMode,
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId?._id || item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
@@ -214,6 +238,7 @@ const OfferItemForm = ({
         }))
       };
       // Set the selected drawing spec if it exists (use the populated object for display)
+      // Also check templateSourceId if templateMode is 'drawing' (for drawing mode)
       if (item?.drawingSpecification) {
         // If it's already a populated object, use it directly
         if (typeof item.drawingSpecification === 'object' && item.drawingSpecification.drawingNumber) {
@@ -222,6 +247,15 @@ const OfferItemForm = ({
           // Otherwise, it will be fetched by the useEffect that watches drawingSpecification
           setSelectedDrawingSpec(null);
         }
+      } else if (preservedTemplateMode === 'drawing' && item?.templateSourceId) {
+        // If templateMode is 'drawing' and templateSourceId exists, use it as drawingSpecification
+        // The drawingSpecification might be stored in templateSourceId for drawing mode
+        const drawingId = typeof item.templateSourceId === 'object' && item.templateSourceId._id 
+          ? item.templateSourceId._id 
+          : item.templateSourceId;
+        // Set drawingSpecification so the useEffect can fetch it
+        newFormData.drawingSpecification = drawingId;
+        setSelectedDrawingSpec(null); // Will be set by useEffect
       } else {
         setSelectedDrawingSpec(null);
       }
@@ -242,6 +276,12 @@ const OfferItemForm = ({
     }
     
     console.log('OfferItemForm: Setting formData to:', newFormData);
+    console.log('[OfferItemForm] useEffect - templateMode:', {
+      itemTemplateMode: item?.templateMode,
+      preservedTemplateMode,
+      lineOfBusinessType,
+      finalTemplateMode: newFormData.templateMode
+    });
     setFormData(newFormData);
   }, [item, lineOfBusinessType]);
 
@@ -559,6 +599,20 @@ const OfferItemForm = ({
         toast.error('Please select a drawing');
         return;
       }
+    } else if (lineOfBusinessType === 'non_karoseri') {
+      // For non_karoseri, bodyType and chassisType are optional
+      // But if templateMode is set, validate accordingly
+      if (formData.templateMode === 'bodyType' && !formData.templateSourceId) {
+        console.log('Validation failed: body type template not selected');
+        toast.error('Please select a body type template');
+        return;
+      }
+      
+      if (formData.templateMode === 'drawing' && !formData.templateSourceId) {
+        console.log('Validation failed: drawing not selected');
+        toast.error('Please select a drawing');
+        return;
+      }
     } else if (lineOfBusinessType === 'service') {
       if (!formData.serviceName?.trim()) {
         console.log('Validation failed: serviceName is empty');
@@ -645,7 +699,7 @@ const OfferItemForm = ({
     };
 
     let resetData;
-    if (lineOfBusinessType === 'karoseri') {
+    if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
       resetData = {
         ...baseData,
         karoseri: item?.karoseri || '',
@@ -655,7 +709,7 @@ const OfferItemForm = ({
         bodyTypeId: item?.bodyTypeId || '',
         chassisTypeId: item?.chassisTypeId || '',
         sizeTypeId: item?.sizeTypeId || '',
-        templateMode: item?.templateMode || 'manual',
+        templateMode: item?.templateMode || (lineOfBusinessType === 'non_karoseri' ? undefined : 'manual'),
         templateSourceModel: item?.templateSourceModel || null,
         templateSourceId: item?.templateSourceId || null,
         specifications: (item?.specifications || []).map(spec => ({
@@ -721,6 +775,7 @@ const OfferItemForm = ({
             <p className="text-sm text-gray-600">
               {item ? 'Edit item details' : 
                 lineOfBusinessType === 'karoseri' ? 'Enter karoseri and chassis information' :
+                lineOfBusinessType === 'non_karoseri' ? 'Enter item information (body type and chassis optional)' :
                 lineOfBusinessType === 'service' ? 'Enter service information' :
                 lineOfBusinessType === 'sparepart' ? 'Enter sparepart information' :
                 'Enter item information'}
@@ -776,7 +831,7 @@ const OfferItemForm = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Product Information - Conditional based on lineOfBusinessType */}
-        {lineOfBusinessType === 'karoseri' && (
+        {(lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') && (
         <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
           <div className="flex items-center mb-4">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
@@ -789,7 +844,7 @@ const OfferItemForm = ({
             {/* Template Mode Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Specification Source *
+                Specification Source {lineOfBusinessType === 'karoseri' ? '*' : <span className="text-xs text-gray-500">(Optional)</span>}
               </label>
               <CustomDropdown
                 options={[
@@ -797,7 +852,7 @@ const OfferItemForm = ({
                   { value: 'bodyType', label: 'Body Type Template - Use default body type specs' },
                   { value: 'drawing', label: 'Drawing - Copy from existing drawing' }
                 ]}
-                value={formData.templateMode}
+                value={formData.templateMode && ['manual', 'bodyType', 'drawing'].includes(formData.templateMode) ? formData.templateMode : ''}
                 onChange={(value) => {
                   handleInputChange('templateMode', value);
                   handleInputChange('karoseri', '');
@@ -848,7 +903,7 @@ const OfferItemForm = ({
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Chassis Type *
+                    Chassis Type {lineOfBusinessType === 'karoseri' ? '*' : <span className="text-xs text-gray-500">(Optional)</span>}
                   </label>
                   <CustomDropdown
                     options={chassisTypes.map(ct => ({
@@ -932,7 +987,7 @@ const OfferItemForm = ({
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Body Type *
+                    Body Type {lineOfBusinessType === 'karoseri' ? '*' : <span className="text-xs text-gray-500">(Optional)</span>}
                   </label>
                   <CustomDropdown
                     options={bodyTypes.map(bt => ({
@@ -960,7 +1015,7 @@ const OfferItemForm = ({
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Chassis Type *
+                    Chassis Type {lineOfBusinessType === 'karoseri' ? '*' : <span className="text-xs text-gray-500">(Optional)</span>}
                   </label>
                   <CustomDropdown
                     options={chassisTypes.map(ct => ({
@@ -1043,7 +1098,7 @@ const OfferItemForm = ({
             {formData.templateMode === 'drawing' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Drawing *
+                  Drawing {lineOfBusinessType === 'karoseri' ? '*' : <span className="text-xs text-gray-500">(Optional)</span>}
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -1355,8 +1410,8 @@ const OfferItemForm = ({
         </div>
       </div>
 
-      {/* Specifications - Only for karoseri */}
-      {lineOfBusinessType === 'karoseri' && (
+      {/* Specifications - For karoseri and non_karoseri */}
+      {(lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') && (
       <div className="mt-8 bg-white rounded-lg p-5 shadow-sm border border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h5 className="font-semibold text-gray-900">Specifications (Editable)</h5>

@@ -576,7 +576,7 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
 
         {/* Specification Comparison Section */}
         {rfq.engineeringTransit && rfq.engineeringTransit.specsOriginal && rfq.engineeringTransit.specsModified && 
-         rfq.engineeringTransit.specsModified.length > 0 && rfq.lineOfBusiness?.type === 'karoseri' && (
+         rfq.engineeringTransit.specsModified.length > 0 && (rfq.lineOfBusiness?.type === 'karoseri' || rfq.lineOfBusiness?.type === 'non_karoseri') && (
           <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
@@ -935,15 +935,15 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
                   </div>
                   
                   {/* Type-specific fields */}
-                  {rfq.lineOfBusiness?.type === 'karoseri' && (
+                  {(rfq.lineOfBusiness?.type === 'karoseri' || rfq.lineOfBusiness?.type === 'non_karoseri') && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                       <div>
                         <span className="font-medium text-gray-700">Karoseri:</span>
-                        <span className="ml-2 text-gray-900">{item.karoseri}</span>
+                        <span className="ml-2 text-gray-900">{item.karoseri || 'N/A'}</span>
                       </div>
                       <div>
                         <span className="font-medium text-gray-700">Chassis:</span>
-                        <span className="ml-2 text-gray-900">{item.chassis} {item.chassisModel ? `- ${item.chassisModel}` : ''}</span>
+                        <span className="ml-2 text-gray-900">{item.chassis || 'N/A'} {item.chassisModel ? `- ${item.chassisModel}` : ''}</span>
                       </div>
                     </div>
                   )}
@@ -989,8 +989,8 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
                     </div>
                   )}
 
-                  {/* Specifications (only for karoseri) */}
-                  {rfq.lineOfBusiness?.type === 'karoseri' && item.specifications && item.specifications.length > 0 && (
+                  {/* Specifications (for karoseri and non_karoseri) */}
+                  {(rfq.lineOfBusiness?.type === 'karoseri' || rfq.lineOfBusiness?.type === 'non_karoseri') && item.specifications && item.specifications.length > 0 && (
                     <div>
                       <button
                         onClick={() => toggleItemExpansion(index)}

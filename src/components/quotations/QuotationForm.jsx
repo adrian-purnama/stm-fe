@@ -324,7 +324,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
             };
             
             // Add type-specific fields
-            if (lineOfBusinessType === 'karoseri') {
+            if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
               // Extract ObjectId from populated fields if they're objects
               const drawingSpecId = item.drawingSpecification 
                 ? (typeof item.drawingSpecification === 'object' && item.drawingSpecification._id 
@@ -350,6 +350,21 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                   : item.templateSourceId)
                 : null;
               
+              // Preserve templateMode from RFQ
+              // For non_karoseri: preserve valid values ('manual', 'bodyType', 'drawing'), otherwise undefined
+              // For karoseri: default to 'manual' if not set
+              const preservedTemplateMode = lineOfBusinessType === 'non_karoseri' 
+                ? (item.templateMode && ['manual', 'bodyType', 'drawing'].includes(item.templateMode) ? item.templateMode : undefined)
+                : (item.templateMode || 'manual');
+              
+              console.log('[QuotationForm] Preserving templateMode for non_karoseri:', {
+                itemTemplateMode: item.templateMode,
+                lineOfBusinessType,
+                preservedTemplateMode,
+                itemDrawingSpecification: item.drawingSpecification,
+                itemTemplateSourceId: item.templateSourceId
+              });
+              
               return {
                 ...baseItem,
                 karoseri: item.karoseri || '',
@@ -358,7 +373,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                 drawingSpecification: drawingSpecId,
                 bodyTypeId: bodyTypeId,
                 chassisTypeId: chassisTypeId,
-                templateMode: item.templateMode || 'manual',
+                templateMode: preservedTemplateMode,
                 templateSourceModel: item.templateSourceModel || null,
                 templateSourceId: templateSourceId,
                 specifications: item.specifications || []
@@ -398,6 +413,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
         console.log('QuotationForm: firstOffer data:', firstOffer);
         console.log('QuotationForm: extracted offerItems:', offerItems);
         console.log('QuotationForm: offerItems length:', offerItems.length);
+        console.log('QuotationForm: First offerItem templateMode:', offerItems[0]?.templateMode, 'lineOfBusinessType:', lineOfBusinessType);
         setFormData(rfqFormData);
         setQuotationNumber('');
         setNotesImagesData([]);
@@ -1258,7 +1274,7 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                     <div>
                       <h4 className="font-medium text-gray-900">Item {index + 1}</h4>
                       <p className="text-sm text-gray-600">
-                        {lineOfBusinessType === 'karoseri' && `${item.karoseri || ''} - ${item.chassis || ''}`}
+                        {(lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') && `${item.karoseri || 'N/A'} - ${item.chassis || 'N/A'}`}
                         {lineOfBusinessType === 'service' && item.serviceName}
                         {lineOfBusinessType === 'sparepart' && item.sparepartName}
                       </p>
@@ -1319,7 +1335,15 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
           
           {formData.offerItems.length === 0 && editingItemIndex === -1 && (
             <div className="text-center py-8 text-gray-500">
-              <p>No items added yet. Click "Add Item" to start adding karoseri and chassis combinations.</p>
+              <p>
+                {lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri' 
+                  ? 'No items added yet. Click "Add Item" to start adding items.'
+                  : lineOfBusinessType === 'service'
+                  ? 'No items added yet. Click "Add Item" to start adding service items.'
+                  : lineOfBusinessType === 'sparepart'
+                  ? 'No items added yet. Click "Add Item" to start adding sparepart items.'
+                  : 'No items added yet. Click "Add Item" to start adding items.'}
+              </p>
             </div>
           )}
         </div>
@@ -1772,16 +1796,53 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <div>
-                          <span className="font-medium text-gray-700">Karoseri:</span>
-                          <span className="ml-2 text-gray-900">{item.karoseri}</span>
+                      {/* Type-specific fields */}
+                      {(rfqReferenceData.lineOfBusiness?.type === 'karoseri' || rfqReferenceData.lineOfBusiness?.type === 'non_karoseri') && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <span className="font-medium text-gray-700">Karoseri:</span>
+                            <span className="ml-2 text-gray-900">{item.karoseri || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Chassis:</span>
+                            <span className="ml-2 text-gray-900">{item.chassis || 'N/A'}</span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Chassis:</span>
-                          <span className="ml-2 text-gray-900">{item.chassis}</span>
+                      )}
+                      
+                      {rfqReferenceData.lineOfBusiness?.type === 'service' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <span className="font-medium text-gray-700">Service Name:</span>
+                            <span className="ml-2 text-gray-900">{item.serviceName || 'N/A'}</span>
+                          </div>
+                          {item.serviceDetails && item.serviceDetails.length > 0 && (
+                            <div className="md:col-span-2">
+                              <span className="font-medium text-gray-700">Service Details:</span>
+                              <ul className="list-disc list-inside ml-2 text-gray-900 mt-1">
+                                {item.serviceDetails.map((detail, idx) => (
+                                  <li key={idx}>{detail}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      )}
+                      
+                      {rfqReferenceData.lineOfBusiness?.type === 'sparepart' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <span className="font-medium text-gray-700">Sparepart Name:</span>
+                            <span className="ml-2 text-gray-900">{item.sparepartName || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Price Per Unit:</span>
+                            <span className="ml-2 text-gray-900">
+                              {item.pricePerUnit ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.pricePerUnit) : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {item.notes && (
                         <div className="mb-3">
@@ -1790,8 +1851,8 @@ const QuotationForm = ({ quotation, onSave, onCancel, mode = 'create-quotation',
                         </div>
                       )}
 
-                      {/* Specifications */}
-                      {item.specifications && item.specifications.length > 0 && (
+                      {/* Specifications (for karoseri and non_karoseri) */}
+                      {(rfqReferenceData.lineOfBusiness?.type === 'karoseri' || rfqReferenceData.lineOfBusiness?.type === 'non_karoseri') && item.specifications && item.specifications.length > 0 && (
                         <div>
                           <h5 className="font-medium text-gray-700 mb-2">Specifications:</h5>
                           <div className="space-y-3">

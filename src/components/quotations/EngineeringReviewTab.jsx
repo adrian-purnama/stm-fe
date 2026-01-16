@@ -240,7 +240,7 @@ const EngineeringReviewTab = () => {
     };
     
     // Type-specific fields
-    if (lineOfBusinessType === 'karoseri') {
+    if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
       newItem.karoseri = '';
       newItem.chassis = '';
       newItem.chassisModel = '';
@@ -445,7 +445,7 @@ const EngineeringReviewTab = () => {
       }
     } else {
       // Deep copy from original specs (from specsOriginal if available, otherwise from items)
-      if (lineOfBusinessType === 'karoseri') {
+      if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
         const sourceSpecs = rfq.engineeringTransit?.specsOriginal || rfq.items || [];
         specsModified = sourceSpecs.map(item => ({
           itemNumber: item.itemNumber,
@@ -578,6 +578,7 @@ const EngineeringReviewTab = () => {
                       <h3 className="text-lg font-semibold text-gray-900">{rfq.rfqNumber}</h3>
                       <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
                         rfq.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                        rfq.lineOfBusiness?.type === 'non_karoseri' ? 'bg-cyan-100 text-cyan-800' :
                         rfq.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
                         rfq.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
                         'bg-gray-100 text-gray-800'
@@ -680,7 +681,7 @@ const EngineeringReviewTab = () => {
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Line of Business: {rfq.lineOfBusiness?.type || 'karoseri'}</h4>
                         
-                        {rfq.lineOfBusiness?.type === 'karoseri' && rfq.items && (
+                        {(rfq.lineOfBusiness?.type === 'karoseri' || rfq.lineOfBusiness?.type === 'non_karoseri') && rfq.items && (
                           <div className="space-y-3">
                             <p className="text-sm font-medium text-gray-700">Items:</p>
                             {rfq.items.map((item, index) => {
@@ -947,8 +948,8 @@ const EngineeringReviewTab = () => {
               />
             </div>
 
-            {/* Karoseri Specifications Editor */}
-            {selectedRFQ.lineOfBusiness?.type === 'karoseri' && (
+            {/* Karoseri and Non Karoseri Specifications Editor */}
+            {(selectedRFQ.lineOfBusiness?.type === 'karoseri' || selectedRFQ.lineOfBusiness?.type === 'non_karoseri') && (
               <div className="space-y-4 rounded-xl border border-gray-200 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <label className="text-sm font-medium text-gray-700">

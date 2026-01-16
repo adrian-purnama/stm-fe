@@ -94,19 +94,23 @@ const QuotationFormPage = () => {
                   };
                   
                   // Add type-specific fields based on line of business
-                  if (lineOfBusinessType === 'karoseri') {
-                    // Karoseri-specific fields
+                  if (lineOfBusinessType === 'karoseri' || lineOfBusinessType === 'non_karoseri') {
+                    // Karoseri and Non Karoseri-specific fields
                     itemData.karoseri = item.karoseri || '';
                     itemData.chassis = item.chassis || '';
                     itemData.chassisModel = item.chassisModel || '';
                     itemData.drawingSpecification = item.drawingSpecification || null;
-                    itemData.templateMode = item.templateMode || 'manual';
+                    // For non_karoseri: preserve templateMode if it exists, otherwise undefined
+                    // For karoseri: default to 'manual' if not set
+                    itemData.templateMode = lineOfBusinessType === 'non_karoseri' 
+                      ? (item.templateMode && ['manual', 'bodyType', 'drawing'].includes(item.templateMode) ? item.templateMode : undefined)
+                      : (item.templateMode || 'manual');
                     itemData.templateSourceModel = item.templateSourceModel || null;
                     itemData.templateSourceId = item.templateSourceId || null;
                     itemData.specifications = item.specifications || [];
                     // Handle populated objects (get _id) or plain IDs
-                    itemData.bodyTypeId = rfqData.bodyTypeId?._id || rfqData.bodyTypeId || null;
-                    itemData.chassisTypeId = rfqData.chassisTypeId?._id || rfqData.chassisTypeId || null;
+                    itemData.bodyTypeId = rfqData.bodyTypeId?._id || rfqData.bodyTypeId || item.bodyTypeId?._id || item.bodyTypeId || null;
+                    itemData.chassisTypeId = rfqData.chassisTypeId?._id || rfqData.chassisTypeId || item.chassisTypeId?._id || item.chassisTypeId || null;
                   } else if (lineOfBusinessType === 'service') {
                     // Service-specific fields
                     itemData.serviceName = item.serviceName || '';
