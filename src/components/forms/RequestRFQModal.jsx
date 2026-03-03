@@ -245,11 +245,20 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
       const response = await axiosInstance.get(`/api/rfq/documents/${docEntry._id}/download`, {
         responseType: 'blob'
       });
-      const blob = new Blob([response.data], { type: docEntry.mimeType || 'application/octet-stream' });
+      const contentType = response.headers['content-type']?.split(';')[0]?.trim() || docEntry.mimeType || 'application/octet-stream';
+      let filename = docEntry.originalName || 'document';
+      const disposition = response.headers['content-disposition'];
+      if (disposition) {
+        const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i) || disposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].trim());
+        }
+      }
+      const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
-      link.download = docEntry.originalName || 'document';
+      link.download = filename;
       window.document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1897,7 +1906,7 @@ const RequestRFQModal = ({ isOpen, onClose, onSubmit, approvers, quotationCreato
                               <div className="flex flex-col">
                                 <span className="font-medium text-gray-800">{docEntry.originalName}</span>
                                 <span className="text-xs text-gray-500">
-                                  {formatFileSize(docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt).toLocaleString()}
+                                  {(docEntry.fileSize > 0 ? formatFileSize(docEntry.fileSize) : '—')} • Uploaded {new Date(docEntry.uploadedAt).toLocaleString()}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">

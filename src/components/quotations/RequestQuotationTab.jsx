@@ -551,13 +551,15 @@ const RequestQuotationTab = () => {
   const handleCreateRFQ = async ({ data: rfqData, newFiles = [] }) => {
     try {
       const response = await axiosInstance.post('/api/rfq', rfqData);
-      const createdRfq = response.data?.data?.rfq;
+      const apiData = response.data?.data;
+      const createdRfqId = apiData?.rfqId;
+      const stage = apiData?.stage;
 
-      if (createdRfq && Array.isArray(newFiles) && newFiles.length > 0) {
+      if (createdRfqId && Array.isArray(newFiles) && newFiles.length > 0) {
         for (const file of newFiles) {
           const formData = new FormData();
           formData.append('document', file);
-          await axiosInstance.post(`/api/rfq/${createdRfq._id}/documents`, formData, {
+          await axiosInstance.post(`/api/rfq/${createdRfqId}/documents`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
@@ -566,7 +568,7 @@ const RequestQuotationTab = () => {
       // Show appropriate success message based on draft/submit
       if (rfqData.isDraft) {
         toast.success('RFQ saved as draft successfully');
-      } else if (rfqData.submitToEngineering && createdRfq?.stage === 'engineering') {
+      } else if (rfqData.submitToEngineering && stage === 'engineering') {
         toast.success('RFQ submitted and sent to engineering for review');
       } else {
         toast.success('RFQ submitted successfully');

@@ -7,13 +7,12 @@ import BaseModal from '../modals/BaseModal';
 
 // Check if document is an image (moved outside component to avoid dependency issues)
 const isImageDocument = (docEntry) => {
-  const mimeType = docEntry.file?.mimeType || docEntry.mimeType || '';
-  const fileName = docEntry.file?.originalName || docEntry.originalName || '';
-  const imageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-  const imageExtensions = ['.jpg', '.jpeg', '.png'];
+  const mimeType = (docEntry.file?.mimeType || docEntry.mimeType || '').toLowerCase();
+  const fileName = (docEntry.file?.originalName || docEntry.originalName || '').toLowerCase();
+  const imageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
   
-  return imageMimeTypes.includes(mimeType.toLowerCase()) || 
-         imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+  return imageMimeTypes.includes(mimeType) || imageExtensions.some(ext => fileName.endsWith(ext));
 };
 
 const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
@@ -128,17 +127,6 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
     }
   }, [imagePreviews]);
 
-  // Automatically load image previews when documents are available
-  React.useEffect(() => {
-    if (rfq?.documents && rfq.documents.length > 0) {
-      rfq.documents.forEach((docEntry) => {
-        if (isImageDocument(docEntry)) {
-          loadImagePreview(docEntry);
-        }
-      });
-    }
-  }, [rfq?.documents, loadImagePreview]);
-
   // Cleanup object URLs on unmount only
   React.useEffect(() => {
     return () => {
@@ -167,11 +155,16 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
         responseType: 'blob'
       });
       
-      // Get the original filename from the document entry
-      const filename = docEntry.file?.originalName || docEntry.originalName || 'document';
-      const mimeType = docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
-      
-      const blob = new Blob([response.data], { type: mimeType });
+      const contentType = response.headers['content-type']?.split(';')[0]?.trim() || docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
+      let filename = docEntry.file?.originalName || docEntry.originalName || 'document';
+      const disposition = response.headers['content-disposition'];
+      if (disposition) {
+        const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i) || disposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].trim());
+        }
+      }
+      const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
@@ -783,96 +776,41 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
               {rfq.documents.map((docEntry) => {
                 const documentId = docEntry._id || docEntry.file?.fileId || docEntry.fileId;
                 const isImage = isImageDocument(docEntry);
-                const hasPreview = imagePreviews[documentId];
-                const isLoading = loadingImages[documentId];
-                
                 return (
                   <div
                     key={docEntry._id}
-                    className={`rounded-lg border border-gray-200 bg-gray-50 overflow-hidden ${isImage ? 'p-0' : 'px-4 py-3'}`}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
                   >
-                    {isImage ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                       <div className="flex flex-col">
-                        {/* Image Preview Section */}
-                        <div className="p-4 pb-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                            <div className="flex flex-col">
-                              <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
-                              <span className="text-xs text-gray-500">
-                                {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
-                                {docEntry.uploadedBy && (
-                                  <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
-                                )}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadRfqDocument(docEntry)}
-                              className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
-                            >
-                              <Download size={14} />
-                              Download
-                            </button>
-                          </div>
-                          
-                          {/* Thumbnail Preview */}
-                          {isLoading ? (
-                            <div className="mt-3 flex items-center justify-center py-8 bg-gray-100 rounded-lg border border-gray-200">
-                              <div className="flex flex-col items-center gap-2">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
-                                <span className="text-xs text-gray-500">Loading preview...</span>
-                              </div>
-                            </div>
-                          ) : hasPreview ? (
-                            <div className="mt-3 relative group">
-                              <img
-                                src={imagePreviews[documentId]}
-                                alt={docEntry.file?.originalName || docEntry.originalName}
-                                className="w-full h-auto max-h-64 object-contain rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  const previewUrl = imagePreviews[documentId];
-                                  // Verify URL is still valid, reload if needed
-                                  if (previewUrl) {
-                                    setShowImageModal({ documentId, url: previewUrl });
-                                  } else {
-                                    // Reload if URL is missing
-                                    const newUrl = await loadImagePreview(docEntry, true);
-                                    if (newUrl) {
-                                      setShowImageModal({ documentId, url: newUrl });
-                                    } else {
-                                      toast.error('Failed to load image preview');
-                                    }
-                                  }
-                                }}
-                                onError={async () => {
-                                  // Try to reload the image
-                                  const newUrl = await loadImagePreview(docEntry, true);
-                                  if (!newUrl) {
-                                    toast.error('Failed to load image preview');
-                                  }
-                                }}
-                              />
-                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center pointer-events-none">
-                                <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Click to enlarge</span>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
+                        <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
+                        <span className="text-xs text-gray-500">
+                          {(docEntry.file?.fileSize > 0 || docEntry.fileSize > 0 ? formatFileSize(docEntry.file?.fileSize || docEntry.fileSize) : '—')} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
+                          {docEntry.uploadedBy && (
+                            <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
+                          )}
+                        </span>
                       </div>
-                    ) : (
-                      /* Non-image document */
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
-                          <span className="text-xs text-gray-500">
-                            {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
-                            {docEntry.uploadedBy && (
-                              <> • Uploaded by {docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}</>
-                            )}
-                          </span>
-                        </div>
+                      <div className="inline-flex items-center gap-2">
+                        {isImage && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const previewUrl = imagePreviews[documentId];
+                              if (previewUrl) {
+                                setShowImageModal({ documentId, url: previewUrl });
+                              } else {
+                                const newUrl = await loadImagePreview(docEntry, true);
+                                if (newUrl) setShowImageModal({ documentId, url: newUrl });
+                                else toast.error('Failed to load image preview');
+                              }
+                            }}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            <Eye size={14} />
+                            Preview
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDownloadRfqDocument(docEntry)}
@@ -882,7 +820,7 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
                           Download
                         </button>
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}

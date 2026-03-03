@@ -46,11 +46,16 @@ const EngineeringReviewTab = () => {
         responseType: 'blob'
       });
       
-      // Get the original filename from the document entry
-      const filename = docEntry.file?.originalName || docEntry.originalName || 'document';
-      const mimeType = docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
-      
-      const blob = new Blob([response.data], { type: mimeType });
+      const contentType = response.headers['content-type']?.split(';')[0]?.trim() || docEntry.file?.mimeType || docEntry.mimeType || 'application/octet-stream';
+      let filename = docEntry.file?.originalName || docEntry.originalName || 'document';
+      const disposition = response.headers['content-disposition'];
+      if (disposition) {
+        const filenameMatch = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i) || disposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].trim());
+        }
+      }
+      const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
@@ -785,7 +790,7 @@ const EngineeringReviewTab = () => {
                                 <div className="flex flex-col">
                                   <span className="font-medium text-gray-800">{docEntry.file?.originalName || docEntry.originalName}</span>
                                   <span className="text-xs text-gray-500">
-                                    {formatFileSize(docEntry.file?.fileSize || docEntry.fileSize)} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()} {docEntry.uploadedBy ? `• ${docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}` : ''}
+                                    {(docEntry.file?.fileSize > 0 || docEntry.fileSize > 0 ? formatFileSize(docEntry.file?.fileSize || docEntry.fileSize) : '—')} • Uploaded {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()} {docEntry.uploadedBy ? `• ${docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}` : ''}
                                   </span>
                                 </div>
                                 <button
@@ -884,7 +889,7 @@ const EngineeringReviewTab = () => {
                           {docEntry.originalName || docEntry.file?.originalName || 'Document'}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {formatFileSize(docEntry.fileSize || docEntry.file?.fileSize)} • Uploaded{' '}
+                          {(docEntry.fileSize > 0 || docEntry.file?.fileSize > 0 ? formatFileSize(docEntry.fileSize || docEntry.file?.fileSize) : '—')} • Uploaded{' '}
                           {new Date(docEntry.uploadedAt || docEntry.createdAt).toLocaleString()}
                           {docEntry.uploadedBy ? ` • ${docEntry.uploadedBy.fullName || docEntry.uploadedBy.email}` : ''}
                         </span>

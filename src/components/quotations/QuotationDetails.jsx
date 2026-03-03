@@ -2221,9 +2221,20 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                                   e.target.nextSibling.style.display = 'flex';
                                 }}
                               />
-                              {/* Download button overlay for creators */}
-                              {isCreator && (
-                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              {/* Preview and Download button overlay */}
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(getNotesImageAssetUrl(imageId, fileId), '_blank', 'noopener,noreferrer');
+                                  }}
+                                  className="inline-flex items-center px-3 py-2 bg-white text-gray-800 rounded-md hover:bg-gray-100 transition-colors shadow-lg"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Preview
+                                </button>
+                                {isCreator && (
                                   <a
                                     href={getNotesImageAssetUrl(imageId, fileId, true)}
                                     download={originalName}
@@ -2233,8 +2244,8 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                                     <Download className="h-4 w-4 mr-2" />
                                     Download
                                   </a>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </>
                           ) : null}
                           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm" style={{ display: fileId ? 'none' : 'flex' }}>
@@ -2250,17 +2261,29 @@ const QuotationDetails = ({ quotation, onEdit, onDelete, onClose, onPreview }) =
                               {(imageFile.fileSize / 1024 / 1024).toFixed(2)} MB
                             </p>
                           )}
-                          {/* Download link below image for creators */}
-                          {isCreator && fileId && (
-                            <a
-                              href={getNotesImageAssetUrl(imageId, fileId, true)}
-                              download={originalName}
-                              className="mt-1 inline-flex items-center text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Download className="h-3 w-3 mr-1" />
-                              Download
-                            </a>
+                          {/* Preview and Download links below image */}
+                          {fileId && (
+                            <div className="mt-1 flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => window.open(getNotesImageAssetUrl(imageId, fileId), '_blank', 'noopener,noreferrer')}
+                                className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Preview
+                              </button>
+                              {isCreator && (
+                                <a
+                                  href={getNotesImageAssetUrl(imageId, fileId, true)}
+                                  download={originalName}
+                                  className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Download
+                                </a>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
