@@ -20,7 +20,9 @@ import {
   Info,
   SlidersHorizontal,
   XCircle,
-  FileText
+  FileText,
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import toast from 'react-hot-toast';
@@ -294,6 +296,28 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     
     return hasDeletePermission || isCreator;
   }, [user]);
+
+  // Download approver can add manager notes
+  const canAddManagerNotes = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    return permissions.includes('quotation_download_approver');
+  }, [user]);
+
+  // All quotation viewer sees notes when added by download approver
+  const hasAllQuotationViewer = useMemo(() => {
+    if (!user || !user.permissions) return false;
+    const permissions = user.permissions.map(perm => {
+      if (typeof perm === 'string') return perm;
+      if (perm.name) return perm.name;
+      return null;
+    }).filter(Boolean);
+    return permissions.includes('all_quotation_viewer');
+  }, [user]);
   
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -307,19 +331,20 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const [chips, setChips] = useState([]); // [{ type: 'status', value: 'open' }, ...]
   const [advancedFilters, setAdvancedFilters] = useState({
     status: [],
-    bodyType: '',
-    chassisType: ''
+    customer: ''
   });
-  const [bodyTypes, setBodyTypes] = useState([]);
-  const [chassisTypes, setChassisTypes] = useState([]);
-  const [loadingBodyTypes, setLoadingBodyTypes] = useState(false);
-  const [loadingChassisTypes, setLoadingChassisTypes] = useState(false);
   const [showSearchHelp, setShowSearchHelp] = useState(false);
   const [statusModal, setStatusModal] = useState({
     isOpen: false,
     header: null,
     offers: []
   });
+  const [managerNotesModal, setManagerNotesModal] = useState({
+    isOpen: false,
+    header: null,
+    manager_notes: ''
+  });
+  const [managerNotesSaving, setManagerNotesSaving] = useState(false);
   const [statusForm, setStatusForm] = useState({
     status: '',
     reason: '',
@@ -350,46 +375,6 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     const preferences = getSectionPreferences(PREFERENCE_SECTIONS.QUOTATIONS);
     setIsFilterCollapsed(preferences.isFilterCollapsed ?? true);
     setFavoriteStatuses(preferences.favoriteStatuses ?? ['open']);
-  }, []);
-
-  // Load body types and chassis types
-  useEffect(() => {
-    const loadBodyTypes = async () => {
-      setLoadingBodyTypes(true);
-      try {
-        const response = await ApiHelper.get('/api/body-types/list');
-        const options = (response.data.data || []).map((bodyType) => ({
-          value: bodyType._id,
-          label: bodyType.shortName ? `${bodyType.name} (${bodyType.shortName})` : bodyType.name
-        }));
-        setBodyTypes(options);
-      } catch (error) {
-        console.error('Error loading body types:', error);
-        toast.error('Failed to load body types');
-      } finally {
-        setLoadingBodyTypes(false);
-      }
-    };
-
-    const loadChassisTypes = async () => {
-      setLoadingChassisTypes(true);
-      try {
-        const response = await ApiHelper.get('/api/chassis-types/list');
-        const options = (response.data.data || []).map((chassisType) => ({
-          value: chassisType._id,
-          label: chassisType.shortName ? `${chassisType.name} (${chassisType.shortName})` : chassisType.name
-        }));
-        setChassisTypes(options);
-      } catch (error) {
-        console.error('Error loading chassis types:', error);
-        toast.error('Failed to load chassis types');
-      } finally {
-        setLoadingChassisTypes(false);
-      }
-    };
-
-    loadBodyTypes();
-    loadChassisTypes();
   }, []);
 
   // Parse search tokens (like RFQ)
@@ -463,8 +448,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
       status: [],
-      bodyType: '',
-      chassisType: ''
+      customer: ''
     });
   };
 
@@ -481,21 +465,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     });
   });
 
-  if (advancedFilters.bodyType) {
-    const bodyTypeLabel = bodyTypes.find(bt => bt.value === advancedFilters.bodyType)?.label || advancedFilters.bodyType;
+  if (advancedFilters.customer?.trim()) {
     filterChips.push({
-      key: 'bodyType',
-      label: `Body Type: ${bodyTypeLabel}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, bodyType: '' }))
-    });
-  }
-
-  if (advancedFilters.chassisType) {
-    const chassisTypeLabel = chassisTypes.find(ct => ct.value === advancedFilters.chassisType)?.label || advancedFilters.chassisType;
-    filterChips.push({
-      key: 'chassisType',
-      label: `Chassis Type: ${chassisTypeLabel}`,
-      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, chassisType: '' }))
+      key: 'customer',
+      label: `Customer: ${advancedFilters.customer.trim()}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, customer: '' }))
     });
   }
 
@@ -534,24 +508,21 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         setLoadingMore(true);
       }
       
-      // Simple search - just send the searchInput directly
+      // One filter at a time: quotation number (search), status, or customer (backend else-if)
       const params = {
         page: pageToFetch,
         limit: 10,
         filterMode,
-        lightweight: 'true', // Request lightweight mode for fast header load
-        search: searchInput.trim() || undefined
+        lightweight: 'true' // Request lightweight mode for fast header load
       };
-
-      // Add filters
-      if (advancedFilters.status?.length) {
+      const searchVal = searchInput.trim();
+      const customerVal = advancedFilters.customer?.trim();
+      if (searchVal) {
+        params.search = searchVal;
+      } else if (advancedFilters.status?.length) {
         params.status = advancedFilters.status;
-      }
-      if (advancedFilters.bodyType) {
-        params.bodyType = advancedFilters.bodyType;
-      }
-      if (advancedFilters.chassisType) {
-        params.chassisType = advancedFilters.chassisType;
+      } else if (customerVal) {
+        params.customer = customerVal;
       }
 
       // Remove undefined values
@@ -826,6 +797,47 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const openManagerNotesModal = (header) => {
+    const key = header.quotationNumber || header._id?.toString();
+    const latest = quotations.find(q => (q.header.quotationNumber || q.header._id?.toString()) === key);
+    const notes = (latest?.header?.manager_notes ?? header?.manager_notes ?? '').trim();
+    setManagerNotesModal({
+      isOpen: true,
+      header: latest?.header || header,
+      manager_notes: notes
+    });
+  };
+
+  const handleSaveManagerNotes = async () => {
+    const { header, manager_notes } = managerNotesModal;
+    if (!header) return;
+    setManagerNotesSaving(true);
+    try {
+      const quotationNumber = header.quotationNumber || header._id?.toString();
+      const baseUrl = apiEndpoint === '/api/quotations/all' ? '/api/quotations' : apiEndpoint;
+      const res = await ApiHelper.patch(
+        `${baseUrl}/${encodeURIComponent(quotationNumber)}/manager-notes`,
+        { manager_notes: (manager_notes || '').trim() }
+      );
+      const savedNotes = (res?.data?.data?.manager_notes ?? manager_notes ?? '').trim();
+      const key = header.quotationNumber || header._id?.toString();
+      setQuotations(prev => prev.map(q => {
+        const qKey = q.header.quotationNumber || q.header._id?.toString();
+        if (qKey === key) {
+          return { ...q, header: { ...q.header, manager_notes: savedNotes } };
+        }
+        return q;
+      }));
+      setManagerNotesModal({ isOpen: false, header: null, manager_notes: '' });
+      toast.success('Manager notes saved');
+    } catch (error) {
+      const msg = error.response?.data?.message || error.message || 'Failed to save manager notes';
+      toast.error(msg);
+    } finally {
+      setManagerNotesSaving(false);
+    }
   };
 
   const openStatusModal = (header, offers) => {
@@ -1721,7 +1733,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           <div className="relative flex-1 w-full">
             <input
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Search: 2/quo/XII/2025 | customer:ABC | requester:John | approver:Jane | from:2025-01-01 to:2025-12-31"
+              placeholder="Quotation number (e.g. 2/quo/XII/2025)"
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onAddChipFromInput()}
@@ -1738,29 +1750,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
         {/* Inline Filters */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          {/* Body Type Dropdown */}
-          <div className="flex-1 sm:flex-initial sm:w-48">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Body Type</label>
-            <CustomDropdown
-              options={bodyTypes}
-              value={advancedFilters.bodyType}
-              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, bodyType: value }))}
-              placeholder={loadingBodyTypes ? "Loading..." : "Select body type"}
-              disabled={loadingBodyTypes}
-              searchable={true}
-            />
-          </div>
-
-          {/* Chassis Type Dropdown */}
-          <div className="flex-1 sm:flex-initial sm:w-48">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Chassis Type</label>
-            <CustomDropdown
-              options={chassisTypes}
-              value={advancedFilters.chassisType}
-              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, chassisType: value }))}
-              placeholder={loadingChassisTypes ? "Loading..." : "Select chassis type"}
-              disabled={loadingChassisTypes}
-              searchable={true}
+          {/* Customer filter (searches RFQ.customerName via QuotationHeader.rfqId) */}
+          <div className="flex-1 sm:max-w-xs">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>
+            <input
+              type="text"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Filter by customer name"
+              value={advancedFilters.customer}
+              onChange={(e) => setAdvancedFilters((prev) => ({ ...prev, customer: e.target.value }))}
             />
           </div>
 
@@ -1837,7 +1835,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             <div className="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white px-4 py-4 sm:px-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-lg font-semibold text-gray-900 sm:text-xl">{header.quotationNumber}</h3>
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold sm:text-sm ${
                     header.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
@@ -1857,6 +1856,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                         Reason: {header.status.reason}
                     </span>
                   )}
+                    </div>
+                    {canAddManagerNotes && (
+                      <button
+                        type="button"
+                        onClick={() => openManagerNotesModal(header)}
+                        data-tooltip-id={`manager-notes-${header._id}`}
+                        data-tooltip-content={header.manager_notes ? 'View/edit manager notes' : 'Add manager notes'}
+                        className="rounded-full p-2 text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+                      >
+                        <MessageSquare className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
                   
                   {/* Customer Info */}
@@ -1952,6 +1963,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     <span>Updated: {formatDate(header.updatedAt)}</span>
                   </div>
                 </div>
+                  {hasAllQuotationViewer && header.manager_notes && (
+                    <div className="mt-2 rounded-lg border border-gray-200 bg-amber-50/50 px-3 py-2 text-sm text-gray-700">
+                      <p className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-red-600" aria-hidden />
+                        <span><span className="font-medium text-gray-600">Manager notes:</span> {header.manager_notes}</span>
+                      </p>
+                    </div>
+                  )}
               </div>
 
                 {/* Action Buttons */}
@@ -2844,6 +2863,41 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           })}
         </React.Fragment>
       ))}
+
+      {/* Manager Notes Modal */}
+      <BaseModal
+        isOpen={managerNotesModal.isOpen}
+        onClose={() => setManagerNotesModal({ isOpen: false, header: null, manager_notes: '' })}
+        title={managerNotesModal.header ? `Manager notes – ${managerNotesModal.header.quotationNumber}` : 'Manager notes'}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Add notes for this quotation. Users with All Quotation Viewer permission will see these notes.</p>
+          <textarea
+            value={managerNotesModal.manager_notes}
+            onChange={(e) => setManagerNotesModal(prev => ({ ...prev, manager_notes: e.target.value }))}
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter manager notes..."
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setManagerNotesModal({ isOpen: false, header: null, manager_notes: '' })}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveManagerNotes}
+              disabled={managerNotesSaving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {managerNotesSaving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
 
       {/* Status Modal */}
       <BaseModal
