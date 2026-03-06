@@ -24,6 +24,16 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
+  // Simple-request workaround: no Authorization header + form body = no CORS preflight (for proxies that block OPTIONS)
+  if (config._noPreflight && config.data instanceof URLSearchParams) {
+    const token = localStorage.getItem("asb-token");
+    if (token) config.data.append("token", token);
+    config.headers = config.headers || {};
+    delete config.headers.Authorization;
+    delete config.headers["Content-Type"];
+    return config;
+  }
+
   const token = localStorage.getItem("asb-token");
   
   if (token) {

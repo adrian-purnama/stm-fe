@@ -817,9 +817,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     try {
       const quotationNumber = header.quotationNumber || header._id?.toString();
       const baseUrl = apiEndpoint === '/api/quotations/all' ? '/api/quotations' : apiEndpoint;
+      // Form body + no Authorization header = "simple" request, no CORS preflight (works behind proxies that block OPTIONS)
+      const body = new URLSearchParams({ manager_notes: (manager_notes || '').trim() });
       const res = await ApiHelper.post(
         `${baseUrl}/${encodeURIComponent(quotationNumber)}/manager-notes`,
-        { manager_notes: (manager_notes || '').trim() }
+        body,
+        { _noPreflight: true }
       );
       const savedNotes = (res?.data?.data?.manager_notes ?? manager_notes ?? '').trim();
       const key = header.quotationNumber || header._id?.toString();
