@@ -817,7 +817,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     try {
       const quotationNumber = header.quotationNumber || header._id?.toString();
       const baseUrl = apiEndpoint === '/api/quotations/all' ? '/api/quotations' : apiEndpoint;
-      const res = await ApiHelper.patch(
+      const res = await ApiHelper.post(
         `${baseUrl}/${encodeURIComponent(quotationNumber)}/manager-notes`,
         { manager_notes: (manager_notes || '').trim() }
       );
