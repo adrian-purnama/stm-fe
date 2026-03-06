@@ -817,10 +817,13 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     try {
       const quotationNumber = header.quotationNumber || header._id?.toString();
       const baseUrl = apiEndpoint === '/api/quotations/all' ? '/api/quotations' : apiEndpoint;
-      // Form body + no Authorization header = "simple" request, no CORS preflight (works behind proxies that block OPTIONS)
-      const body = new URLSearchParams({ manager_notes: (manager_notes || '').trim() });
+      // Flat URL (no encoded slashes) + form body = avoids proxy/CORS issues with paths like /1%2FQUO%2FSTM/...
+      const body = new URLSearchParams({
+        quotationNumber,
+        manager_notes: (manager_notes || '').trim()
+      });
       const res = await ApiHelper.post(
-        `${baseUrl}/${encodeURIComponent(quotationNumber)}/manager-notes`,
+        `${baseUrl}/manager-notes`,
         body,
         { _noPreflight: true }
       );
