@@ -550,38 +550,36 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       setTotal(paginationData.total || 0);
       const nextPage = paginationData.current + 1;
       setHasMore(nextPage <= paginationData.pages);
-      
-      // Trigger async loading of full details for each quotation
-      // Fetch header details and offers separately for faster perceived performance
-      // Limit concurrent requests to prevent memory issues and API overload
-      const fetchWithLimit = async (items, limit, fn) => {
-        for (let i = 0; i < items.length; i += limit) {
-          const batch = items.slice(i, i + limit);
-          // Process batch sequentially to avoid overwhelming the API
-          for (const item of batch) {
-            await fn(item);
-          }
-          // Small delay between batches to prevent memory buildup
-          if (i + limit < items.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-      };
 
-      // Process quotations in batches of 5 to limit concurrent requests
-      const quotationsToFetch = headers.filter(q => q.header);
-      await fetchWithLimit(quotationsToFetch, 5, async (quotation) => {
-        if (quotation.header) {
-          // Fetch full header details (populated user fields, customer info, etc.)
-          await fetchQuotationHeader(quotation.header);
-          // Fetch offers
-          await fetchQuotationDetails(quotation.header);
-        }
-      });
-      
-      // Mark initial load as complete
+      // Mark loading complete and initial load done so the list renders immediately
       if (isInitialLoad) {
         setIsInitialLoad(false);
+      }
+
+      // Load full details in the background (do not block rendering)
+      const quotationsToFetch = headers.filter(q => q.header);
+      if (quotationsToFetch.length > 0) {
+        const fetchWithLimit = async (items, limit, fn) => {
+          for (let i = 0; i < items.length; i += limit) {
+            const batch = items.slice(i, i + limit);
+            for (const item of batch) {
+              try {
+                await fn(item);
+              } catch (e) {
+                console.warn('[QuotationList] Background detail fetch failed for item:', item?.header?.quotationNumber, e);
+              }
+            }
+            if (i + limit < items.length) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+        };
+        fetchWithLimit(quotationsToFetch, 3, async (quotation) => {
+          if (quotation.header) {
+            await fetchQuotationHeader(quotation.header);
+            await fetchQuotationDetails(quotation.header);
+          }
+        }).catch(err => console.warn('[QuotationList] Background detail fetches error:', err));
       }
     } catch (error) {
       toast.error('Failed to fetch quotations');
