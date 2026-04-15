@@ -6,6 +6,30 @@ import BaseModal from '../modals/BaseModal';
 import toast from 'react-hot-toast';
 import { CheckCircle, XCircle, Clock, Eye, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, TrendingUp, MessageSquare, Search, SlidersHorizontal, Filter, XCircle as XCircleIcon } from 'lucide-react';
 
+/** Sparepart RFQ items store estimatedRevenue as line total (qty × pricePerUnit); other LOBs use per-unit estimatedRevenue. */
+const sumRfqBudgetTotal = (items, lobType) => {
+  const sparepart = lobType === 'sparepart';
+  return (items || []).reduce((sum, item) => {
+    const itemRev = parseFloat(item.estimatedRevenue) || 0;
+    const qty = parseInt(item.quantity, 10) || 1;
+    const ppu = parseFloat(item.pricePerUnit) || 0;
+    if (sparepart) return sum + (itemRev || ppu * qty);
+    return sum + itemRev * qty;
+  }, 0);
+};
+
+const getRfqItemBudgetDisplay = (item, lobType) => {
+  const quantity = parseInt(item.quantity, 10) || 1;
+  const sparepart = lobType === 'sparepart';
+  const perQty = sparepart
+    ? parseFloat(item.pricePerUnit) || 0
+    : parseFloat(item.estimatedRevenue) || 0;
+  const lineTotal = sparepart
+    ? parseFloat(item.estimatedRevenue) || perQty * quantity
+    : perQty * quantity;
+  return { quantity, perQty, lineTotal };
+};
+
 const ApproveQuotationTab = () => {
   const navigate = useNavigate();
   const { connected } = useContext(NotificationsContext);
@@ -528,12 +552,7 @@ const ApproveQuotationTab = () => {
       ) : (
         <div className="space-y-3">
           {filteredRfqs.map((rfq) => {
-            // Calculate total revenue
-            const totalRevenue = rfq.items?.reduce((sum, item) => {
-              const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
-              const itemQuantity = parseInt(item.quantity) || 1;
-              return sum + (itemRevenue * itemQuantity);
-            }, 0) || 0;
+            const totalRevenue = sumRfqBudgetTotal(rfq.items, rfq.lineOfBusiness?.type);
 
             // Engineering verdict
             const engVerdict = rfq.engineeringTransit;
@@ -653,9 +672,10 @@ const ApproveQuotationTab = () => {
                        <div className="text-xs font-semibold text-blue-800 mb-2">Budget Breakdown</div>
                        <div className="space-y-2">
                          {rfq.items.map((item, idx) => {
-                           const perQty = parseFloat(item.estimatedRevenue) || 0;
-                           const qty = parseInt(item.quantity) || 1;
-                           const itemTotal = perQty * qty;
+                           const { perQty, quantity: qty, lineTotal: itemTotal } = getRfqItemBudgetDisplay(
+                             item,
+                             rfq.lineOfBusiness?.type
+                           );
                            const formatCurrency = (amount) => 
                              new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
                            
@@ -780,9 +800,10 @@ const ApproveQuotationTab = () => {
                     )}
                      <div className="pt-3 space-y-3">
                       {rfq.items.map((item, index) => {
-                        const perQuantity = parseFloat(item.estimatedRevenue) || 0;
-                        const quantity = parseInt(item.quantity) || 1;
-                        const totalRevenue = perQuantity * quantity;
+                        const { perQty: perQuantity, quantity, lineTotal: totalRevenue } = getRfqItemBudgetDisplay(
+                          item,
+                          rfq.lineOfBusiness?.type
+                        );
                         const formatCurrency = (amount) => 
                           new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
                         
@@ -1015,9 +1036,10 @@ const ApproveQuotationTab = () => {
                     {selectedRFQ.items && selectedRFQ.items.length > 0 ? (
                       <>
                         {selectedRFQ.items.map((item, index) => {
-                          const perQuantity = parseFloat(item.estimatedRevenue) || 0;
-                          const quantity = parseInt(item.quantity) || 1;
-                          const totalRevenue = perQuantity * quantity;
+                          const { perQty: perQuantity, quantity, lineTotal: totalRevenue } = getRfqItemBudgetDisplay(
+                            item,
+                            selectedRFQ.lineOfBusiness?.type
+                          );
                           const formatCurrency = (amount) => 
                             new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
                           
@@ -1050,11 +1072,10 @@ const ApproveQuotationTab = () => {
                             <span className="font-semibold text-blue-800">Grand Total Revenue:</span>
                             <span className="px-2 py-1 rounded text-xs font-semibold bg-green-200 text-green-900">
                               {(() => {
-                                const grandTotal = selectedRFQ.items?.reduce((sum, item) => {
-                                  const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
-                                  const itemQuantity = parseInt(item.quantity) || 1;
-                                  return sum + (itemRevenue * itemQuantity);
-                                }, 0) || 0;
+                                const grandTotal = sumRfqBudgetTotal(
+                                  selectedRFQ.items,
+                                  selectedRFQ.lineOfBusiness?.type
+                                );
                                 return grandTotal > 0 
                                   ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(grandTotal)
                                   : 'Not Set';

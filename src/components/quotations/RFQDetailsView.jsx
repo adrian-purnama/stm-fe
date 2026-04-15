@@ -453,9 +453,14 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
             {rfq.items && rfq.items.length > 0 ? (
               <>
                 {rfq.items.map((item, index) => {
-                  const perQuantity = parseFloat(item.estimatedRevenue) || 0;
                   const quantity = parseInt(item.quantity) || 1;
-                  const totalRevenue = perQuantity * quantity;
+                  const isSparepartLob = rfq.lineOfBusiness?.type === 'sparepart';
+                  const perQuantity = isSparepartLob
+                    ? parseFloat(item.pricePerUnit) || 0
+                    : parseFloat(item.estimatedRevenue) || 0;
+                  const totalRevenue = isSparepartLob
+                    ? parseFloat(item.estimatedRevenue) || perQuantity * quantity
+                    : perQuantity * quantity;
                   const formatCurrency = (amount) => 
                     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
                   
@@ -491,10 +496,14 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
                     <span className="font-semibold text-blue-800">Grand Total Revenue:</span>
                     <span className="px-3 py-1 rounded text-sm font-semibold bg-green-200 text-green-900">
                       {(() => {
+                        const sparepartLob = rfq.lineOfBusiness?.type === 'sparepart';
                         const grandTotal = rfq.items?.reduce((sum, item) => {
                           const itemRevenue = parseFloat(item.estimatedRevenue) || 0;
                           const itemQuantity = parseInt(item.quantity) || 1;
-                          return sum + (itemRevenue * itemQuantity);
+                          if (sparepartLob) {
+                            return sum + (itemRevenue || (parseFloat(item.pricePerUnit) || 0) * itemQuantity);
+                          }
+                          return sum + itemRevenue * itemQuantity;
                         }, 0) || 0;
                         return grandTotal > 0 
                           ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(grandTotal)
@@ -852,9 +861,14 @@ const RFQDetailsView = ({ rfq, loading, onApprove, onReject }) => {
                     <div className="flex flex-col items-end gap-1 text-sm text-gray-600">
                       <div>Quantity: {item.quantity || 1}</div>
                       {item.estimatedRevenue && (() => {
-                        const perQuantity = parseFloat(item.estimatedRevenue) || 0;
                         const quantity = parseInt(item.quantity) || 1;
-                        const totalRevenue = perQuantity * quantity;
+                        const isSparepartLob = rfq.lineOfBusiness?.type === 'sparepart';
+                        const perQuantity = isSparepartLob
+                          ? parseFloat(item.pricePerUnit) || 0
+                          : parseFloat(item.estimatedRevenue) || 0;
+                        const totalRevenue = isSparepartLob
+                          ? parseFloat(item.estimatedRevenue) || perQuantity * quantity
+                          : perQuantity * quantity;
                         const formatCurrency = (amount) => 
                           new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
                         return (
