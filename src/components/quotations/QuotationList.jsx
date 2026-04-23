@@ -332,10 +332,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const [advancedFilters, setAdvancedFilters] = useState({
     status: [],
     customer: '',
-    truckTypes: []
+    truckTypes: [],
+    bodyTypeId: '',
+    chassisTypeId: '',
+    sizeTypeId: '',
+    featureTypeId: ''
   });
   const [truckTypePickerValue, setTruckTypePickerValue] = useState('');
   const [truckTypeOptions, setTruckTypeOptions] = useState([]);
+  const [bodyTypeOptions, setBodyTypeOptions] = useState([]);
+  const [chassisTypeOptions, setChassisTypeOptions] = useState([]);
+  const [sizeTypeOptions, setSizeTypeOptions] = useState([]);
+  const [featureTypeOptions, setFeatureTypeOptions] = useState([]);
   const [showSearchHelp, setShowSearchHelp] = useState(false);
   const [statusModal, setStatusModal] = useState({
     isOpen: false,
@@ -383,8 +391,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   useEffect(() => {
     const loadTruckTypeOptions = async () => {
       try {
-        const response = await ApiHelper.get('/api/drawing-specifications/list');
-        const items = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const [drawingResp, bodyResp, chassisResp, sizeResp, featureResp] = await Promise.all([
+          ApiHelper.get('/api/drawing-specifications/list'),
+          ApiHelper.get('/api/body-types/list'),
+          ApiHelper.get('/api/chassis-types/list'),
+          ApiHelper.get('/api/size-types/list'),
+          ApiHelper.get('/api/feature-types/list')
+        ]);
+
+        const items = Array.isArray(drawingResp?.data?.data) ? drawingResp.data.data : [];
         const mapped = items
           .filter((item) => item?._id)
           .map((item) => {
@@ -399,8 +414,18 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             };
           });
         setTruckTypeOptions(mapped);
+
+        const toOption = (item) => ({
+          value: item?._id || '',
+          label: item?.name || item?.shortName || item?._id || ''
+        });
+
+        setBodyTypeOptions((Array.isArray(bodyResp?.data?.data) ? bodyResp.data.data : []).map(toOption).filter((x) => x.value));
+        setChassisTypeOptions((Array.isArray(chassisResp?.data?.data) ? chassisResp.data.data : []).map(toOption).filter((x) => x.value));
+        setSizeTypeOptions((Array.isArray(sizeResp?.data?.data) ? sizeResp.data.data : []).map(toOption).filter((x) => x.value));
+        setFeatureTypeOptions((Array.isArray(featureResp?.data?.data) ? featureResp.data.data : []).map(toOption).filter((x) => x.value));
       } catch (error) {
-        console.error('[QuotationList] Failed to load truck type options:', error);
+        console.error('[QuotationList] Failed to load filter options:', error);
       }
     };
 
@@ -479,7 +504,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     setAdvancedFilters({
       status: [],
       customer: '',
-      truckTypes: []
+      truckTypes: [],
+      bodyTypeId: '',
+      chassisTypeId: '',
+      sizeTypeId: '',
+      featureTypeId: ''
     });
   };
 
@@ -512,6 +541,38 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       onRemove: () => toggleMultiFilter('truckTypes', truckTypeId)
     });
   });
+  if (advancedFilters.bodyTypeId) {
+    const option = bodyTypeOptions.find((item) => item.value === advancedFilters.bodyTypeId);
+    filterChips.push({
+      key: 'body-type',
+      label: `Body Type: ${option?.label || advancedFilters.bodyTypeId}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, bodyTypeId: '' }))
+    });
+  }
+  if (advancedFilters.chassisTypeId) {
+    const option = chassisTypeOptions.find((item) => item.value === advancedFilters.chassisTypeId);
+    filterChips.push({
+      key: 'chassis-type',
+      label: `Chassis Type: ${option?.label || advancedFilters.chassisTypeId}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, chassisTypeId: '' }))
+    });
+  }
+  if (advancedFilters.sizeTypeId) {
+    const option = sizeTypeOptions.find((item) => item.value === advancedFilters.sizeTypeId);
+    filterChips.push({
+      key: 'size-type',
+      label: `Size Type: ${option?.label || advancedFilters.sizeTypeId}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, sizeTypeId: '' }))
+    });
+  }
+  if (advancedFilters.featureTypeId) {
+    const option = featureTypeOptions.find((item) => item.value === advancedFilters.featureTypeId);
+    filterChips.push({
+      key: 'feature-type',
+      label: `Feature Type: ${option?.label || advancedFilters.featureTypeId}`,
+      onRemove: () => setAdvancedFilters((prev) => ({ ...prev, featureTypeId: '' }))
+    });
+  }
 
   // Initial load effect
   useEffect(() => {
@@ -567,6 +628,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       } else if (truckTypesVal.length) {
         params.drawingSpecificationIds = truckTypesVal;
       }
+
+      if (advancedFilters.bodyTypeId) params.bodyTypeId = advancedFilters.bodyTypeId;
+      if (advancedFilters.chassisTypeId) params.chassisTypeId = advancedFilters.chassisTypeId;
+      if (advancedFilters.sizeTypeId) params.sizeTypeId = advancedFilters.sizeTypeId;
+      if (advancedFilters.featureTypeId) params.featureTypeId = advancedFilters.featureTypeId;
 
       // Remove undefined values
       Object.keys(params).forEach((key) => {
@@ -1854,6 +1920,53 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             <p className="mt-1 text-xs text-gray-500">
               Selected: {advancedFilters.truckTypes.length}
             </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Body Type</label>
+            <CustomDropdown
+              options={bodyTypeOptions}
+              value={advancedFilters.bodyTypeId}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, bodyTypeId: value || '' }))}
+              placeholder="Select body type"
+              searchable={true}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Chassis Type</label>
+            <CustomDropdown
+              options={chassisTypeOptions}
+              value={advancedFilters.chassisTypeId}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, chassisTypeId: value || '' }))}
+              placeholder="Select chassis type"
+              searchable={true}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Size Type</label>
+            <CustomDropdown
+              options={sizeTypeOptions}
+              value={advancedFilters.sizeTypeId}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, sizeTypeId: value || '' }))}
+              placeholder="Select size type"
+              searchable={true}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Feature Type</label>
+            <CustomDropdown
+              options={featureTypeOptions}
+              value={advancedFilters.featureTypeId}
+              onChange={(value) => setAdvancedFilters((prev) => ({ ...prev, featureTypeId: value || '' }))}
+              placeholder="Select feature type"
+              searchable={true}
+              className="text-sm"
+            />
           </div>
         </div>
       </div>
