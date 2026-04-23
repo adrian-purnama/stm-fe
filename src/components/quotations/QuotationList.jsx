@@ -331,8 +331,11 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const [chips, setChips] = useState([]); // [{ type: 'status', value: 'open' }, ...]
   const [advancedFilters, setAdvancedFilters] = useState({
     status: [],
-    customer: ''
+    customer: '',
+    truckTypes: []
   });
+  const [truckTypePickerValue, setTruckTypePickerValue] = useState('');
+  const [truckTypeOptions, setTruckTypeOptions] = useState([]);
   const [showSearchHelp, setShowSearchHelp] = useState(false);
   const [statusModal, setStatusModal] = useState({
     isOpen: false,
@@ -375,6 +378,33 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     const preferences = getSectionPreferences(PREFERENCE_SECTIONS.QUOTATIONS);
     setIsFilterCollapsed(preferences.isFilterCollapsed ?? true);
     setFavoriteStatuses(preferences.favoriteStatuses ?? ['open']);
+  }, []);
+
+  useEffect(() => {
+    const loadTruckTypeOptions = async () => {
+      try {
+        const response = await ApiHelper.get('/api/drawing-specifications/list');
+        const items = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const mapped = items
+          .filter((item) => item?._id)
+          .map((item) => {
+            const bodyTypeName = item.bodyTypeId?.shortName || item.bodyTypeId?.name || '';
+            const chassisTypeName = item.chassisTypeId?.shortName || item.chassisTypeId?.name || '';
+            const model = item.chassisModel || '';
+            const drawingNo = item.drawingNumber || '';
+            const labelParts = [drawingNo, bodyTypeName, chassisTypeName, model].filter(Boolean);
+            return {
+              value: item._id,
+              label: labelParts.join(' | ') || item._id
+            };
+          });
+        setTruckTypeOptions(mapped);
+      } catch (error) {
+        console.error('[QuotationList] Failed to load truck type options:', error);
+      }
+    };
+
+    loadTruckTypeOptions();
   }, []);
 
   // Parse search tokens (like RFQ)
@@ -448,7 +478,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
       status: [],
-      customer: ''
+      customer: '',
+      truckTypes: []
     });
   };
 
@@ -472,6 +503,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       onRemove: () => setAdvancedFilters((prev) => ({ ...prev, customer: '' }))
     });
   }
+
+  (advancedFilters.truckTypes || []).forEach((truckTypeId) => {
+    const option = truckTypeOptions.find((item) => item.value === truckTypeId);
+    filterChips.push({
+      key: `truck-type-${truckTypeId}`,
+      label: `Truck Type: ${option?.label || truckTypeId}`,
+      onRemove: () => toggleMultiFilter('truckTypes', truckTypeId)
+    });
+  });
 
   // Initial load effect
   useEffect(() => {
@@ -508,7 +548,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
         setLoadingMore(true);
       }
       
-      // One filter at a time: quotation number (search), status, or customer (backend else-if)
+      // One filter at a time: quotation number (search), status, customer, or truck type (backend else-if)
       const params = {
         page: pageToFetch,
         limit: 10,
@@ -517,12 +557,15 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       };
       const searchVal = searchInput.trim();
       const customerVal = advancedFilters.customer?.trim();
+      const truckTypesVal = (advancedFilters.truckTypes || []).filter(Boolean);
       if (searchVal) {
         params.search = searchVal;
       } else if (advancedFilters.status?.length) {
         params.status = advancedFilters.status;
       } else if (customerVal) {
         params.customer = customerVal;
+      } else if (truckTypesVal.length) {
+        params.drawingSpecificationIds = truckTypesVal;
       }
 
       // Remove undefined values
@@ -550,7 +593,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       setTotal(paginationData.total || 0);
       const nextPage = paginationData.current + 1;
       setHasMore(nextPage <= paginationData.pages);
-
+      
       // Mark loading complete and initial load done so the list renders immediately
       if (isInitialLoad) {
         setIsInitialLoad(false);
@@ -1787,6 +1830,30 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                 );
               })}
             </div>
+          </div>
+
+          {/* Truck Type Filter */}
+          <div className="flex-1 sm:max-w-md">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Truck Type</label>
+            <CustomDropdown
+              options={truckTypeOptions}
+              value={truckTypePickerValue}
+              onChange={(value) => {
+                if (!value) return;
+                setAdvancedFilters((prev) => {
+                  if (prev.truckTypes.includes(value)) return prev;
+                  return { ...prev, truckTypes: [...prev.truckTypes, value] };
+                });
+                // Keep dropdown ready for the next selection.
+                setTruckTypePickerValue('');
+              }}
+              placeholder="Select truck type to add"
+              searchable={true}
+              className="text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Selected: {advancedFilters.truckTypes.length}
+            </p>
           </div>
         </div>
       </div>
