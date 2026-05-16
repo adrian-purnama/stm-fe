@@ -46,6 +46,14 @@ const statusOptions = [
   { value: 'close', label: 'Close' }
 ];
 
+const LINE_OF_BUSINESS_OPTIONS = [
+  { value: '', label: 'All lines of business' },
+  { value: 'karoseri', label: 'Karoseri' },
+  { value: 'non_karoseri', label: 'Non karoseri' },
+  { value: 'service', label: 'Service' },
+  { value: 'sparepart', label: 'Sparepart' }
+];
+
 // Predefined reasons for loss and close statuses
 const LOSS_REASONS = [
   { value: 'harga', label: 'Price' },
@@ -338,6 +346,8 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     sizeTypeId: '',
     featureTypeId: ''
   });
+  const [lineOfBusinessType, setLineOfBusinessType] = useState('');
+  const [itemsTextSearch, setItemsTextSearch] = useState('');
   const [truckTypePickerValue, setTruckTypePickerValue] = useState('');
   const [truckTypeOptions, setTruckTypeOptions] = useState([]);
   const [bodyTypeOptions, setBodyTypeOptions] = useState([]);
@@ -510,6 +520,25 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       sizeTypeId: '',
       featureTypeId: ''
     });
+    setLineOfBusinessType('');
+    setItemsTextSearch('');
+  };
+
+  const handleLineOfBusinessChange = (value) => {
+    setLineOfBusinessType(value);
+    if (value === 'service' || value === 'sparepart') {
+      setAdvancedFilters((prev) => ({
+        ...prev,
+        truckTypes: [],
+        bodyTypeId: '',
+        chassisTypeId: '',
+        sizeTypeId: '',
+        featureTypeId: ''
+      }));
+      setTruckTypePickerValue('');
+    } else {
+      setItemsTextSearch('');
+    }
   };
 
   // Build filter chips for display
@@ -574,6 +603,27 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     });
   }
 
+  if (lineOfBusinessType) {
+    const lobLabel =
+      LINE_OF_BUSINESS_OPTIONS.find((o) => o.value === lineOfBusinessType)?.label ||
+      lineOfBusinessType;
+    filterChips.push({
+      key: 'line-of-business',
+      label: `Line of business: ${lobLabel}`,
+      onRemove: () => handleLineOfBusinessChange('')
+    });
+  }
+  if (
+    (lineOfBusinessType === 'service' || lineOfBusinessType === 'sparepart') &&
+    itemsTextSearch.trim()
+  ) {
+    filterChips.push({
+      key: 'items-text-search',
+      label: `Items match: "${itemsTextSearch.trim()}"`,
+      onRemove: () => setItemsTextSearch('')
+    });
+  }
+
   // Initial load effect
   useEffect(() => {
     if (isInitialLoad) {
@@ -591,7 +641,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
 
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput, advancedFilters]);
+  }, [searchInput, advancedFilters, lineOfBusinessType, itemsTextSearch]);
 
   // Fetch quotation headers only (fast initial load)
   const fetchQuotations = async (reset = false) => {
@@ -619,20 +669,35 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
       const searchVal = searchInput.trim();
       const customerVal = advancedFilters.customer?.trim();
       const truckTypesVal = (advancedFilters.truckTypes || []).filter(Boolean);
+      const showKaroseriFilters =
+        !lineOfBusinessType ||
+        lineOfBusinessType === 'karoseri' ||
+        lineOfBusinessType === 'non_karoseri';
+
       if (searchVal) {
         params.search = searchVal;
       } else if (advancedFilters.status?.length) {
         params.status = advancedFilters.status;
       } else if (customerVal) {
         params.customer = customerVal;
-      } else if (truckTypesVal.length) {
+      } else if (showKaroseriFilters && truckTypesVal.length) {
         params.drawingSpecificationIds = truckTypesVal;
       }
 
-      if (advancedFilters.bodyTypeId) params.bodyTypeId = advancedFilters.bodyTypeId;
-      if (advancedFilters.chassisTypeId) params.chassisTypeId = advancedFilters.chassisTypeId;
-      if (advancedFilters.sizeTypeId) params.sizeTypeId = advancedFilters.sizeTypeId;
-      if (advancedFilters.featureTypeId) params.featureTypeId = advancedFilters.featureTypeId;
+      if (lineOfBusinessType) params.lineOfBusinessType = lineOfBusinessType;
+      if (
+        (lineOfBusinessType === 'service' || lineOfBusinessType === 'sparepart') &&
+        itemsTextSearch.trim()
+      ) {
+        params.itemsTextSearch = itemsTextSearch.trim();
+      }
+
+      if (showKaroseriFilters) {
+        if (advancedFilters.bodyTypeId) params.bodyTypeId = advancedFilters.bodyTypeId;
+        if (advancedFilters.chassisTypeId) params.chassisTypeId = advancedFilters.chassisTypeId;
+        if (advancedFilters.sizeTypeId) params.sizeTypeId = advancedFilters.sizeTypeId;
+        if (advancedFilters.featureTypeId) params.featureTypeId = advancedFilters.featureTypeId;
+      }
 
       // Remove undefined values
       Object.keys(params).forEach((key) => {
@@ -895,7 +960,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
     setCurrentPage(1);
     setQuotations([]);
     setHasMore(true);
-  }, [chips, advancedFilters, searchInput]);
+  }, [chips, advancedFilters, searchInput, lineOfBusinessType, itemsTextSearch]);
 
   const formatDate = (date) => {
     if (!date) return '-';
@@ -1861,6 +1926,52 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           </button>
         </div>
 
+        {/* Line of business */}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-gray-700">Line of business</span>
+          <div className="flex flex-wrap gap-2">
+            {LINE_OF_BUSINESS_OPTIONS.map((option) => {
+              const active = lineOfBusinessType === option.value;
+              return (
+                <button
+                  key={option.value || 'all-lob'}
+                  type="button"
+                  onClick={() => handleLineOfBusinessChange(option.value)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                    active
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-400 hover:text-emerald-700'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {(lineOfBusinessType === 'service' || lineOfBusinessType === 'sparepart') && (
+          <div className="flex flex-col gap-2">
+            <label className="mb-1 block text-xs font-medium text-gray-700">
+              Search items (fuzzy match)
+            </label>
+            <input
+              type="text"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:max-w-xl"
+              placeholder={
+                lineOfBusinessType === 'service'
+                  ? 'Service name, notes, details…'
+                  : 'Spare part name, notes…'
+              }
+              value={itemsTextSearch}
+              onChange={(e) => setItemsTextSearch(e.target.value)}
+            />
+            <p className="text-xs text-gray-500">
+              Matches RFQ items or quotation offer items containing this text (case-insensitive).
+            </p>
+          </div>
+        )}
+
         {/* Inline Filters */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           {/* Customer filter (searches RFQ.customerName via QuotationHeader.rfqId) */}
@@ -1899,6 +2010,9 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
           </div>
 
           {/* Truck Type Filter */}
+          {(!lineOfBusinessType ||
+            lineOfBusinessType === 'karoseri' ||
+            lineOfBusinessType === 'non_karoseri') && (
           <div className="flex-1 sm:max-w-md">
             <label className="block text-xs font-medium text-gray-700 mb-1">Truck Type</label>
             <CustomDropdown
@@ -1921,8 +2035,12 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
               Selected: {advancedFilters.truckTypes.length}
             </p>
           </div>
+          )}
         </div>
 
+        {(!lineOfBusinessType ||
+          lineOfBusinessType === 'karoseri' ||
+          lineOfBusinessType === 'non_karoseri') && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Body Type</label>
@@ -1969,6 +2087,7 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
             />
           </div>
         </div>
+        )}
       </div>
 
       {/* Filter Chips UI */}
@@ -2024,11 +2143,14 @@ const QuotationList = ({ onView, onPreview, onEdit, onCreate, onDelete, showCrea
                     <h3 className="text-lg font-semibold text-gray-900 sm:text-xl">{header.quotationNumber}</h3>
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold sm:text-sm ${
                     header.lineOfBusiness?.type === 'karoseri' ? 'bg-blue-100 text-blue-800' :
+                    header.lineOfBusiness?.type === 'non_karoseri' ? 'bg-cyan-100 text-cyan-800' :
                     header.lineOfBusiness?.type === 'service' ? 'bg-purple-100 text-purple-800' :
                     header.lineOfBusiness?.type === 'sparepart' ? 'bg-indigo-100 text-indigo-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {header.lineOfBusiness?.type?.charAt(0).toUpperCase() + header.lineOfBusiness?.type?.slice(1) || 'Karoseri'}
+                    {(header.lineOfBusiness?.type === 'non_karoseri'
+                      ? 'Non karoseri'
+                      : header.lineOfBusiness?.type?.charAt(0).toUpperCase() + header.lineOfBusiness?.type?.slice(1)) || 'Karoseri'}
                   </span>
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold sm:text-sm ${
                     statusClassMap[header.status?.type] || 'bg-gray-100 text-gray-800'
